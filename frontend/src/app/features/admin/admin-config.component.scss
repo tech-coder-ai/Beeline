@@ -1,0 +1,71 @@
+.admin-config {
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+  padding-bottom: 20px;
+  position: relative;
+}
+
+.save-toast {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  background: rgba(18, 145, 92, 0.12);
+  color: var(--bl-good);
+  font-size: 12.5px;
+  font-weight: 600;
+  z-index: 30;
+}
+
+.section-title {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  text-transform: capitalize;
+}
+
+.flag-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+}
+
+.flag-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  font-size: 13px;
+  text-transform: capitalize;
+}
+
+.field-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  font-size: 12px;
+}
+
+.pill-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.note {
+  font-size: 12px;
+  margin: 0;
+}

@@ -1,0 +1,23 @@
+<div class="page">
+  <div class="page-header">
+    <h1>Metadata Manager</h1>
+    <span class="spacer"></span>
+  </div>
+
+  <div class="tab-bar">
+    @for (t of tabs; track t.id) {
+      <button class="tab" [class.active]="tab() === t.id" (click)="tab.set(t.id)">
+        <mat-icon>{{ t.icon }}</mat-icon>{{ t.label }}
+      </button>
+    }
+  </div>
+
+  <div class="tab-content">
+    @switch (tab()) {
+      @case ('catalog') { <bl-catalog-browser /> }
+      @case ('approvals') { <bl-approval-queue /> }
+      @case ('glossary') { <bl-glossary-manager /> }
+      @case ('import') { <bl-import-panel /> }
+    }
+  </div>
+</div>

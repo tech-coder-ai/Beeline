@@ -1,0 +1,57 @@
+<div class="approval-page">
+  <div class="filter-row">
+    <button class="ghost-btn" [class.active]="filterType() === null" (click)="setFilter(null)">All</button>
+    @for (t of entityTypes; track t) {
+      <button class="ghost-btn" [class.active]="filterType() === t" (click)="setFilter(t)">{{ formatType(t) }}</button>
+    }
+    <span class="spacer"></span>
+    @if (selected().size > 0) {
+      <span class="muted">{{ selected().size }} selected</span>
+      <button class="primary-btn" (click)="bulkDecide('approve')"><mat-icon>done_all</mat-icon> Approve all</button>
+      <button class="ghost-btn" (click)="bulkDecide('reject')"><mat-icon>block</mat-icon> Reject all</button>
+    }
+  </div>
+
+  @if (items().length) {
+    <div class="select-all-row">
+      <input type="checkbox" [checked]="selected().size === items().length" (change)="toggleAll()" />
+      <span class="muted">Select all ({{ items().length }} pending)</span>
+    </div>
+  }
+
+  <div class="approval-list">
+    @for (item of items(); track item.id) {
+      <div class="approval-card glass-card">
+        <input type="checkbox" [checked]="selected().has(item.id)" (change)="toggle(item.id)" />
+        <div class="approval-body">
+          <div class="approval-header">
+            <span class="chip">{{ formatType(item.entity_type) }}</span>
+            <span class="entity-label">{{ item.entity_label }}</span>
+            @if (item.confidence !== null && item.confidence !== undefined) {
+              <span class="chip" [class.good]="item.confidence >= 0.8" [class.warn]="item.confidence < 0.8">
+                {{ (item.confidence * 100).toFixed(0) }}% confidence
+              </span>
+            }
+            <span class="chip neutral">{{ item.source }}</span>
+          </div>
+          @if (item.current_value) {
+            <div class="value-diff current">{{ item.current_value }}</div>
+          }
+          <div class="value-diff proposed">{{ item.proposed_value }}</div>
+          @if (item.rationale) {
+            <p class="rationale muted">{{ item.rationale }}</p>
+          }
+        </div>
+        <div class="approval-actions">
+          <button class="icon-btn good" matTooltip="Approve" (click)="decide(item, 'approve')"><mat-icon>check</mat-icon></button>
+          <button class="icon-btn bad" matTooltip="Reject" (click)="decide(item, 'reject')"><mat-icon>close</mat-icon></button>
+        </div>
+      </div>
+    } @empty {
+      <div class="empty-state muted">
+        <mat-icon>task_alt</mat-icon>
+        No pending approvals.
+      </div>
+    }
+  </div>
+</div>

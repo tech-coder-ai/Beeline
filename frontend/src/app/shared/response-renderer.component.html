@@ -1,0 +1,175 @@
+@let r = response();
+
+<div class="response" [class.compact]="compact()">
+  <!-- summary -->
+  @if (r.summary) {
+    <div class="summary-row">
+      <p class="summary">{{ r.summary }}</p>
+      @if (r.kind === 'answer') {
+        <bl-confidence [confidence]="r.confidence" />
+      }
+    </div>
+  }
+
+  <!-- blocked / error -->
+  @if (r.kind === 'blocked' || r.kind === 'error') {
+    <div class="banner" [class.bad]="r.kind === 'error'" [class.warn]="r.kind === 'blocked'">
+      <mat-icon>{{ r.kind === 'error' ? 'error_outline' : 'speed' }}</mat-icon>
+      <span>{{ r.summary }}</span>
+    </div>
+    @if (r.recommendations.length) {
+      <ul class="suggestion-list">
+        @for (s of r.recommendations; track s) { <li>{{ s }}</li> }
+      </ul>
+    }
+  }
+
+  <!-- clarification -->
+  @if (r.kind === 'clarification' && r.clarification) {
+    <div class="clarification glass-card">
+      <div class="clarify-question">
+        <mat-icon>help_outline</mat-icon>
+        <span>{{ r.clarification.question }}</span>
+      </div>
+      <div class="clarify-options">
+        @for (opt of r.clarification.options; track opt.value) {
+          <button class="ghost-btn" [matTooltip]="opt.description ?? ''" (click)="clarify.emit(opt)">
+            {{ opt.label }}
+          </button>
+        }
+      </div>
+      @if (r.clarification.allow_free_text) {
+        <div class="clarify-freetext">
+          <input
+            class="text-input"
+            placeholder="Or type your answer..."
+            [(ngModel)]="clarificationText"
+            (keydown.enter)="submitClarificationText()"
+          />
+          <button class="icon-btn" (click)="submitClarificationText()"><mat-icon>send</mat-icon></button>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- query preview -->
+  @if (r.kind === 'preview') {
+    <div class="preview-card glass-card">
+      <div class="preview-stats">
+        @if (r.tables_used.length) {
+          <div class="stat"><span class="muted">Tables</span><strong>{{ r.tables_used.join(', ') }}</strong></div>
+        }
+        @if (r.cost_estimate?.estimated_rows_scanned) {
+          <div class="stat"><span class="muted">Est. rows scanned</span><strong>{{ r.cost_estimate!.estimated_rows_scanned | number }}</strong></div>
+        }
+        @if (r.cost_estimate?.estimated_runtime_seconds) {
+          <div class="stat"><span class="muted">Est. runtime</span><strong>{{ r.cost_estimate!.estimated_runtime_seconds }}s</strong></div>
+        }
+      </div>
+      @if (r.sql) { <bl-sql-panel [sql]="r.sql" label="Query to run" /> }
+      @if (r.warnings.length) {
+        <ul class="suggestion-list warn-list">
+          @for (w of r.warnings; track w) { <li>{{ w }}</li> }
+        </ul>
+      }
+      <div class="preview-actions">
+        <button class="primary-btn" (click)="executePreview.emit()">
+          <mat-icon>play_arrow</mat-icon> Execute
+        </button>
+        <button class="ghost-btn" (click)="refineQuestion.emit()">Refine question</button>
+      </div>
+    </div>
+  }
+
+  <!-- answer content -->
+  @if (r.kind === 'answer') {
+    @if (r.cards.length) {
+      <bl-kpi-cards [cards]="r.cards" />
+    }
+
+    @if (r.charts.length) {
+      <div class="chart-grid" [class.single]="r.charts.length === 1">
+        @for (chart of r.charts; track $index) {
+          <div class="glass-card chart-card"><bl-chart [spec]="chart" /></div>
+        }
+      </div>
+    }
+
+    @if (r.table && r.table.rows.length) {
+      <bl-data-grid
+        [table]="r.table"
+        (saveQuery)="saveQuery.emit()"
+        (pinToDashboard)="pinToDashboard.emit()"
+        (explainQuery)="toggleSql()"
+        (regenerate)="refineQuestion.emit()"
+      />
+    }
+
+    @if (r.insights.length) {
+      <div class="insight-block">
+        <div class="block-label"><mat-icon>auto_awesome</mat-icon> Insights</div>
+        <ul>
+          @for (insight of r.insights; track insight) { <li>{{ insight }}</li> }
+        </ul>
+      </div>
+    }
+
+    @if (r.recommendations.length) {
+      <div class="insight-block">
+        <div class="block-label"><mat-icon>lightbulb</mat-icon> Recommendations</div>
+        <ul>
+          @for (rec of r.recommendations; track rec) { <li>{{ rec }}</li> }
+        </ul>
+      </div>
+    }
+
+    @if (r.follow_up_questions.length) {
+      <div class="followups">
+        @for (q of r.follow_up_questions; track q) {
+          <button class="ghost-btn followup" (click)="followUp.emit(q)">
+            <mat-icon>arrow_outward</mat-icon>{{ q }}
+          </button>
+        }
+      </div>
+    }
+
+    <!-- explainability + stats footer -->
+    <div class="footer-row">
+      <div class="footer-left">
+        @if (r.sql) {
+          <button class="ghost-btn small" (click)="toggleSql()">
+            <mat-icon>code</mat-icon>{{ showSql ? 'Hide SQL' : 'View SQL' }}
+          </button>
+        }
+        @if (r.stats) {
+          <span class="muted stat-text">
+            {{ r.stats.row_count | number }} rows
+            @if (r.stats.execution_time_ms) { · {{ r.stats.execution_time_ms | number }} ms }
+            @if (r.stats.cache_hit) { · <span class="chip neutral">cached</span> }
+            @if (r.stats.reused_from_library) { · <span class="chip neutral">reused query</span> }
+          </span>
+        }
+      </div>
+      <div class="footer-right">
+        <button class="icon-btn" [class.active]="feedbackGiven === 'up'" matTooltip="Good answer" (click)="vote('up')">
+          <mat-icon>thumb_up</mat-icon>
+        </button>
+        <button class="icon-btn" [class.active]="feedbackGiven === 'down'" matTooltip="Report incorrect" (click)="vote('down')">
+          <mat-icon>thumb_down</mat-icon>
+        </button>
+      </div>
+    </div>
+
+    @if (showSql && r.sql) {
+      <bl-sql-panel [sql]="r.sql" />
+    }
+
+    @if (r.warnings.length) {
+      <div class="warnings">
+        @for (w of r.warnings; track w) {
+          <div class="banner warn small"><mat-icon>warning_amber</mat-icon>{{ w }}</div>
+        }
+      </div>
+    }
+  }
+</div>

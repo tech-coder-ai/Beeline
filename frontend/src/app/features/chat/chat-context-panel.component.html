@@ -1,0 +1,60 @@
+<div class="context-panel glass">
+  <div class="panel-title"><mat-icon>info</mat-icon> Context</div>
+
+  @if (!hasContent()) {
+    <p class="muted empty">Ask a question and details will appear here.</p>
+  } @else {
+    @let r = response()!;
+
+    @if (r.tables_used.length) {
+      <div class="section">
+        <div class="section-label">Tables used</div>
+        @for (t of r.tables_used; track t) {
+          <div class="pill-row"><mat-icon>table_chart</mat-icon>{{ t }}</div>
+        }
+      </div>
+    }
+
+    @if (r.metrics_used.length) {
+      <div class="section">
+        <div class="section-label">Metrics</div>
+        @for (m of r.metrics_used; track m) {
+          <div class="pill-row"><mat-icon>functions</mat-icon>{{ m }}</div>
+        }
+      </div>
+    }
+
+    @if (r.filters_used.length) {
+      <div class="section">
+        <div class="section-label">Filters applied</div>
+        @for (f of r.filters_used; track f) {
+          <div class="pill-row"><mat-icon>filter_alt</mat-icon>{{ f }}</div>
+        }
+      </div>
+    }
+
+    @if (r.stats) {
+      <div class="section">
+        <div class="section-label">Execution stats</div>
+        <div class="stat-grid">
+          @if (r.stats.row_count !== null && r.stats.row_count !== undefined) {
+            <div class="stat"><span class="muted">Rows</span><strong>{{ r.stats.row_count }}</strong></div>
+          }
+          @if (r.stats.execution_time_ms !== null && r.stats.execution_time_ms !== undefined) {
+            <div class="stat"><span class="muted">Time</span><strong>{{ r.stats.execution_time_ms }} ms</strong></div>
+          }
+          @if (r.stats.column_count) {
+            <div class="stat"><span class="muted">Columns</span><strong>{{ r.stats.column_count }}</strong></div>
+          }
+        </div>
+      </div>
+    }
+
+    @if (r.sql_explanation) {
+      <div class="section">
+        <div class="section-label">Why this query</div>
+        <p class="explain-text">{{ r.sql_explanation.summary }}</p>
+      </div>
+    }
+  }
+</div>

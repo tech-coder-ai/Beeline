@@ -1,0 +1,51 @@
+<div class="bottom-panel glass" [class.expanded]="expanded()">
+  <div class="panel-tabs">
+    <button class="tab" [class.active]="expanded() && activeTab() === 'sql'" [disabled]="!hasSql()" (click)="setTab('sql')">
+      <mat-icon>code</mat-icon> SQL
+    </button>
+    <button class="tab" [class.active]="expanded() && activeTab() === 'cost'" [disabled]="!hasCost()" (click)="setTab('cost')">
+      <mat-icon>speed</mat-icon> Cost
+    </button>
+    <button class="tab" [class.active]="expanded() && activeTab() === 'warnings'" [disabled]="warningCount() === 0" (click)="setTab('warnings')">
+      <mat-icon>warning_amber</mat-icon> Warnings
+      @if (warningCount() > 0) { <span class="chip warn count">{{ warningCount() }}</span> }
+    </button>
+    <span class="spacer"></span>
+    <button class="icon-btn" (click)="toggle()">
+      <mat-icon>{{ expanded() ? 'expand_more' : 'expand_less' }}</mat-icon>
+    </button>
+  </div>
+
+  @if (expanded()) {
+    <div class="panel-body">
+      @switch (activeTab()) {
+        @case ('sql') {
+          @if (response()?.sql) { <bl-sql-panel [sql]="response()!.sql!" /> }
+        }
+        @case ('cost') {
+          @if (response()?.cost_estimate; as cost) {
+            <div class="cost-grid">
+              @if (cost.estimated_rows_scanned) {
+                <div class="cost-stat"><span class="muted">Rows scanned</span><strong>{{ cost.estimated_rows_scanned | number }}</strong></div>
+              }
+              @if (cost.estimated_runtime_seconds) {
+                <div class="cost-stat"><span class="muted">Runtime</span><strong>{{ cost.estimated_runtime_seconds }}s</strong></div>
+              }
+              @if (cost.join_count) {
+                <div class="cost-stat"><span class="muted">Joins</span><strong>{{ cost.join_count }}</strong></div>
+              }
+              @if (cost.partition_pruned !== null && cost.partition_pruned !== undefined) {
+                <div class="cost-stat"><span class="muted">Partition pruned</span><strong>{{ cost.partition_pruned ? 'Yes' : 'No' }}</strong></div>
+              }
+            </div>
+          }
+        }
+        @case ('warnings') {
+          <ul class="warning-list">
+            @for (w of response()?.warnings ?? []; track w) { <li>{{ w }}</li> }
+          </ul>
+        }
+      }
+    </div>
+  }
+</div>

@@ -1,0 +1,63 @@
+<div class="dashboards-layout">
+  <div class="dash-rail">
+    <button class="primary-btn full" (click)="startCreate()"><mat-icon>add</mat-icon> New dashboard</button>
+
+    @if (creating()) {
+      <div class="create-box glass-card">
+        <input class="text-input" placeholder="Dashboard name" [(ngModel)]="newName" (keydown.enter)="createDashboard()" />
+        <div class="create-actions">
+          <button class="primary-btn small" (click)="createDashboard()">Create</button>
+          <button class="ghost-btn small" (click)="creating.set(false)">Cancel</button>
+        </div>
+      </div>
+    }
+
+    <div class="dash-list">
+      @for (d of dashboards(); track d.id) {
+        <button class="dash-item" [class.active]="d.id === activeId()" (click)="open(d.id!)">
+          <mat-icon>dashboard</mat-icon>
+          <span>{{ d.name }}</span>
+        </button>
+      } @empty {
+        <p class="muted empty">No dashboards yet. Pin results from Chat to get started.</p>
+      }
+    </div>
+  </div>
+
+  <div class="dash-content">
+    @if (active(); as dash) {
+      <div class="page-header">
+        <h1>{{ dash.name }}</h1>
+        <span class="spacer"></span>
+        <button class="icon-btn" matTooltip="Share" (click)="share()"><mat-icon>share</mat-icon></button>
+        <button class="icon-btn" matTooltip="Delete" (click)="deleteDashboard()"><mat-icon>delete</mat-icon></button>
+      </div>
+
+      <div class="widget-grid">
+        @for (widget of dash.widgets; track widget.id) {
+          <div class="widget glass-card" [class.full]="widget.size === 'full'">
+            <div class="widget-header">
+              <span class="widget-title">{{ widget.title }}</span>
+              <button class="icon-btn" (click)="removeWidget(widget)"><mat-icon>close</mat-icon></button>
+            </div>
+            @if (widget.snapshot) {
+              @if (widget.widget_type === 'kpi' && widget.snapshot.cards.length) {
+                <bl-kpi-cards [cards]="widget.snapshot.cards" />
+              } @else if (widget.widget_type === 'chart' && widget.snapshot.charts.length) {
+                <bl-chart [spec]="widget.snapshot.charts[0]" />
+              } @else if (widget.snapshot.table) {
+                <bl-data-grid [table]="widget.snapshot.table" [showActions]="false" />
+              }
+            } @else {
+              <p class="muted">No snapshot available. Re-run from Chat to refresh.</p>
+            }
+          </div>
+        } @empty {
+          <p class="muted">This dashboard has no widgets yet. Use "Pin to dashboard" on any chat result.</p>
+        }
+      </div>
+    } @else {
+      <div class="empty-state muted">Select or create a dashboard to get started.</div>
+    }
+  </div>
+</div>

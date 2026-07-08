@@ -1,0 +1,84 @@
+.glossary-page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.search-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--bl-hover);
+  flex: 1;
+  max-width: 360px;
+
+  mat-icon { font-size: 17px; width: 17px; height: 17px; color: var(--bl-text-muted); }
+  .search-input { flex: 1; border: none; background: transparent; outline: none; font: inherit; color: var(--bl-text); }
+}
+
+.editor {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12.5px;
+  }
+
+  textarea { resize: vertical; font: inherit; }
+}
+
+.editor-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.editor-actions { display: flex; gap: 8px; }
+
+.term-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.term-card {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.term-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  .term-name { font-weight: 600; font-size: 13.5px; }
+  .spacer { flex: 1; }
+}
+
+.term-def {
+  font-size: 12.5px;
+  margin: 0;
+  color: var(--bl-text-muted);
+}
+
+.pill-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}

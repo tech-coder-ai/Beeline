@@ -1,0 +1,113 @@
+<div class="catalog-layout">
+  <div class="db-rail">
+    <button class="db-item" [class.active]="selectedDb() === null" (click)="selectDb(null)">
+      <mat-icon>storage</mat-icon> All databases
+    </button>
+    @for (db of databases(); track db.id) {
+      <button class="db-item" [class.active]="selectedDb() === db.id" (click)="selectDb(db.id)">
+        <mat-icon>folder</mat-icon> {{ db.name }}
+        <span class="muted count">{{ db.table_count }}</span>
+      </button>
+    }
+  </div>
+
+  <div class="table-list">
+    <div class="search-row">
+      <mat-icon>search</mat-icon>
+      <input class="search-input" placeholder="Search tables..." [ngModel]="search()" (ngModelChange)="onSearch($event)" />
+    </div>
+
+    <div class="table-grid">
+      @for (table of filteredTables(); track table.id) {
+        <div class="table-card glass-card" (click)="openTable(table)">
+          <div class="table-card-header">
+            <mat-icon>table_chart</mat-icon>
+            <span class="table-name">{{ table.name }}</span>
+            @if (table.classification) {
+              <span class="chip" [class.bad]="table.classification === 'pii' || table.classification === 'confidential'">
+                {{ table.classification }}
+              </span>
+            }
+          </div>
+          <p class="table-desc muted">{{ table.description || 'No description yet' }}</p>
+          <div class="table-meta">
+            <span>{{ table.database_name }}</span>
+            <span>{{ table.column_count }} columns</span>
+            @if (table.row_count) { <span>{{ table.row_count | number }} rows</span> }
+          </div>
+        </div>
+      } @empty {
+        <p class="muted">No tables found. Trigger a metadata sync from Admin.</p>
+      }
+    </div>
+  </div>
+
+  @if (selectedTable(); as table) {
+    <div class="drawer-backdrop" (click)="closeDrawer()"></div>
+    <div class="drawer glass-card">
+      <div class="drawer-header">
+        <div>
+          <h2>{{ table.database_name }}.{{ table.name }}</h2>
+          <span class="chip neutral">{{ table.table_type }}</span>
+        </div>
+        <button class="icon-btn" (click)="closeDrawer()"><mat-icon>close</mat-icon></button>
+      </div>
+
+      <div class="drawer-section">
+        <div class="section-label">
+          Description
+          @if (!editingDescription()) {
+            <button class="icon-btn" (click)="editingDescription.set(true)"><mat-icon>edit</mat-icon></button>
+          }
+        </div>
+        @if (editingDescription()) {
+          <textarea class="text-input desc-input" rows="3" [(ngModel)]="descriptionDraft"></textarea>
+          <div class="drawer-actions">
+            <button class="primary-btn" (click)="saveDescription()">Save</button>
+            <button class="ghost-btn" (click)="editingDescription.set(false)">Cancel</button>
+          </div>
+        } @else {
+          <p>{{ table.description || 'No description yet.' }}</p>
+        }
+      </div>
+
+      <div class="drawer-section stats-row">
+        <div class="stat"><span class="muted">Owner</span><strong>{{ table.owner || '-' }}</strong></div>
+        <div class="stat"><span class="muted">Rows</span><strong>{{ table.row_count ? (table.row_count | number) : '-' }}</strong></div>
+        <div class="stat"><span class="muted">Size</span><strong>{{ formatBytes(table.size_bytes) }}</strong></div>
+        <div class="stat"><span class="muted">Format</span><strong>{{ table.storage_format || '-' }}</strong></div>
+      </div>
+
+      @if (table.partition_columns?.length) {
+        <div class="drawer-section">
+          <div class="section-label">Partition columns</div>
+          <div class="pill-list">
+            @for (p of table.partition_columns; track p) { <span class="chip">{{ p }}</span> }
+          </div>
+        </div>
+      }
+
+      <div class="drawer-section">
+        <div class="section-label">Columns ({{ table.columns?.length || 0 }})</div>
+        <table class="bl-table">
+          <thead>
+            <tr><th>Name</th><th>Type</th><th>Description</th><th>Flags</th></tr>
+          </thead>
+          <tbody>
+            @for (col of table.columns; track col.id) {
+              <tr>
+                <td>{{ col.name }}</td>
+                <td class="mono">{{ col.data_type }}</td>
+                <td class="muted">{{ col.description || '-' }}</td>
+                <td>
+                  @if (col.is_partition) { <span class="chip neutral">partition</span> }
+                  @if (col.is_pii) { <span class="chip bad">PII</span> }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  }
+</div>

@@ -1,0 +1,68 @@
+<div class="glossary-page">
+  <div class="toolbar">
+    <div class="search-row">
+      <mat-icon>search</mat-icon>
+      <input class="search-input" placeholder="Search glossary..." [ngModel]="search()" (ngModelChange)="onSearch($event)" />
+    </div>
+    <button class="primary-btn" (click)="startNew()"><mat-icon>add</mat-icon> New term</button>
+  </div>
+
+  @if (editing(); as term) {
+    <div class="editor glass-card">
+      <div class="editor-grid">
+        <label>
+          <span class="muted">Term</span>
+          <input class="text-input" [(ngModel)]="term.term" placeholder="e.g. Revenue" />
+        </label>
+        <label>
+          <span class="muted">Owner</span>
+          <input class="text-input" [(ngModel)]="term.owner" placeholder="e.g. Finance team" />
+        </label>
+      </div>
+      <label>
+        <span class="muted">Definition</span>
+        <textarea class="text-input" rows="2" [(ngModel)]="term.definition"></textarea>
+      </label>
+      <label>
+        <span class="muted">Business meaning</span>
+        <textarea class="text-input" rows="2" [(ngModel)]="term.business_meaning"></textarea>
+      </label>
+      <div class="editor-grid">
+        <label>
+          <span class="muted">Synonyms (comma separated)</span>
+          <input class="text-input" [(ngModel)]="synonymsText" placeholder="Sales, Income" />
+        </label>
+        <label>
+          <span class="muted">Tags (comma separated)</span>
+          <input class="text-input" [(ngModel)]="tagsText" placeholder="finance, kpi" />
+        </label>
+      </div>
+      <div class="editor-actions">
+        <button class="primary-btn" (click)="save()">Save</button>
+        <button class="ghost-btn" (click)="cancel()">Cancel</button>
+      </div>
+    </div>
+  }
+
+  <div class="term-list">
+    @for (term of terms(); track term.id) {
+      <div class="term-card glass-card">
+        <div class="term-header">
+          <span class="term-name">{{ term.term }}</span>
+          @if (term.source === 'ai') { <span class="chip neutral">AI</span> }
+          <span class="spacer"></span>
+          <button class="icon-btn" (click)="startEdit(term)"><mat-icon>edit</mat-icon></button>
+          <button class="icon-btn" (click)="remove(term)"><mat-icon>delete</mat-icon></button>
+        </div>
+        <p class="term-def">{{ term.definition }}</p>
+        @if (term.synonyms.length) {
+          <div class="pill-list">
+            @for (s of term.synonyms; track s) { <span class="chip">{{ s }}</span> }
+          </div>
+        }
+      </div>
+    } @empty {
+      <p class="muted">No glossary terms yet.</p>
+    }
+  </div>
+</div>

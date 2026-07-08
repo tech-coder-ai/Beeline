@@ -1,0 +1,44 @@
+<div class="thread" #scroll>
+  @if (state.messages().length === 0) {
+    <div class="welcome">
+      <div class="welcome-mark">🐝</div>
+      <h2>Ask Beeline anything about your data</h2>
+      <p class="muted">Natural language in, governed SQL and insights out.</p>
+    </div>
+  }
+
+  @for (message of state.messages(); track message.id) {
+    <div class="message-row" [class.user]="message.role === 'user'">
+      @if (message.role === 'user') {
+        <div class="bubble user-bubble">{{ message.content }}</div>
+      } @else {
+        <div class="assistant-block">
+          <div class="avatar"><mat-icon>auto_awesome</mat-icon></div>
+          <div class="assistant-content glass-card" (click)="inspect.emit(message.id)">
+            @if (message.response_payload) {
+              <bl-response-renderer
+                [response]="message.response_payload"
+                (clarify)="onClarify(message.id, $event)"
+                (executePreview)="onExecutePreview(message.response_payload.execution_id)"
+                (followUp)="onFollowUp($event)"
+              />
+            } @else {
+              <p>{{ message.content }}</p>
+            }
+          </div>
+        </div>
+      }
+    </div>
+  }
+
+  @if (state.sending()) {
+    <div class="message-row">
+      <div class="assistant-block">
+        <div class="avatar"><mat-icon>auto_awesome</mat-icon></div>
+        <div class="assistant-content glass-card thinking">
+          <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        </div>
+      </div>
+    </div>
+  }
+</div>

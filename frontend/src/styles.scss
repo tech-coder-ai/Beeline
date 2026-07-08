@@ -1,1 +1,271 @@
-/* You can add global styles to this file, and also import other style files */
+@use '@angular/material' as mat;
+
+// ============================================================
+// Beeline design system: glassmorphism, light + dark themes
+// ============================================================
+
+html {
+  color-scheme: light;
+  @include mat.theme((
+    color: (
+      primary: mat.$azure-palette,
+      tertiary: mat.$violet-palette,
+    ),
+    typography: Inter,
+    density: 0,
+  ));
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+:root {
+  --bl-accent: #2f6fed;
+  --bl-accent-soft: rgba(47, 111, 237, 0.12);
+  --bl-good: #12915c;
+  --bl-warn: #b7791f;
+  --bl-bad: #d64545;
+
+  --bl-bg: #eef1f7;
+  --bl-bg-gradient:
+    radial-gradient(1200px 800px at 85% -10%, rgba(47, 111, 237, 0.14), transparent 60%),
+    radial-gradient(900px 700px at -10% 110%, rgba(124, 92, 255, 0.12), transparent 55%);
+  --bl-surface: rgba(255, 255, 255, 0.66);
+  --bl-surface-solid: #ffffff;
+  --bl-border: rgba(20, 30, 60, 0.1);
+  --bl-hover: rgba(20, 30, 60, 0.06);
+  --bl-text: #1a2333;
+  --bl-text-muted: #5b667a;
+  --bl-code-bg: #f4f6fb;
+  --bl-shadow: 0 8px 32px rgba(20, 30, 60, 0.1);
+  --bl-user-bubble: linear-gradient(135deg, #2f6fed, #7c5cff);
+}
+
+html.dark {
+  --bl-accent: #6f9bff;
+  --bl-accent-soft: rgba(111, 155, 255, 0.16);
+  --bl-good: #3ecf8e;
+  --bl-warn: #e2b93b;
+  --bl-bad: #ff7b7b;
+
+  --bl-bg: #0d1220;
+  --bl-bg-gradient:
+    radial-gradient(1200px 800px at 85% -10%, rgba(72, 118, 255, 0.18), transparent 60%),
+    radial-gradient(900px 700px at -10% 110%, rgba(124, 92, 255, 0.14), transparent 55%);
+  --bl-surface: rgba(23, 30, 48, 0.62);
+  --bl-surface-solid: #171e30;
+  --bl-border: rgba(255, 255, 255, 0.09);
+  --bl-hover: rgba(255, 255, 255, 0.06);
+  --bl-text: #e7ecf6;
+  --bl-text-muted: #93a0b8;
+  --bl-code-bg: #10162a;
+  --bl-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --bl-user-bubble: linear-gradient(135deg, #3a63c9, #6b4fd8);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  color: var(--bl-text);
+  background: var(--bl-bg);
+  background-image: var(--bl-bg-gradient);
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+}
+
+code,
+pre,
+.mono {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+// glass panel primitive
+.glass {
+  background: var(--bl-surface);
+  backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+}
+
+.glass-card {
+  background: var(--bl-surface);
+  backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  border: 1px solid var(--bl-border);
+  border-radius: 16px;
+  box-shadow: var(--bl-shadow);
+}
+
+// shared page scaffolding
+.page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 20px;
+  gap: 16px;
+  overflow: auto;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  h1 {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  .spacer {
+    flex: 1;
+  }
+}
+
+.muted {
+  color: var(--bl-text-muted);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 500;
+  background: var(--bl-accent-soft);
+  color: var(--bl-accent);
+  white-space: nowrap;
+
+  &.good { background: rgba(18, 145, 92, 0.12); color: var(--bl-good); }
+  &.warn { background: rgba(183, 121, 31, 0.14); color: var(--bl-warn); }
+  &.bad { background: rgba(214, 69, 69, 0.12); color: var(--bl-bad); }
+  &.neutral { background: var(--bl-hover); color: var(--bl-text-muted); }
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--bl-text-muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+
+  &:hover {
+    background: var(--bl-hover);
+    color: var(--bl-text);
+  }
+
+  mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+  }
+}
+
+.primary-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  border: none;
+  border-radius: 10px;
+  background: var(--bl-accent);
+  color: #fff;
+  font-weight: 600;
+  font-size: 13.5px;
+  cursor: pointer;
+  transition: filter 0.15s ease;
+
+  &:hover { filter: brightness(1.08); }
+  &:disabled { opacity: 0.5; cursor: default; }
+}
+
+.ghost-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: 1px solid var(--bl-border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--bl-text);
+  font-weight: 500;
+  font-size: 13px;
+  cursor: pointer;
+
+  &:hover { background: var(--bl-hover); }
+}
+
+.text-input {
+  padding: 9px 12px;
+  border: 1px solid var(--bl-border);
+  border-radius: 10px;
+  background: var(--bl-surface-solid);
+  color: var(--bl-text);
+  font: inherit;
+  outline: none;
+
+  &:focus {
+    border-color: var(--bl-accent);
+  }
+}
+
+// scrollbars
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-thumb {
+  background: var(--bl-border);
+  border-radius: 6px;
+}
+::-webkit-scrollbar-track { background: transparent; }
+
+// sql / code blocks
+.sql-block {
+  background: var(--bl-code-bg);
+  border: 1px solid var(--bl-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12.5px;
+  line-height: 1.55;
+  overflow-x: auto;
+  white-space: pre;
+  color: var(--bl-text);
+}
+
+// simple table styling for non-grid tables
+.bl-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+
+  th, td {
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--bl-border);
+  }
+
+  th {
+    color: var(--bl-text-muted);
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+}

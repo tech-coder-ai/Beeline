@@ -1,0 +1,47 @@
+<div class="admin-config">
+  @if (saved()) {
+    <div class="save-toast"><mat-icon>check_circle</mat-icon> Saved</div>
+  }
+
+  <div class="section">
+    <div class="section-title">Feature flags</div>
+    <div class="flag-grid">
+      @for (key of flagKeys; track key) {
+        <div class="flag-row glass-card">
+          <span>{{ key.replace('_', ' ') }}</span>
+          <mat-slide-toggle
+            [checked]="!!featureFlags[key]"
+            (change)="toggleFlag(key, featureFlags[key])"
+          ></mat-slide-toggle>
+        </div>
+      }
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Thresholds &amp; guard rails</div>
+    <div class="field-grid">
+      @for (field of numberFields; track field.path) {
+        <label class="field glass-card">
+          <span class="muted">{{ field.label }}</span>
+          <input
+            class="text-input"
+            type="number"
+            [ngModel]="field.get()"
+            (change)="update(field.path, $any($event.target).valueAsNumber)"
+          />
+        </label>
+      }
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Read-only guard rails (always enforced)</div>
+    <div class="pill-list">
+      @for (kw of blockedKeywords; track kw) {
+        <span class="chip bad">{{ kw }}</span>
+      }
+    </div>
+    <p class="muted note">Beeline is SELECT-only in every configuration. These keywords cannot be re-enabled from the UI.</p>
+  </div>
+</div>

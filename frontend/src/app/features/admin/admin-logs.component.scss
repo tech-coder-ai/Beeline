@@ -1,0 +1,35 @@
+.admin-logs {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-bottom: 20px;
+}
+
+.usage-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.stat-card {
+  padding: 12px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 120px;
+
+  strong { font-size: 18px; text-transform: capitalize; }
+}
+
+.log-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  .ghost-btn.active { background: var(--bl-accent-soft); color: var(--bl-accent); border-color: transparent; }
+  .spacer { flex: 1; }
+  input { max-width: 240px; }
+}
+
+.bl-table { font-size: 12px; }
+.prompt-cell { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

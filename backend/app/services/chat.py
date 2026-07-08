@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.exceptions import NotFound, ValidationFailed
+from app.models.base import utcnow
 from app.models.chat import ChatMessage, ChatSession, ExecutionHistory
 from app.pipeline.orchestrator import orchestrator
 from app.pipeline.types import ExecutionPlan, PipelineContext
@@ -89,7 +90,7 @@ class ChatService:
             execution_id=response.execution_id,
         )
         db.add(message)
-        session.updated_at = message.created_at
+        session.updated_at = utcnow()
         await db.flush()
         await db.commit()
         return ChatTurnOut(session_id=session.id, message_id=message.id, response=response)
@@ -133,7 +134,7 @@ class ChatService:
         )
         db.add(message)
         if session:
-            session.updated_at = message.created_at
+            session.updated_at = utcnow()
         await db.flush()
         await db.commit()
         return ChatTurnOut(

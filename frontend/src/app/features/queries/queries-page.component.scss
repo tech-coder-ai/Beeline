@@ -1,0 +1,82 @@
+.queries-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ghost-btn.active {
+  background: var(--bl-accent-soft);
+  color: var(--bl-accent);
+  border-color: transparent;
+}
+
+.editor-section {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.section-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--bl-text-muted);
+}
+
+.sql-editor {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12.5px;
+  width: 100%;
+  resize: vertical;
+}
+
+.editor-actions { display: flex; gap: 8px; }
+.result-block { margin-top: 8px; }
+
+.query-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+}
+
+.query-card {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.query-header {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+
+  .query-name { font-weight: 600; font-size: 13.5px; }
+  .spacer { flex: 1; }
+  .icon-btn.active { color: var(--bl-accent); }
+}
+
+.query-desc { font-size: 12px; margin: 0; }
+
+.sql-block.small {
+  font-size: 11px;
+  max-height: 110px;
+  overflow-y: auto;
+}
+
+.query-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--bl-text-muted);
+}
+
+.result-panel {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}

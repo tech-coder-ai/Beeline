@@ -1,0 +1,62 @@
+<div class="queries-page">
+  <div class="page-header">
+    <h1>Query Library</h1>
+    <span class="spacer"></span>
+    <button class="ghost-btn" [class.active]="showBookmarkedOnly()" (click)="showBookmarkedOnly.set(!showBookmarkedOnly())">
+      <mat-icon>bookmark</mat-icon> Bookmarked
+    </button>
+  </div>
+
+  <div class="editor-section glass-card">
+    <div class="section-label">SQL Editor</div>
+    <textarea class="text-input sql-editor" rows="4" placeholder="SELECT ..." [ngModel]="editorSql()" (ngModelChange)="editorSql.set($event)"></textarea>
+    <div class="editor-actions">
+      <button class="primary-btn" [disabled]="running()" (click)="runEditor()"><mat-icon>play_arrow</mat-icon> Run</button>
+      <button class="ghost-btn" (click)="saveFromEditor()"><mat-icon>bookmark_add</mat-icon> Save as query</button>
+    </div>
+    @if (editorResult(); as result) {
+      <div class="result-block">
+        @if (result.charts.length) { <bl-chart [spec]="result.charts[0]" /> }
+        @if (result.table) { <bl-data-grid [table]="result.table" [showActions]="false" /> }
+      </div>
+    }
+  </div>
+
+  <div class="query-list">
+    @for (q of visibleQueries; track q.id) {
+      <div class="query-card glass-card">
+        <div class="query-header">
+          <span class="query-name">{{ q.name }}</span>
+          <span class="spacer"></span>
+          <button class="icon-btn" [class.active]="q.is_bookmarked" matTooltip="Bookmark" (click)="toggleBookmark(q)">
+            <mat-icon>{{ q.is_bookmarked ? 'bookmark' : 'bookmark_border' }}</mat-icon>
+          </button>
+          <button class="icon-btn" matTooltip="Run" [disabled]="runningId() === q.id" (click)="run(q)">
+            <mat-icon>play_arrow</mat-icon>
+          </button>
+          <button class="icon-btn" matTooltip="Delete" (click)="remove(q)">
+            <mat-icon>delete</mat-icon>
+          </button>
+        </div>
+        @if (q.description) { <p class="muted query-desc">{{ q.description }}</p> }
+        <pre class="sql-block small">{{ q.sql }}</pre>
+        <div class="query-meta">
+          <span>Run {{ q.run_count || 0 }} times</span>
+          @if (q.tags.length) {
+            @for (t of q.tags; track t) { <span class="chip">{{ t }}</span> }
+          }
+        </div>
+      </div>
+    } @empty {
+      <p class="muted">No saved queries yet. Save one from a chat result or the editor above.</p>
+    }
+  </div>
+
+  @if (result(); as r) {
+    <div class="result-panel glass-card">
+      <div class="section-label">Result</div>
+      @if (r.charts.length) { <bl-chart [spec]="r.charts[0]" /> }
+      @if (r.table) { <bl-data-grid [table]="r.table" /> }
+    </div>
+  }
+</div>

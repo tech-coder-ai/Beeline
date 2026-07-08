@@ -1,0 +1,95 @@
+.dashboards-layout {
+  display: flex;
+  height: 100%;
+}
+
+.dash-rail {
+  width: 240px;
+  flex-shrink: 0;
+  padding: 16px 12px;
+  border-right: 1px solid var(--bl-border);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+
+  .full { width: 100%; justify-content: center; }
+}
+
+.create-box {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.create-actions { display: flex; gap: 6px;
+  .small { padding: 6px 12px; font-size: 12px; }
+}
+
+.dash-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dash-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border: none;
+  background: transparent;
+  border-radius: 9px;
+  color: var(--bl-text-muted);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+
+  mat-icon { font-size: 16px; width: 16px; height: 16px; }
+  span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  &:hover { background: var(--bl-hover); color: var(--bl-text); }
+  &.active { background: var(--bl-accent-soft); color: var(--bl-accent); font-weight: 500; }
+}
+
+.empty { font-size: 12px; padding: 10px; }
+
+.dash-content {
+  flex: 1;
+  min-width: 0;
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.widget-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: 14px;
+}
+
+.widget {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  &.full { grid-column: 1 / -1; }
+}
+
+.widget-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  .widget-title { font-weight: 600; font-size: 13px; }
+}
+
+.empty-state {
+  margin: auto;
+  font-size: 13px;
+}

@@ -1,0 +1,13 @@
+<div class="chat-page">
+  <bl-chat-sidebar />
+
+  <div class="center-column">
+    <bl-chat-thread />
+    <div class="composer-dock">
+      <bl-chat-composer />
+    </div>
+    <bl-chat-bottom-panel [response]="latestResponse()" />
+  </div>
+
+  <bl-chat-context-panel [response]="latestResponse()" />
+</div>

@@ -1,0 +1,61 @@
+<div class="sidebar glass">
+  <button class="new-chat-btn" (click)="state.newChat()">
+    <mat-icon>add</mat-icon> New chat
+  </button>
+
+  <div class="search-box">
+    <mat-icon>search</mat-icon>
+    <input
+      class="search-input"
+      placeholder="Search chats"
+      [ngModel]="state.sessionSearch()"
+      (ngModelChange)="onSearch($event)"
+    />
+  </div>
+
+  <div class="session-list">
+    @for (session of state.sessions(); track session.id) {
+      <div
+        class="session-item"
+        [class.active]="session.id === state.activeSessionId()"
+        (click)="state.openSession(session.id)"
+      >
+        @if (session.is_pinned) {
+          <mat-icon class="pin-icon" matTooltip="Pinned">push_pin</mat-icon>
+        }
+        @if (renamingId() === session.id) {
+          <input
+            class="rename-input"
+            [(ngModel)]="renameValue"
+            (click)="$event.stopPropagation()"
+            (keydown.enter)="commitRename(session)"
+            (blur)="commitRename(session)"
+            autofocus
+          />
+        } @else {
+          <span class="session-title">{{ session.title }}</span>
+        }
+
+        <button class="icon-btn menu-trigger" [matMenuTriggerFor]="menu" (click)="$event.stopPropagation()">
+          <mat-icon>more_horiz</mat-icon>
+        </button>
+        <mat-menu #menu="matMenu">
+          <button mat-menu-item (click)="startRename(session, $event)">
+            <mat-icon>edit</mat-icon><span>Rename</span>
+          </button>
+          <button mat-menu-item (click)="state.togglePin(session)">
+            <mat-icon>push_pin</mat-icon><span>{{ session.is_pinned ? 'Unpin' : 'Pin' }}</span>
+          </button>
+          <button mat-menu-item (click)="state.archive(session)">
+            <mat-icon>archive</mat-icon><span>Archive</span>
+          </button>
+          <button mat-menu-item (click)="state.remove(session)">
+            <mat-icon>delete</mat-icon><span>Delete</span>
+          </button>
+        </mat-menu>
+      </div>
+    } @empty {
+      <div class="empty-state muted">No conversations yet.</div>
+    }
+  </div>
+</div>

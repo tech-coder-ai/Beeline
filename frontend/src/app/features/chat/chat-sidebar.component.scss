@@ -1,0 +1,112 @@
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  width: 260px;
+  height: 100%;
+  border-right: 1px solid var(--bl-border);
+  padding: 14px 10px;
+  gap: 12px;
+}
+
+.new-chat-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--bl-border);
+  border-radius: 12px;
+  background: var(--bl-accent-soft);
+  color: var(--bl-accent);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+
+  &:hover { filter: brightness(1.05); }
+}
+
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  background: var(--bl-hover);
+
+  mat-icon { font-size: 17px; width: 17px; height: 17px; color: var(--bl-text-muted); }
+
+  .search-input {
+    border: none;
+    background: transparent;
+    outline: none;
+    font: inherit;
+    font-size: 12.5px;
+    color: var(--bl-text);
+    width: 100%;
+  }
+}
+
+.session-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.session-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 13px;
+  position: relative;
+
+  .pin-icon {
+    font-size: 14px; width: 14px; height: 14px;
+    color: var(--bl-accent);
+    transform: rotate(35deg);
+  }
+
+  .session-title {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .menu-trigger {
+    opacity: 0;
+    width: 26px; height: 26px;
+    mat-icon { font-size: 16px; width: 16px; height: 16px; }
+  }
+
+  &:hover {
+    background: var(--bl-hover);
+    .menu-trigger { opacity: 1; }
+  }
+
+  &.active {
+    background: var(--bl-accent-soft);
+    color: var(--bl-accent);
+    font-weight: 500;
+  }
+
+  .rename-input {
+    flex: 1;
+    border: 1px solid var(--bl-accent);
+    border-radius: 6px;
+    padding: 2px 6px;
+    font: inherit;
+    background: var(--bl-surface-solid);
+    color: var(--bl-text);
+  }
+}
+
+.empty-state {
+  padding: 20px 10px;
+  text-align: center;
+  font-size: 12.5px;
+}

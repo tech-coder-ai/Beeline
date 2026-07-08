@@ -1,0 +1,72 @@
+<div class="admin-connectors">
+  <div class="section">
+    <div class="section-title">Analytics connectors</div>
+    <div class="connector-grid">
+      @for (c of connectors(); track c['id']) {
+        <div class="connector-card glass-card">
+          <div class="connector-header">
+            <mat-icon>cable</mat-icon>
+            <span class="connector-name">{{ c['display_name'] || c['id'] }}</span>
+            @if (c['id'] === defaultId()) { <span class="chip good">default</span> }
+            <span class="chip neutral">{{ c['type'] }}</span>
+          </div>
+          <div class="connector-meta muted">
+            {{ c['host'] }}:{{ c['port'] }} · {{ c['database'] }}
+          </div>
+          <div class="connector-actions">
+            <button class="ghost-btn small" [disabled]="testing() === c['id']" (click)="test(c['id'])">
+              <mat-icon>network_check</mat-icon> Test connection
+            </button>
+            @if (testResults()[c['id']]; as result) {
+              <span class="chip" [class.good]="result.ok" [class.bad]="!result.ok">
+                {{ result.ok ? 'Connected' : 'Failed' }} ({{ result.latency_ms }}ms)
+              </span>
+            }
+          </div>
+          @if (testResults()[c['id']] && !testResults()[c['id']].ok) {
+            <p class="error-text">{{ testResults()[c['id']].message }}</p>
+          }
+        </div>
+      }
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Metadata synchronization</div>
+    <div class="sync-actions">
+      <button class="primary-btn" [disabled]="syncing()" (click)="triggerSync('incremental')">
+        <mat-icon>sync</mat-icon> Incremental sync
+      </button>
+      <button class="ghost-btn" [disabled]="syncing()" (click)="triggerSync('full')">
+        <mat-icon>refresh</mat-icon> Full sync
+      </button>
+      <button class="ghost-btn" [disabled]="enriching()" (click)="triggerEnrichment()">
+        <mat-icon>auto_awesome</mat-icon> Run AI enrichment
+      </button>
+    </div>
+
+    <table class="bl-table">
+      <thead>
+        <tr><th>Started</th><th>Mode</th><th>Status</th><th>Tables</th><th>Columns</th><th>Error</th></tr>
+      </thead>
+      <tbody>
+        @for (run of syncRuns(); track run.id) {
+          <tr>
+            <td>{{ run.created_at | date: 'short' }}</td>
+            <td>{{ run.mode }}</td>
+            <td>
+              <span class="chip" [class.good]="run.status === 'success'" [class.bad]="run.status === 'failed'" [class.warn]="run.status === 'running'">
+                {{ run.status }}
+              </span>
+            </td>
+            <td>{{ run.tables_synced }}</td>
+            <td>{{ run.columns_synced }}</td>
+            <td class="muted error-cell">{{ run.error || '-' }}</td>
+          </tr>
+        } @empty {
+          <tr><td colspan="6" class="muted">No sync runs yet.</td></tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</div>

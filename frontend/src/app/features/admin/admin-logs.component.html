@@ -1,0 +1,70 @@
+<div class="admin-logs">
+  <div class="usage-stats">
+    <div class="stat-card glass-card">
+      <span class="muted">Total queries</span>
+      <strong>{{ usage()['total_queries'] }}</strong>
+    </div>
+    <div class="stat-card glass-card">
+      <span class="muted">Avg execution time</span>
+      <strong>{{ usage()['avg_execution_ms'] || '-' }} ms</strong>
+    </div>
+    @for (entry of byStatus | keyvalue; track entry.key) {
+      <div class="stat-card glass-card">
+        <span class="muted">{{ entry.key }}</span>
+        <strong>{{ entry.value }}</strong>
+      </div>
+    }
+  </div>
+
+  <div class="log-toolbar">
+    <button class="ghost-btn" [class.active]="view() === 'executions'" (click)="view.set('executions')">Execution log</button>
+    <button class="ghost-btn" [class.active]="view() === 'audit'" (click)="view.set('audit')">Audit trail</button>
+    <span class="spacer"></span>
+    <input class="text-input" placeholder="Search..." [ngModel]="search()" (ngModelChange)="onSearch($event)" />
+  </div>
+
+  @if (view() === 'executions') {
+    <table class="bl-table">
+      <thead><tr><th>Time</th><th>Prompt</th><th>Status</th><th>Rows</th><th>Duration</th><th>Model</th></tr></thead>
+      <tbody>
+        @for (e of executions(); track e.id) {
+          <tr>
+            <td>{{ e.created_at | date: 'short' }}</td>
+            <td class="prompt-cell">{{ e.prompt }}</td>
+            <td>
+              <span class="chip" [class.good]="e.status === 'executed'" [class.bad]="e.status === 'failed' || e.status === 'blocked'" [class.warn]="e.status === 'preview' || e.status === 'clarification'">
+                {{ e.status }}
+              </span>
+            </td>
+            <td>{{ e.row_count ?? '-' }}</td>
+            <td>{{ e.execution_time_ms ? e.execution_time_ms + 'ms' : '-' }}</td>
+            <td class="muted">{{ e.llm_model || '-' }}</td>
+          </tr>
+        } @empty {
+          <tr><td colspan="6" class="muted">No executions logged yet.</td></tr>
+        }
+      </tbody>
+    </table>
+  } @else {
+    <table class="bl-table">
+      <thead><tr><th>Time</th><th>Action</th><th>Entity</th><th>Severity</th><th>User</th></tr></thead>
+      <tbody>
+        @for (a of audits(); track a.id) {
+          <tr>
+            <td>{{ a.created_at | date: 'short' }}</td>
+            <td>{{ a.action }}</td>
+            <td class="muted">{{ a.entity_type }} {{ a.entity_id }}</td>
+            <td>
+              <span class="chip" [class.bad]="a.severity === 'critical'" [class.warn]="a.severity === 'warning'" [class.neutral]="a.severity === 'info'">
+                {{ a.severity }}
+              </span>
+            </td>
+            <td class="muted">{{ a.user_id }}</td>
+          </tr>
+        } @empty {
+          <tr><td colspan="5" class="muted">No audit entries yet.</td></tr>
+        }
+      </tbody>
+    </table>
+  }
+</div>

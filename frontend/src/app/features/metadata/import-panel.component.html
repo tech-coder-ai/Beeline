@@ -1,0 +1,66 @@
+<div class="import-page">
+  <div class="upload-card glass-card">
+    <mat-icon class="upload-icon">upload_file</mat-icon>
+    <p>Upload a CSV or Excel file with columns: <span class="mono">database, table, column, description, glossary, owner, tags, classification</span></p>
+    <label class="primary-btn upload-btn">
+      <mat-icon>attach_file</mat-icon> Choose file
+      <input type="file" accept=".csv,.xlsx,.xlsm" hidden (change)="onFileSelected($event)" />
+    </label>
+    @if (file()) {
+      <span class="muted">{{ file()!.name }}</span>
+    }
+  </div>
+
+  @if (loading()) {
+    <p class="muted">Processing...</p>
+  }
+
+  @if (preview(); as p) {
+    <div class="preview-card glass-card">
+      <div class="preview-summary">
+        <div class="stat"><span class="muted">Matched rows</span><strong>{{ p.matched_rows }}</strong></div>
+        <div class="stat"><span class="muted">Changes proposed</span><strong>{{ p.changes.length }}</strong></div>
+        <div class="stat"><span class="muted">Unmatched</span><strong>{{ p.unmatched.length }}</strong></div>
+      </div>
+
+      @if (p.changes.length) {
+        <table class="bl-table">
+          <thead><tr><th>Entity</th><th>Field</th><th>Current</th><th>Proposed</th></tr></thead>
+          <tbody>
+            @for (c of p.changes; track $index) {
+              <tr>
+                <td>{{ c.label }}</td>
+                <td>{{ c.field }}</td>
+                <td class="muted">{{ c.current || '-' }}</td>
+                <td>{{ c.proposed }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+
+      @if (p.unmatched.length) {
+        <div class="unmatched">
+          <div class="section-label">Unmatched rows</div>
+          <ul>
+            @for (u of p.unmatched; track u.row) { <li>Row {{ u.row }}: {{ u.reason }}</li> }
+          </ul>
+        </div>
+      }
+
+      @if (!committed()) {
+        <div class="preview-actions">
+          <button class="primary-btn" [disabled]="!p.changes.length" (click)="commit()">
+            <mat-icon>fact_check</mat-icon> Queue for approval
+          </button>
+          <button class="ghost-btn" (click)="reset()">Cancel</button>
+        </div>
+      } @else {
+        <div class="banner good-banner">
+          <mat-icon>check_circle</mat-icon>
+          Changes queued in the Approvals tab for review.
+        </div>
+      }
+    </div>
+  }
+</div>

@@ -1,0 +1,73 @@
+.suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 14px;
+  max-width: 640px;
+}
+
+.suggestion-chip {
+  padding: 9px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--bl-border);
+  background: var(--bl-surface);
+  color: var(--bl-text);
+  font-size: 12.5px;
+  cursor: pointer;
+  text-align: left;
+
+  &:hover {
+    border-color: var(--bl-accent);
+    color: var(--bl-accent);
+  }
+}
+
+.composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 10px 10px 10px 16px;
+  border-radius: 18px;
+}
+
+.composer-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  resize: none;
+  font: inherit;
+  font-size: 14px;
+  color: var(--bl-text);
+  max-height: 160px;
+  line-height: 1.5;
+  padding: 6px 0;
+
+  &::placeholder {
+    color: var(--bl-text-muted);
+  }
+}
+
+.send-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border: none;
+  border-radius: 12px;
+  background: var(--bl-accent);
+  color: #fff;
+  cursor: pointer;
+  flex-shrink: 0;
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  &:not(:disabled):hover {
+    filter: brightness(1.08);
+  }
+}
