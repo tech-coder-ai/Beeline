@@ -2,9 +2,51 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  justify-content: center;
+  justify-content: flex-start;
   margin-bottom: 14px;
-  max-width: 640px;
+  width: 100%;
+}
+
+.composer-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  min-height: 22px;
+  width: 100%;
+}
+
+.connector-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+
+  mat-icon { font-size: 16px; width: 16px; height: 16px; color: var(--bl-accent); }
+
+  select {
+    border: 1px solid var(--bl-border);
+    border-radius: 8px;
+    background: var(--bl-surface-solid);
+    color: var(--bl-text);
+    font: inherit;
+    font-size: 12px;
+    padding: 4px 8px;
+  }
+}
+
+.connector-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+
+  mat-icon { font-size: 15px; width: 15px; height: 15px; }
+}
+
+.action-notice {
+  font-size: 12px;
+  color: var(--bl-good);
 }
 
 .suggestion-chip {
@@ -23,12 +65,24 @@
   }
 }
 
+.avatar {
+  height: 30px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #2f6fed, #7c5cff);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  mat-icon { font-size: 16px; width: 16px; height: 16px; color: #fff; }
+}
+
 .composer {
   display: flex;
   align-items: flex-end;
   gap: 8px;
   padding: 10px 10px 10px 16px;
   border-radius: 18px;
+  width: 100%;
 }
 
 .composer-input {

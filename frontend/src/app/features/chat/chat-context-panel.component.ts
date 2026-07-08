@@ -14,6 +14,12 @@ export class ChatContextPanelComponent {
 
   readonly hasContent = computed(() => {
     const r = this.response();
-    return !!r && (r.tables_used.length > 0 || r.filters_used.length > 0 || r.metrics_used.length > 0 || !!r.stats);
+    return !!r && (
+      r.tables_used.length > 0
+      || r.filters_used.length > 0
+      || r.metrics_used.length > 0
+      || !!r.stats
+      || !!r.sql_explanation
+    );
   });
 }

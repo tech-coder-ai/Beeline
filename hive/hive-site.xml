@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Overrides the apache/hive:3.1.3 image's default hive-site.xml.
+  Mounted via HIVE_CUSTOM_CONF_DIR in docker-compose.yml, which symlinks it
+  over the image's own /opt/hive/conf/hive-site.xml (same filename).
+
+  This is the stock config from the image plus one added property:
+  hive.metastore.warehouse.dir (the legacy key). The image only sets the
+  newer metastore.warehouse.dir, but HiveServer2's own DDL execution path
+  (as opposed to the standalone metastore service) resolves the warehouse
+  directory via the legacy hive.* key and falls back to a hardcoded
+  /user/hive/warehouse default when it's absent - a directory that doesn't
+  exist in this image and isn't on any persisted volume, so every
+  CREATE DATABASE / CREATE TABLE fails with "Unable to create database path
+  file:/user/hive/warehouse/...". Setting both keys to the same, volume-backed
+  path fixes it for both code paths.
+-->
+<configuration>
+    <property>
+        <name>hive.server2.enable.doAs</name>
+        <value>false</value>
+    </property>
+    <property>
+        <name>hive.tez.exec.inplace.progress</name>
+        <value>false</value>
+    </property>
+    <property>
+        <name>hive.exec.scratchdir</name>
+        <value>/opt/hive/scratch_dir</value>
+    </property>
+    <property>
+        <name>hive.user.install.directory</name>
+        <value>/opt/hive/install_dir</value>
+    </property>
+    <property>
+        <name>tez.runtime.optimize.local.fetch</name>
+        <value>true</value>
+    </property>
+    <property>
+        <name>hive.exec.submit.local.task.via.child</name>
+        <value>false</value>
+    </property>
+    <property>
+        <name>mapreduce.framework.name</name>
+        <value>local</value>
+    </property>
+    <property>
+        <name>tez.local.mode</name>
+        <value>true</value>
+    </property>
+    <property>
+        <name>hive.execution.engine</name>
+        <value>tez</value>
+    </property>
+    <property>
+        <name>metastore.warehouse.dir</name>
+        <value>/opt/hive/data/warehouse</value>
+    </property>
+    <property>
+        <name>hive.metastore.warehouse.dir</name>
+        <value>/opt/hive/data/warehouse</value>
+    </property>
+    <property>
+        <name>metastore.metastore.event.db.notification.api.auth</name>
+        <value>false</value>
+    </property>
+    <property>
+        <name>javax.jdo.option.ConnectionURL</name>
+        <value>jdbc:derby:;databaseName=/opt/hive/metastore/derby;create=true</value>
+    </property>
+    <property>
+        <name>javax.jdo.option.ConnectionDriverName</name>
+        <value>org.apache.derby.jdbc.EmbeddedDriver</value>
+    </property>
+</configuration>

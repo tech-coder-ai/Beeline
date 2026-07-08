@@ -39,9 +39,21 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   padding: 12px 14px;
   font-size: 13px;
   text-transform: capitalize;
+
+  .flag-copy {
+    flex: 1;
+    min-width: 0;
+    text-transform: none;
+
+    .note {
+      margin-top: 4px;
+      line-height: 1.45;
+    }
+  }
 }
 
 .field-grid {

@@ -37,16 +37,20 @@ from app.pipeline.stages.planner import QueryPlanner
 from app.pipeline.stages.refiner import QueryRefiner
 from app.pipeline.stages.semantic_search import SemanticSearch
 from app.pipeline.stages.sql_generator import SQLGenerator
+from app.pipeline.stages.sql_reviewer import SqlReviewer
 from app.pipeline.stages.validator import SQLValidator
 from app.pipeline.stages.visualization import VisualizationPlanner
+from app.pipeline.sql_utils import sanitize_sql, compact_connector_error
 from app.pipeline.types import ExecutionPlan, PipelineContext
 from app.schemas.response import (
     BeelineResponse,
     ConfidenceBreakdown,
     CostEstimate,
     ExecutionStats,
+    SqlExplanation,
 )
 from app.services.audit import audit
+from app.services.explain import explain_service
 from app.services.query_library import QueryLibraryService
 
 logger = get_logger(__name__)
@@ -66,6 +70,7 @@ class Orchestrator:
         self.interpreter = ResultInterpreter()
         self.viz_planner = VisualizationPlanner()
         self.clarifier = ClarificationEngine()
+        self.sql_reviewer = SqlReviewer()
         self.library = QueryLibraryService()
 
     # ------------------------------------------------------------------ entry
@@ -105,7 +110,7 @@ class Orchestrator:
         except ConnectorError as exc:
             history.status = "failed"
             history.error = exc.message
-            response = self._error_response(ctx, "error", exc.message)
+            response = self._error_response(ctx, "error", compact_connector_error(exc.message))
         except BeelineError as exc:
             history.status = "failed"
             history.error = exc.message
@@ -128,6 +133,24 @@ class Orchestrator:
 
         if ctx.intent and not ctx.intent.needs_data:
             return await self._metadata_answer(ctx)
+
+        # No answer to a clarification can ever populate an empty catalog - detect
+        # that case once and give a clear, actionable message instead of looping
+        # clarification requests forever.
+        if not ctx.resolved_tables and not await self._catalog_has_tables(db):
+            history.status = "blocked"
+            return BeelineResponse(
+                kind="answer",
+                summary=(
+                    "No tables have been synchronized into Beeline's catalog yet, so there is "
+                    "no data to query. Ask an administrator to run a metadata sync "
+                    "(Admin -> Connectors & Sync -> Full sync) once the analytics connector is "
+                    "reachable, then ask again."
+                ),
+                visualization="text",
+                confidence=self._confidence_breakdown(ctx),
+                warnings=ctx.warnings,
+            )
 
         # -------- confidence gate: clarify, never guess
         overall = self._overall_confidence(ctx, planning_done=False)
@@ -163,10 +186,13 @@ class Orchestrator:
             await self.generator.run(ctx, connector)
 
         # -------- validate + optimize + estimate
+        dialect = connector.dialect.sqlglot_dialect
+        if ctx.sql:
+            ctx.sql = sanitize_sql(ctx.sql, dialect)
         known_tables = await self._known_tables(db)
-        self.validator.validate(ctx.sql or "", connector.dialect.sqlglot_dialect, ctx, known_tables)
+        self.validator.validate(ctx.sql or "", dialect, ctx, known_tables)
         ctx.optimized_sql = self.optimizer.optimize(
-            ctx.sql or "", connector.dialect.sqlglot_dialect, ctx
+            ctx.sql or "", dialect, ctx
         )
         await self.cost_estimator.run(ctx, connector)
 
@@ -184,24 +210,48 @@ class Orchestrator:
                 warnings=ctx.warnings + ctx.validation_warnings,
             )
 
-        # -------- preview gate
-        overall = self._overall_confidence(ctx, planning_done=True)
-        auto_threshold = settings.get("pipeline.confidence.autoexecute_threshold", 0.85)
-        preview_enabled = settings.get("pipeline.query_preview.enabled", True)
-        if preview_enabled and overall < auto_threshold and not ctx.clarification_answer:
+        # -------- preview / auto-review gate
+        preview_cfg = settings.section("pipeline.query_preview") or {}
+        manual_review = preview_cfg.get("manual_review")
+        if manual_review is None:
+            # Backward compat: enabled=false meant skip preview and auto-execute.
+            manual_review = preview_cfg.get("enabled", True)
+
+        if manual_review and not ctx.clarification_answer:
             history.status = "preview"
+            sql_explanation = await self._sql_explanation(ctx, connector)
             return BeelineResponse(
                 kind="preview",
                 summary="Here is the query I plan to run. Review and execute, or refine your question.",
                 sql=ctx.optimized_sql,
+                sql_explanation=sql_explanation,
                 cost_estimate=CostEstimate(**ctx.cost) if ctx.cost else None,
                 confidence=self._confidence_breakdown(ctx),
                 tables_used=ctx.plan.tables if ctx.plan else [],
                 filters_used=[f"{f.column} {f.operator} {f.value}" for f in (ctx.plan.filters if ctx.plan else [])],
                 metrics_used=[a.alias or a.function for a in (ctx.plan.aggregations if ctx.plan else [])],
                 warnings=ctx.warnings + ctx.validation_warnings,
-                metadata={"rationale": ctx.plan.rationale if ctx.plan else ""},
+                metadata={"rationale": ctx.plan.rationale if ctx.plan else "", "manual_review": True},
             )
+
+        review = await self.sql_reviewer.review(ctx, connector.dialect.sqlglot_dialect, settings)
+        clarify_threshold = settings.get("pipeline.confidence.clarification_threshold", 0.65)
+        if not review["approved"] and (
+            review["confidence"] < clarify_threshold or review.get("clarification")
+        ):
+            history.status = "clarification"
+            clarification = review.get("clarification") or await self.clarifier.build(ctx)
+            return BeelineResponse(
+                kind="clarification",
+                summary="I need one detail before I query the data.",
+                clarification=clarification,
+                sql=ctx.optimized_sql,
+                confidence=self._confidence_breakdown(ctx),
+                tables_used=ctx.plan.tables if ctx.plan else [],
+                warnings=ctx.warnings + ctx.validation_warnings + review.get("issues", []),
+            )
+        if review.get("issues"):
+            ctx.warnings.extend(review["issues"])
 
         return await self.execute_and_respond(ctx, db, history)
 
@@ -216,6 +266,7 @@ class Orchestrator:
 
         narrative = await self.interpreter.run(ctx)
         viz = self.viz_planner.run(ctx)
+        sql_explanation = await self._sql_explanation(ctx, connector)
 
         if not ctx.cache_hit and ctx.row_count >= 0 and ctx.sql:
             await self.library.record_success(ctx, db)
@@ -236,6 +287,7 @@ class Orchestrator:
             recommendations=narrative["recommendations"],
             follow_up_questions=narrative["follow_up_questions"],
             sql=ctx.optimized_sql,
+            sql_explanation=sql_explanation,
             cost_estimate=CostEstimate(**ctx.cost) if ctx.cost else None,
             stats=ExecutionStats(
                 execution_time_ms=ctx.execution_time_ms,
@@ -304,6 +356,24 @@ class Orchestrator:
             sql=round(ctx.confidence.get("sql", 0.0), 3),
             overall=round(ctx.confidence.get("overall", 0.0), 3),
         )
+
+    async def _sql_explanation(self, ctx: PipelineContext, connector) -> SqlExplanation | None:
+        sql = ctx.optimized_sql or ctx.sql
+        if not sql:
+            return None
+        try:
+            return await explain_service.explain(
+                sql, connector.dialect.sqlglot_dialect, question=ctx.effective_prompt
+            )
+        except Exception as exc:  # noqa: BLE001 - explanation is optional
+            logger.debug("SQL explanation unavailable: %s", exc)
+            return None
+
+    async def _catalog_has_tables(self, db: AsyncSession) -> bool:
+        row = (
+            await db.execute(select(CatalogTable.id).where(CatalogTable.is_active.is_(True)).limit(1))
+        ).first()
+        return row is not None
 
     async def _known_tables(self, db: AsyncSession) -> set[str]:
         rows = (

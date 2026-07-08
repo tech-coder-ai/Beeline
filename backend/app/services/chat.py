@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.exceptions import NotFound, ValidationFailed
+from app.core.json_utils import json_safe_tree
 from app.models.base import utcnow
 from app.models.chat import ChatMessage, ChatSession, ExecutionHistory
 from app.pipeline.orchestrator import orchestrator
@@ -74,8 +75,11 @@ class ChatService:
                           user_id: str = "default") -> ChatTurnOut:
         if request.execute_preview_id:
             return await self._execute_preview(db, request, user_id)
-        if not request.message or not request.message.strip():
+
+        effective_message = (request.message or "").strip() or (request.clarification_answer or "").strip()
+        if not effective_message:
             raise ValidationFailed("Message must not be empty")
+        request = request.model_copy(update={"message": effective_message})
 
         session = await self._ensure_session(db, request, user_id)
         ctx = await self._build_context(db, session, request, user_id)
@@ -86,7 +90,7 @@ class ChatService:
             session_id=session.id,
             role="assistant",
             content=response.summary,
-            response_payload=response.model_dump(),
+            response_payload=json_safe_tree(response.model_dump()),
             execution_id=response.execution_id,
         )
         db.add(message)
@@ -129,7 +133,7 @@ class ChatService:
             session_id=history.session_id,
             role="assistant",
             content=response.summary,
-            response_payload=response.model_dump(),
+            response_payload=json_safe_tree(response.model_dump()),
             execution_id=history.id,
         )
         db.add(message)

@@ -3,14 +3,13 @@ import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { ApiService } from '../../core/api.service';
-import { Dashboard, DashboardWidget } from '../../core/models';
-import { ChartComponent } from '../../shared/chart.component';
-import { DataGridComponent } from '../../shared/data-grid.component';
+import { ChartSpec, Dashboard, DashboardWidget, TableSpec } from '../../core/models';
 import { KpiCardsComponent } from '../../shared/kpi-cards.component';
+import { ResultDataViewComponent } from '../../shared/result-data-view.component';
 
 @Component({
   selector: 'bl-dashboards-page',
-  imports: [FormsModule, MatIconModule, MatTooltipModule, ChartComponent, DataGridComponent, KpiCardsComponent],
+  imports: [FormsModule, MatIconModule, MatTooltipModule, KpiCardsComponent, ResultDataViewComponent],
   templateUrl: './dashboards-page.component.html',
   styleUrl: './dashboards-page.component.scss',
 })
@@ -73,5 +72,27 @@ export class DashboardsPageComponent implements OnInit {
     const dash = this.active();
     if (!dash?.id) return;
     this.api.getDashboard(dash.id).subscribe();
+  }
+
+  legacyTable(widget: DashboardWidget): TableSpec | null {
+    if (widget.snapshot?.table?.rows?.length) return widget.snapshot.table;
+    const viz = widget.visualization as { table?: TableSpec } | null | undefined;
+    return viz?.table?.rows?.length ? viz.table : null;
+  }
+
+  legacyChart(widget: DashboardWidget): ChartSpec | null {
+    if (widget.snapshot?.charts?.length) return widget.snapshot.charts[0];
+    const viz = widget.visualization as { charts?: ChartSpec[] } | null | undefined;
+    return viz?.charts?.length ? viz.charts[0] : null;
+  }
+
+  snapshotCards(widget: DashboardWidget) {
+    return widget.snapshot?.cards?.length ? widget.snapshot.cards : null;
+  }
+
+  snapshotCharts(widget: DashboardWidget): ChartSpec[] {
+    if (widget.snapshot?.charts?.length) return widget.snapshot.charts;
+    const viz = widget.visualization as { charts?: ChartSpec[] } | null | undefined;
+    return viz?.charts ?? [];
   }
 }

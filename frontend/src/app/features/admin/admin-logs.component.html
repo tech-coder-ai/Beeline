@@ -21,7 +21,34 @@
     <button class="ghost-btn" [class.active]="view() === 'audit'" (click)="view.set('audit')">Audit trail</button>
     <span class="spacer"></span>
     <input class="text-input" placeholder="Search..." [ngModel]="search()" (ngModelChange)="onSearch($event)" />
+    @if (!confirmClear()) {
+      <button
+        class="ghost-btn danger"
+        matTooltip="Clear execution history, analytics, and audit trail"
+        (click)="startClear()"
+      >
+        <mat-icon>delete_sweep</mat-icon> Clear logs
+      </button>
+    }
   </div>
+
+  @if (confirmClear()) {
+    <div class="confirm-banner glass-card">
+      <mat-icon>warning_amber</mat-icon>
+      <div class="confirm-copy">
+        <strong>Clear all logs and analytics?</strong>
+        <span class="muted">This removes execution history, usage stats, and audit entries. Chat messages and dashboards are kept.</span>
+      </div>
+      <button class="ghost-btn" (click)="cancelClear()" [disabled]="clearing()">Cancel</button>
+      <button class="primary-btn danger-btn" (click)="clearAll()" [disabled]="clearing()">
+        {{ clearing() ? 'Clearing...' : 'Clear' }}
+      </button>
+    </div>
+  }
+
+  @if (clearMessage(); as msg) {
+    <div class="notice-banner">{{ msg }}</div>
+  }
 
   @if (view() === 'executions') {
     <table class="bl-table">

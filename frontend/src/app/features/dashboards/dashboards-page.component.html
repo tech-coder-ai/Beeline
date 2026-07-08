@@ -40,13 +40,19 @@
               <span class="widget-title">{{ widget.title }}</span>
               <button class="icon-btn" (click)="removeWidget(widget)"><mat-icon>close</mat-icon></button>
             </div>
-            @if (widget.snapshot) {
-              @if (widget.widget_type === 'kpi' && widget.snapshot.cards.length) {
-                <bl-kpi-cards [cards]="widget.snapshot.cards" />
-              } @else if (widget.widget_type === 'chart' && widget.snapshot.charts.length) {
-                <bl-chart [spec]="widget.snapshot.charts[0]" />
-              } @else if (widget.snapshot.table) {
-                <bl-data-grid [table]="widget.snapshot.table" [showActions]="false" />
+            @if (widget.snapshot || widget.visualization) {
+              @if (snapshotCards(widget); as cards) {
+                <bl-kpi-cards [cards]="cards" />
+              }
+              @if (legacyChart(widget) || legacyTable(widget)) {
+                <bl-result-data-view
+                  [table]="legacyTable(widget)"
+                  [charts]="snapshotCharts(widget)"
+                  [showGridActions]="false"
+                />
+              }
+              @if (!snapshotCards(widget) && !legacyChart(widget) && !legacyTable(widget)) {
+                <p class="muted">Snapshot has no renderable data.</p>
               }
             } @else {
               <p class="muted">No snapshot available. Re-run from Chat to refresh.</p>

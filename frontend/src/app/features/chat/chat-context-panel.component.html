@@ -54,6 +54,26 @@
       <div class="section">
         <div class="section-label">Why this query</div>
         <p class="explain-text">{{ r.sql_explanation.summary }}</p>
+        @if (r.sql_explanation.table_reasons.length) {
+          <ul class="reason-list">
+            @for (item of r.sql_explanation.table_reasons; track item) { <li>{{ item }}</li> }
+          </ul>
+        }
+        @if (r.sql_explanation.filter_reasons.length) {
+          <ul class="reason-list">
+            @for (item of r.sql_explanation.filter_reasons; track item) { <li>{{ item }}</li> }
+          </ul>
+        }
+        @if (r.sql_explanation.aggregation_reasons.length) {
+          <ul class="reason-list">
+            @for (item of r.sql_explanation.aggregation_reasons; track item) { <li>{{ item }}</li> }
+          </ul>
+        }
+        @if (r.sql_explanation.grouping_reasons.length) {
+          <ul class="reason-list">
+            @for (item of r.sql_explanation.grouping_reasons; track item) { <li>{{ item }}</li> }
+          </ul>
+        }
       </div>
     }
   }

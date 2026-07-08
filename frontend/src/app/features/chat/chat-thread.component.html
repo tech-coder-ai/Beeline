@@ -10,17 +10,48 @@
   @for (message of state.messages(); track message.id) {
     <div class="message-row" [class.user]="message.role === 'user'">
       @if (message.role === 'user') {
-        <div class="bubble user-bubble">{{ message.content }}</div>
+        <div class="user-block">
+          @if (editingMessageId() === message.id) {
+            <div class="edit-box glass-card">
+              <textarea
+                class="edit-input"
+                rows="3"
+                [(ngModel)]="editText"
+                (keydown.enter)="$event.preventDefault(); submitEdit(message.id)"
+              ></textarea>
+              <div class="edit-actions">
+                <button class="primary-btn small" (click)="submitEdit(message.id)">
+                  <mat-icon>send</mat-icon> Resend
+                </button>
+                <button class="ghost-btn small" (click)="cancelEdit()">Cancel</button>
+              </div>
+            </div>
+          } @else {
+            <div class="bubble user-bubble">{{ message.content }}</div>
+            <div class="user-actions">
+              <button class="icon-btn" matTooltip="Edit and resend" (click)="startEdit(message.id, message.content ?? '')">
+                <mat-icon>edit</mat-icon>
+              </button>
+              <button class="icon-btn" matTooltip="Resend" (click)="resendAsIs(message.id, message.content ?? '')">
+                <mat-icon>replay</mat-icon>
+              </button>
+            </div>
+          }
+        </div>
       } @else {
-        <div class="assistant-block">
-          <div class="avatar"><mat-icon>auto_awesome</mat-icon></div>
-          <div class="assistant-content glass-card" (click)="inspect.emit(message.id)">
+        <div class="chat-assistant-row">
+          <div class="avatar chat-assistant-gutter"><mat-icon>auto_awesome</mat-icon></div>
+          <div class="assistant-content glass-card">
             @if (message.response_payload) {
               <bl-response-renderer
                 [response]="message.response_payload"
                 (clarify)="onClarify(message.id, $event)"
                 (executePreview)="onExecutePreview(message.response_payload.execution_id)"
                 (followUp)="onFollowUp($event)"
+                (refineQuestion)="onRefine(message.id)"
+                (saveQuery)="onSaveQuery(message.response_payload)"
+                (pinToDashboard)="onPinToDashboard(message.response_payload)"
+                (inspect)="onInspect(message.id)"
               />
             } @else {
               <p>{{ message.content }}</p>
@@ -33,8 +64,8 @@
 
   @if (state.sending()) {
     <div class="message-row">
-      <div class="assistant-block">
-        <div class="avatar"><mat-icon>auto_awesome</mat-icon></div>
+      <div class="chat-assistant-row">
+        <div class="avatar chat-assistant-gutter"><mat-icon>auto_awesome</mat-icon></div>
         <div class="assistant-content glass-card thinking">
           <span class="dot"></span><span class="dot"></span><span class="dot"></span>
         </div>

@@ -13,7 +13,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
           <mat-icon>{{ copied() ? 'check' : 'content_copy' }}</mat-icon>
         </button>
       </div>
-      <pre class="sql-block">{{ sql() }}</pre>
+      <pre class="sql-block" [class.scrollable]="scrollable()">{{ sql() }}</pre>
     </div>
   `,
   styles: [`
@@ -24,11 +24,18 @@ import { MatTooltipModule } from '@angular/material/tooltip';
       .label { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
     }
     pre { margin: 0; }
+    pre.scrollable {
+      max-height: 220px;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
   `],
 })
 export class SqlPanelComponent {
   readonly sql = input.required<string>();
   readonly label = input('Generated SQL');
+  readonly scrollable = input(false);
   readonly copied = signal(false);
 
   copy(): void {

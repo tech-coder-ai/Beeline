@@ -92,7 +92,9 @@ async def execute_sql(request: SqlExecuteRequest, db: AsyncSession = Depends(get
 @router.post("/sql/explain")
 async def explain_sql(request: SqlValidateRequest):
     connector = get_connector(request.connector_id)
-    explanation = await explain_service.explain(request.sql, connector.dialect.sqlglot_dialect)
+    explanation = await explain_service.explain(
+        request.sql, connector.dialect.sqlglot_dialect, question=request.question
+    )
     return explanation
 
 

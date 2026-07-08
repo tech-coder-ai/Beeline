@@ -1,8 +1,9 @@
-import { Component, ElementRef, inject, output, viewChild } from '@angular/core';
+import { Component, ElementRef, effect, inject, output, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { ChatStateService } from '../../core/chat-state.service';
+import { ConnectorService } from '../../core/connector.service';
 
 const SUGGESTIONS = [
   'Show sales by region for last 6 months',
@@ -22,6 +23,28 @@ const SUGGESTIONS = [
         }
       </div>
     }
+    <div class="composer-meta">
+      @if (connectors.connectors().length > 1) {
+        <label class="connector-picker">
+          <mat-icon>cable</mat-icon>
+          <select
+            [ngModel]="connectors.activeId()"
+            (ngModelChange)="connectors.setActive($event)"
+          >
+            @for (c of connectors.connectors(); track c.id) {
+              <option [value]="c.id">{{ c.display_name || c.id }}</option>
+            }
+          </select>
+        </label>
+      } @else if (connectors.activeConnector(); as active) {
+        <span class="connector-label muted">
+          <mat-icon>cable</mat-icon>{{ active.display_name || active.id }}
+        </span>
+      }
+      @if (state.actionNotice()) {
+        <span class="action-notice">{{ state.actionNotice() }}</span>
+      }
+    </div>
     <div class="composer glass-card">
       <textarea
         #input
@@ -46,9 +69,34 @@ const SUGGESTIONS = [
 })
 export class ChatComposerComponent {
   readonly state = inject(ChatStateService);
+  readonly connectors = inject(ConnectorService);
   readonly suggestions = SUGGESTIONS;
   readonly sent = output<void>();
+  readonly inputEl = viewChild<ElementRef<HTMLTextAreaElement>>('input');
   text = '';
+
+  constructor() {
+    effect(() => {
+      const draft = this.state.composerDraft();
+      if (!draft) return;
+      this.text = draft;
+      this.state.composerDraft.set('');
+      queueMicrotask(() => {
+        const el = this.inputEl()?.nativeElement;
+        if (el) {
+          el.focus();
+          el.setSelectionRange(el.value.length, el.value.length);
+          this.autoGrow(el);
+        }
+      });
+    });
+    effect(() => {
+      const notice = this.state.actionNotice();
+      if (!notice) return;
+      const timer = setTimeout(() => this.state.actionNotice.set(null), 4000);
+      return () => clearTimeout(timer);
+    });
+  }
 
   send(): void {
     const message = this.text.trim();

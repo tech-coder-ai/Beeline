@@ -106,6 +106,27 @@ pre,
   box-shadow: var(--bl-shadow);
 }
 
+// Chat: shared row width for assistant responses and the composer
+.chat-assistant-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  max-width: var(--chat-assistant-width, 92%);
+}
+
+.chat-assistant-gutter {
+  width: 30px;
+  flex-shrink: 0;
+}
+
+.chat-assistant-body {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 // shared page scaffolding
 .page {
   display: flex;
@@ -268,4 +289,33 @@ pre,
     text-transform: uppercase;
     letter-spacing: 0.03em;
   }
+}
+
+// Shell layout must be global: routed views are inserted as siblings of
+// <router-outlet> and do not receive the app component's encapsulation attrs.
+.content {
+  > router-outlet {
+    flex: 0 0 0;
+    height: 0;
+    overflow: hidden;
+  }
+
+  > :not(router-outlet) {
+    flex: 1 1 0;
+    min-height: 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+}
+
+.ag-popup,
+.ag-menu,
+.ag-filter {
+  z-index: 10000 !important;
+}
+
+.ag-root-wrapper {
+  border-radius: 12px;
 }

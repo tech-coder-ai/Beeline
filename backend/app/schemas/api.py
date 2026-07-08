@@ -232,6 +232,7 @@ class SqlExecuteRequest(BaseModel):
 class SqlValidateRequest(BaseModel):
     sql: str
     connector_id: str | None = None
+    question: str | None = None
 
 
 # ---------------------------------------------------------------- feedback
@@ -254,6 +255,23 @@ class ConnectorTestResult(BaseModel):
     ok: bool
     message: str
     latency_ms: int | None = None
+
+
+class ConnectorUpsert(BaseModel):
+    id: str
+    type: str = "hive"
+    display_name: str = ""
+    host: str = "localhost"
+    port: int = 10000
+    username: str = "hive"
+    password: str = ""
+    database: str = "default"
+    auth: str = "NONE"
+    connect_timeout_seconds: int = 15
+    allowed_schemas: list[str] = Field(default_factory=list)
+    read_replicas: list[dict[str, Any]] = Field(default_factory=list)
+    retry: dict[str, Any] = Field(default_factory=lambda: {"attempts": 3, "backoff_seconds": 2})
+    session_settings: dict[str, str] = Field(default_factory=dict)
 
 
 class SyncRequest(BaseModel):

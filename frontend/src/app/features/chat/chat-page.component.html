@@ -4,10 +4,21 @@
   <div class="center-column">
     <bl-chat-thread />
     <div class="composer-dock">
-      <bl-chat-composer />
+      <div class="chat-assistant-row">
+        <div class="chat-assistant-gutter" aria-hidden="true"></div>
+        <bl-chat-composer class="chat-assistant-body" />
+      </div>
     </div>
     <bl-chat-bottom-panel [response]="latestResponse()" />
   </div>
 
   <bl-chat-context-panel [response]="latestResponse()" />
+
+  @if (state.pinDialogResponse(); as pinResponse) {
+    <bl-pin-dashboard-dialog
+      [response]="pinResponse"
+      (closed)="state.closePinDialog()"
+      (pinned)="state.onPinnedToDashboard($event.dashboardName)"
+    />
+  }
 </div>

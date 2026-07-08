@@ -1,3 +1,10 @@
+:host {
+  flex-shrink: 0;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+}
+
 .sidebar {
   display: flex;
   flex-direction: column;

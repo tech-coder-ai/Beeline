@@ -5,7 +5,7 @@
   </div>
 
   <div class="tab-bar">
-    @for (t of tabs; track t.id) {
+    @for (t of tabs(); track t.id) {
       <button class="tab" [class.active]="tab() === t.id" (click)="tab.set(t.id)">
         <mat-icon>{{ t.icon }}</mat-icon>{{ t.label }}
       </button>

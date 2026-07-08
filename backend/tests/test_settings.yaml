@@ -44,6 +44,9 @@ pipeline:
     autoexecute_threshold: 0.85
   query_preview:
     enabled: true
+    manual_review: true
+    automated_review:
+      use_llm: true
   query_refinement:
     enabled: false
   python_fallback:

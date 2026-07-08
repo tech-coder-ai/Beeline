@@ -8,7 +8,42 @@
 .section-title {
   font-size: 13px;
   font-weight: 600;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   margin-bottom: 12px;
+}
+
+.connector-form {
+  padding: 16px;
+  margin-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--bl-text-muted);
+  }
+}
+
+.form-actions {
+  display: flex;
+  gap: 8px;
+
+  .small { padding: 6px 12px; font-size: 12px; }
 }
 
 .connector-grid {

@@ -14,6 +14,7 @@ from sqlglot import exp
 
 from app.core.config import get_settings
 from app.core.exceptions import GuardRailViolation
+from app.pipeline.sql_utils import sanitize_sql
 from app.pipeline.types import PipelineContext
 
 _COMMENT_PATTERN = re.compile(r"(--|/\*|\*/|#(?!\d))")
@@ -35,7 +36,7 @@ class SQLValidator:
         """Raises GuardRailViolation on hard failures; returns soft warnings."""
         settings = get_settings()
         warnings: list[str] = []
-        stripped = sql.strip().rstrip(";").strip()
+        stripped = sanitize_sql(sql.strip().rstrip(";").strip(), dialect)
 
         if not stripped:
             raise GuardRailViolation("Empty SQL statement.")
@@ -111,9 +112,53 @@ class SQLValidator:
                     detail={"unknown_tables": sorted(unknown)},
                 )
 
+        if ctx is not None and ctx.resolved_tables:
+            unknown_cols = self._unknown_columns(tree, ctx)
+            if unknown_cols:
+                raise GuardRailViolation(
+                    "Query references columns missing from the catalog: " + ", ".join(sorted(unknown_cols)),
+                    detail={"unknown_columns": sorted(unknown_cols)},
+                )
+
         if ctx is not None:
             ctx.validation_warnings.extend(warnings)
         return warnings
+
+    @staticmethod
+    def _unknown_columns(tree: exp.Expression, ctx: PipelineContext) -> set[str]:
+        """Return qualified column refs that are not in resolved metadata."""
+        alias_to_table: dict[str, str] = {}
+        known: dict[str, set[str]] = {}
+        for table in ctx.resolved_tables:
+            qual = table.qualified_name.lower()
+            known[qual] = {c["name"].lower() for c in table.columns}
+            alias_to_table[qual] = qual
+
+        for table in tree.find_all(exp.Table):
+            qual = ".".join(p for p in [table.db, table.name] if p).lower()
+            if qual in known:
+                alias_to_table[qual] = qual
+                if table.alias:
+                    alias_to_table[str(table.alias).lower()] = qual
+
+        output_aliases: set[str] = set()
+        if isinstance(tree, exp.Select):
+            for sel in tree.expressions:
+                if isinstance(sel, exp.Alias):
+                    output_aliases.add(sel.alias.lower())
+
+        unknown: set[str] = set()
+        for col in tree.find_all(exp.Column):
+            name = (col.name or "").lower()
+            if not name or name == "*" or name in output_aliases:
+                continue
+            table_ref = (col.table or "").lower()
+            qual = alias_to_table.get(table_ref) if table_ref else None
+            if not qual and len(known) == 1:
+                qual = next(iter(known))
+            if qual and name not in known.get(qual, set()):
+                unknown.add(f"{qual}.{name}")
+        return unknown
 
     @staticmethod
     def _subquery_depth(tree: exp.Expression) -> int:

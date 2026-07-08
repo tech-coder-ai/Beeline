@@ -1,11 +1,13 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { ApiService } from './api.service';
+import { ConnectorService } from './connector.service';
 import { BeelineResponse, ChatMessage, ChatSession } from './models';
 
 /** Signal-based chat store: sessions, active thread, pipeline call state. */
 @Injectable({ providedIn: 'root' })
 export class ChatStateService {
   private api = inject(ApiService);
+  private connectors = inject(ConnectorService);
 
   readonly sessions = signal<ChatSession[]>([]);
   readonly activeSessionId = signal<string | null>(null);
@@ -13,6 +15,9 @@ export class ChatStateService {
   readonly sending = signal(false);
   readonly sessionSearch = signal('');
   readonly error = signal<string | null>(null);
+  readonly composerDraft = signal('');
+  readonly actionNotice = signal<string | null>(null);
+  readonly pinDialogResponse = signal<BeelineResponse | null>(null);
 
   /** Response currently inspected in the right/bottom panels. */
   readonly focusedResponse = signal<BeelineResponse | null>(null);
@@ -45,6 +50,76 @@ export class ChatStateService {
     });
   }
 
+  prefillComposer(text: string): void {
+    this.composerDraft.set(text);
+  }
+
+  inspectMessage(messageId: string): void {
+    const message = this.messages().find((m) => m.id === messageId);
+    if (message?.response_payload) {
+      this.focusedResponse.set(message.response_payload as BeelineResponse);
+    }
+  }
+
+  refineQuestion(assistantMessageId: string): void {
+    const msgs = this.messages();
+    const idx = msgs.findIndex((m) => m.id === assistantMessageId);
+    if (idx < 0) return;
+    for (let i = idx - 1; i >= 0; i--) {
+      if (msgs[i].role === 'user' && msgs[i].content) {
+        this.prefillComposer(msgs[i].content!);
+        return;
+      }
+    }
+    this.actionNotice.set('No prior question found to refine.');
+  }
+
+  editAndResend(messageId: string, newText: string): void {
+    const trimmed = newText.trim();
+    if (!trimmed) return;
+    const msgs = this.messages();
+    const idx = msgs.findIndex((m) => m.id === messageId);
+    if (idx < 0) return;
+    this.messages.set(msgs.slice(0, idx));
+    this.send(trimmed);
+  }
+
+  saveQuery(response: BeelineResponse): void {
+    if (!response.sql) {
+      this.actionNotice.set('No SQL available to save.');
+      return;
+    }
+    const name = window.prompt('Save query as:', response.metadata?.['refined_prompt'] as string || 'My query');
+    if (!name?.trim()) return;
+    this.api.saveQuery({
+      name: name.trim(),
+      sql: response.sql,
+      prompt: (response.metadata?.['refined_prompt'] as string) ?? null,
+      connector_id: this.connectors.activeId(),
+      tags: [],
+    }).subscribe({
+      next: () => this.actionNotice.set(`Saved query "${name.trim()}"`),
+      error: () => this.actionNotice.set('Failed to save query'),
+    });
+  }
+
+  pinToDashboard(response: BeelineResponse): void {
+    if (!response.table?.rows?.length && !response.charts?.length && !response.cards?.length) {
+      this.actionNotice.set('No result data to pin — run the query first.');
+      return;
+    }
+    this.pinDialogResponse.set(response);
+  }
+
+  closePinDialog(): void {
+    this.pinDialogResponse.set(null);
+  }
+
+  onPinnedToDashboard(dashboardName: string): void {
+    this.pinDialogResponse.set(null);
+    this.actionNotice.set(`Pinned to "${dashboardName}"`);
+  }
+
   send(message: string, extras?: { clarification_answer?: string; execute_preview_id?: string }): void {
     if (this.sending()) return;
     this.sending.set(true);
@@ -66,6 +141,7 @@ export class ChatStateService {
       .sendMessage({
         session_id: this.activeSessionId(),
         message,
+        connector_id: this.connectors.activeId(),
         clarification_answer: extras?.clarification_answer ?? null,
         execute_preview_id: extras?.execute_preview_id ?? null,
       })

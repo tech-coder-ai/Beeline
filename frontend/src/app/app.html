@@ -3,7 +3,7 @@
     <div class="brand" matTooltip="Beeline" matTooltipPosition="right">
       <span class="brand-mark">🐝</span>
     </div>
-    @for (item of navItems; track item.path) {
+    @for (item of navItems(); track item.path) {
       <a
         class="rail-item"
         [routerLink]="item.path"

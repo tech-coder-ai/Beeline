@@ -13,6 +13,7 @@ from app.core.exceptions import LLMUnavailable, ValidationFailed
 from app.core.logging import get_logger
 from app.llm import prompts
 from app.llm.providers import get_llm
+from app.pipeline.sql_utils import sanitize_sql
 from app.pipeline.types import ExecutionPlan, PipelineContext
 
 logger = get_logger(__name__)
@@ -54,7 +55,12 @@ class SQLGenerator:
                 dialect_hints=connector.dialect.dialect_hints(),
             )
             schema_context = "\n".join(
-                f"{t.qualified_name}: {', '.join(c['name'] for c in t.columns)}"
+                f"{t.qualified_name}:\n"
+                + "\n".join(
+                    f"  - {c['name']} ({c['data_type']})"
+                    + (f": {c['description']}" if c.get("description") else "")
+                    for c in t.columns
+                )
                 for t in ctx.resolved_tables
             )
             parsed, result = await llm.complete_json(
@@ -64,7 +70,7 @@ class SQLGenerator:
                 f"Relative date translations: {json.dumps(_RELATIVE_HIVE)}",
             )
             ctx.record_llm("sql", result)
-            sql = (parsed.get("sql") or "").strip().rstrip(";")
+            sql = sanitize_sql((parsed.get("sql") or "").strip().rstrip(";"), dialect_name)
             if sql:
                 ctx.sql = sql
                 if parsed.get("explanation"):

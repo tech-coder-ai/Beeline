@@ -25,10 +25,43 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 
   .ghost-btn.active { background: var(--bl-accent-soft); color: var(--bl-accent); border-color: transparent; }
+  .ghost-btn.danger {
+    color: var(--bl-bad);
+    mat-icon { font-size: 16px; width: 16px; height: 16px; }
+  }
   .spacer { flex: 1; }
   input { max-width: 240px; }
+}
+
+.confirm-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+
+  mat-icon { color: var(--bl-warn); flex-shrink: 0; }
+  .confirm-copy {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 13px;
+  }
+  .danger-btn {
+    background: var(--bl-bad);
+    border-color: var(--bl-bad);
+  }
+}
+
+.notice-banner {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--bl-accent-soft);
+  color: var(--bl-accent);
+  font-size: 13px;
 }
 
 .bl-table { font-size: 12px; }

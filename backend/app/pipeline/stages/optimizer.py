@@ -6,6 +6,7 @@ from sqlglot import exp
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
+from app.pipeline.sql_utils import sanitize_sql
 from app.pipeline.types import PipelineContext
 
 logger = get_logger(__name__)
@@ -14,6 +15,7 @@ logger = get_logger(__name__)
 class SQLOptimizer:
     def optimize(self, sql: str, dialect: str, ctx: PipelineContext | None = None) -> str:
         settings = get_settings()
+        sql = sanitize_sql(sql, dialect)
         try:
             tree = sqlglot.parse_one(sql, read=dialect)
         except Exception as exc:  # noqa: BLE001 - validator already parsed; be safe anyway

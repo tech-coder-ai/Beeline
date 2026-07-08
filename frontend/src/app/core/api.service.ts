@@ -30,6 +30,7 @@ export class ApiService {
   sendMessage(body: {
     session_id?: string | null;
     message: string;
+    connector_id?: string | null;
     clarification_answer?: string | null;
     execute_preview_id?: string | null;
   }): Observable<ChatTurn> {
@@ -140,8 +141,12 @@ export class ApiService {
     return this.http.post<SqlResult>(`${API}/sql/execute`, { sql, limit });
   }
 
-  explainSql(sql: string): Observable<SqlExplanation> {
-    return this.http.post<SqlExplanation>(`${API}/sql/explain`, { sql });
+  explainSql(sql: string, connectorId?: string | null, question?: string | null): Observable<SqlExplanation> {
+    return this.http.post<SqlExplanation>(`${API}/sql/explain`, {
+      sql,
+      connector_id: connectorId ?? null,
+      question: question ?? null,
+    });
   }
 
   listSavedQueries(): Observable<SavedQuery[]> {
@@ -220,8 +225,16 @@ export class ApiService {
     );
   }
 
-  triggerSync(mode: 'full' | 'incremental'): Observable<unknown> {
-    return this.http.post(`${API}/admin/sync`, { mode });
+  upsertConnector(body: Record<string, unknown>): Observable<{ id: string }> {
+    return this.http.post<{ id: string }>(`${API}/admin/connectors`, body);
+  }
+
+  setDefaultConnector(id: string): Observable<{ default: string }> {
+    return this.http.put<{ default: string }>(`${API}/admin/connectors/${id}/default`, {});
+  }
+
+  triggerSync(mode: 'full' | 'incremental', connectorId?: string): Observable<unknown> {
+    return this.http.post(`${API}/admin/sync`, { mode, connector_id: connectorId ?? null });
   }
 
   listSyncRuns(): Observable<SyncRun[]> {
@@ -234,6 +247,10 @@ export class ApiService {
 
   getConfig(): Observable<Record<string, unknown>> {
     return this.http.get<Record<string, unknown>>(`${API}/admin/config`);
+  }
+
+  getFeatureFlags(): Observable<Record<string, boolean>> {
+    return this.http.get<Record<string, boolean>>(`${API}/admin/feature-flags`);
   }
 
   updateConfig(key: string, value: unknown): Observable<unknown> {
@@ -254,6 +271,26 @@ export class ApiService {
 
   usageAnalytics(): Observable<Record<string, unknown>> {
     return this.http.get<Record<string, unknown>>(`${API}/admin/analytics/usage`);
+  }
+
+  clearLogsAndAnalytics(includeSyncRuns = false): Observable<{ deleted: Record<string, number> }> {
+    const params: Record<string, string> = { confirm: 'true' };
+    if (includeSyncRuns) params['include_sync_runs'] = 'true';
+    return this.http.delete<{ deleted: Record<string, number> }>(`${API}/admin/logs`, { params });
+  }
+
+  clearExecutionLogs(): Observable<{ deleted: Record<string, number> }> {
+    return this.http.delete<{ deleted: Record<string, number> }>(
+      `${API}/admin/logs/executions`,
+      { params: { confirm: 'true' } },
+    );
+  }
+
+  clearAuditLogs(): Observable<{ deleted: Record<string, number> }> {
+    return this.http.delete<{ deleted: Record<string, number> }>(
+      `${API}/admin/logs/audit`,
+      { params: { confirm: 'true' } },
+    );
   }
 
   health(): Observable<Record<string, string>> {

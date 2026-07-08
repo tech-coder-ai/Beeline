@@ -3,32 +3,108 @@
 Step-by-step instructions for getting Beeline running locally. For an
 architecture overview and the pipeline diagram, see [README.md](README.md).
 
-Two paths:
+Three paths:
 
-- **[Docker Compose](#option-a-docker-compose-full-stack)** — full stack including a
-  standalone Hive instance and seeded sample data. Slowest first run (image
-  pulls), zero manual setup.
-- **[Manual local setup](#option-b-manual-local-setup)** — backend + frontend run
-  directly on your machine. Fastest iteration loop. You provide your own Hive
-  (or point at nothing and use the metadata/glossary/dashboard features while
-  Hive is unreachable — the app degrades gracefully).
+- **[Option A: Docker Compose](#option-a-docker-compose-full-stack)** — full stack
+  including a standalone local Hive instance and seeded sample data. Slowest
+  first run (image pulls), zero manual setup.
+- **[Option B: Manual local setup](#option-b-manual-local-setup)** — backend +
+  frontend run directly on your machine. Fastest iteration loop. Point at local
+  Hive (including the partial-Docker Hive option), cloud Hive, or nothing while
+  Hive is unreachable — the app degrades gracefully.
+- **[Option C: Backend + UI with cloud Hive](#option-c-backend--ui-with-cloud-hive-no-docker)** —
+  same as Option B but explicitly for connecting to a remote/cloud Hive cluster
+  with no Docker at all.
 
 ---
 
-## Prerequisites
+## Prerequisites (summary)
 
-| Tool | Version | Check |
-|---|---|---|
-| Python | 3.11+ (3.12 recommended) | `python3.12 --version` |
-| Node.js | 20+ | `node --version` |
-| npm | 10+ | `npm --version` |
-| Docker + Compose | for Option A only | `docker --version` |
-| [uv](https://docs.astral.sh/uv/) | optional, faster installs | `uv --version` |
+| Tool | Version | Required for | Check |
+|---|---|---|---|
+| Python | 3.11+ (**3.12 recommended**) | Backend | `python3.12 --version` |
+| pip or [uv](https://docs.astral.sh/uv/) | latest | Backend install | `uv --version` |
+| Node.js | **20+** (22 works) | Frontend | `node --version` |
+| npm | **10+** | Frontend install | `npm --version` |
+| Docker + Compose | Option A (and optional Hive in B) | `docker --version` |
+| LLM access | — | Chat NL→SQL (degrades without) | OpenAI key or Stellar endpoint |
+| Hive / HiveServer2 | — | Data queries & catalog sync | Local (Docker) or cloud endpoint |
+| Redis | — | Optional | Falls back to in-memory cache |
+| PostgreSQL | — | Optional | SQLite is the default metadata store |
 
-Beeline's guard rails and pipeline logic don't depend on having a real Hive
-cluster to explore the UI — the Metadata Manager, Glossary, Dashboards, Query
-Library, and Admin console all work against the local metadata repository
-(SQLite by default) regardless of whether Hive is reachable.
+Beeline's metadata repository (chat sessions, catalog, dashboards, logs) is
+**separate from Hive**. Metadata Manager, Glossary, Dashboards, Query Library,
+and Admin all work against SQLite/Postgres even when Hive is unreachable.
+
+---
+
+## Backend prerequisites (detailed)
+
+| Requirement | Details |
+|---|---|
+| **Python** | `>=3.11` per `backend/pyproject.toml`; **3.12 recommended** |
+| **Virtual env** | `python3.12 -m venv .venv` or `uv venv --python 3.12 .venv` |
+| **Install** | `pip install -e ".[dev]"` or `uv pip install -e ".[dev]"` from `backend/` |
+| **Metadata DB** | **SQLite** (default, zero setup, file `backend/beeline_meta.db`) or **PostgreSQL 16+** |
+| **Redis** | Optional — query-result cache falls back to in-memory if unavailable |
+| **Hive** | Optional for UI exploration; required for NL→SQL against real data |
+| **LLM** | One of: OpenAI-compatible (`OPENAI_API_KEY`) or Stellar (`STELLAR_ENDPOINT`) |
+
+**Python dependencies** (from `backend/pyproject.toml`):
+
+| Package | Purpose |
+|---|---|
+| fastapi, uvicorn | REST API |
+| sqlalchemy[asyncio], aiosqlite, asyncpg | Metadata repository |
+| pydantic, pydantic-settings | Config & validation |
+| alembic | Postgres schema migrations |
+| httpx | LLM HTTP clients |
+| sqlglot | SQL parsing & guard rails |
+| redis | Optional result cache |
+| pyyaml | `settings.yaml` |
+| pyhive, thrift | Hive connector |
+| rapidfuzz | Query-library similarity |
+| openpyxl | Spreadsheet import |
+| pytest, ruff | Dev/test (optional `[dev]` extra) |
+
+**Environment variables:**
+
+| Variable | Purpose |
+|---|---|
+| `OPENAI_API_KEY` | OpenAI-compatible LLM provider |
+| `STELLAR_ENDPOINT` | Custom Stellar LLM endpoint |
+| `BEELINE_CONFIG` | Path to settings file (e.g. `config/settings.yaml`) |
+| `BEELINE__SECTION__KEY` | Dot-path overrides, e.g. `BEELINE__CONNECTORS__DEFINITIONS__HIVE__HOST=localhost` |
+
+Config files: `backend/config/settings.yaml` (local dev), `backend/config/settings.docker.yaml` (Docker).
+
+---
+
+## Frontend prerequisites (detailed)
+
+| Requirement | Details |
+|---|---|
+| **Node.js** | 20+ (Angular 20; Node 22 used in Docker build) |
+| **npm** | 10+ |
+| **Install** | `npm install --legacy-peer-deps` (required once — peer dep ranges) |
+| **Dev server** | `npm run start -- --port 4210` |
+| **API proxy** | `frontend/proxy.conf.json` forwards `/api` → backend (default `http://localhost:8010`) |
+| **Env file** | None — feature flags and config come from the backend API |
+
+**npm dependencies** (from `frontend/package.json`):
+
+| Package | Purpose |
+|---|---|
+| @angular/* 20.x | App framework (standalone + signals) |
+| @angular/material, @angular/cdk | UI components |
+| ag-grid-angular, ag-grid-community | Data grids |
+| echarts, ngx-echarts | Charts |
+| marked | Markdown rendering |
+| rxjs, zone.js, tslib | Angular runtime |
+
+**Dev dependencies:** Angular CLI/build, TypeScript 5.9, Karma/Jasmine (tests).
+
+**Tests (optional):** Chrome/Chromium for `ng test`.
 
 ---
 
@@ -140,6 +216,13 @@ shows no `beeline_default` network yet). If you later run the full
 [Troubleshooting](#containers-cant-reach-each-other--namegaierror-name-or-service-not-known)
 below for why.
 
+After Hive is reachable, sync the catalog:
+
+1. Open http://localhost:4210 → **Admin → Connectors & Sync**
+2. Click **Test connection** on the Hive connector
+3. Click **Full sync**
+4. Confirm tables under **Metadata → Catalog**
+
 ### 2. Frontend
 
 ```bash
@@ -186,6 +269,63 @@ Open http://localhost:4210.
 
 ---
 
+## Option C: Backend + UI with cloud Hive (no Docker)
+
+Same as [Option B](#option-b-manual-local-setup) for starting the backend and
+frontend — but **without any Docker services**. Use this when your Hive
+cluster runs in the cloud and you only run Beeline's API and UI locally.
+
+### 1. Start backend and frontend
+
+Follow [Option B §1 Backend](#1-backend) and [Option B §2 Frontend](#2-frontend).
+
+### 2. Connect to cloud Hive
+
+Edit `backend/config/settings.yaml` → `connectors.definitions.hive`, **or**
+override with environment variables:
+
+```bash
+export BEELINE__CONNECTORS__DEFINITIONS__HIVE__HOST=hive.cloud.example.com
+export BEELINE__CONNECTORS__DEFINITIONS__HIVE__PORT=10000
+export BEELINE__CONNECTORS__DEFINITIONS__HIVE__DATABASE=default
+export BEELINE__CONNECTORS__DEFINITIONS__HIVE__USERNAME=your_user
+export BEELINE__CONNECTORS__DEFINITIONS__HIVE__PASSWORD=your_password
+export BEELINE__CONNECTORS__DEFINITIONS__HIVE__AUTH=LDAP    # NONE | NOSASL | LDAP | KERBEROS
+```
+
+Or use **Admin → Connectors & Sync** in the UI to add/update the connector
+(host, port, auth, credentials) without restarting.
+
+### 3. Sync the catalog
+
+1. Open http://localhost:4210 → **Admin → Connectors & Sync**
+2. Click **Test connection** on your Hive connector
+3. Click **Full sync** to harvest databases/tables/columns into Beeline's catalog
+4. Confirm tables under **Metadata → Catalog**
+5. Ask questions on the **Chat** page
+
+**Network notes for cloud Hive:**
+
+- Your machine must reach the HiveServer2 host/port (VPN, security group, or
+  bastion as required by your cloud provider).
+- TLS-terminated endpoints may need a different port or a tunnel — point
+  `host`/`port` at whatever endpoint accepts the Hive thrift protocol.
+- Kerberos setups need additional client configuration on the machine running
+  the backend (keytab, `krb5.conf`); LDAP/NOSASL are simpler for first tests.
+
+### What works without Hive
+
+| Feature | Without Hive |
+|---|---|
+| Chat UI | Loads; clarification flow when catalog is empty |
+| Metadata Manager, Glossary | Works (empty until sync) |
+| Dashboards, Query Library | Works |
+| Admin → Logs & Analytics | Works |
+| Admin → Connectors | Works (test connection fails until Hive is reachable) |
+| NL→SQL with real data | Needs catalog sync from Hive |
+
+---
+
 ## Configuring the LLM provider
 
 `backend/config/settings.yaml` → `llm.active` picks the provider; provider
@@ -229,6 +369,30 @@ is surfaced in the chat UI's **Warnings** tab rather than a hard failure.
 
 ---
 
+## Admin: clear logs and analytics
+
+**Admin → Logs & Analytics → Clear logs** removes:
+
+- Execution history (and derived usage analytics)
+- User feedback tied to executions
+- Audit trail entries
+
+Chat messages, dashboards, metadata catalog, and glossary are **not** deleted.
+Execution links on chat messages and dashboard widgets are cleared safely.
+
+API equivalents (require `confirm=true`):
+
+```bash
+# Clear everything shown on the Logs & Analytics tab
+curl -X DELETE 'http://localhost:8010/api/v1/admin/logs?confirm=true'
+
+# Or individually:
+curl -X DELETE 'http://localhost:8010/api/v1/admin/logs/executions?confirm=true'
+curl -X DELETE 'http://localhost:8010/api/v1/admin/logs/audit?confirm=true'
+```
+
+---
+
 ## Migrations (Alembic)
 
 Local dev SQLite doesn't need migrations — `init_db()` creates tables on
@@ -256,7 +420,7 @@ true of autogenerated migrations, but especially so given SQLite's limited
 ## Running tests
 
 ```bash
-# backend (36 tests: guard rails, SQL optimizer, deterministic SQL builder,
+# backend (guard rails, SQL optimizer, deterministic SQL builder,
 # visualization planner, LLM provider contracts)
 cd backend && .venv/bin/pytest -q
 
@@ -296,6 +460,10 @@ invocation (frontend) accordingly — nothing else is hardcoded to these ports.
 Expected until you sync the Hive catalog (Admin → Connectors & Sync → Full
 sync) — Beeline refuses to guess at tables it hasn't verified exist, by
 design. Confirm tables appear under Metadata → Catalog first.
+
+**Cannot reach cloud Hive**
+Check VPN, firewall rules, and that `host`/`port`/`auth` match your cluster's
+HiveServer2 endpoint. Use Admin → Test connection for the exact error message.
 
 **`docker compose up` — `hive-init` keeps retrying**
 HiveServer2 can take 30–90 seconds to become ready on first boot (Derby

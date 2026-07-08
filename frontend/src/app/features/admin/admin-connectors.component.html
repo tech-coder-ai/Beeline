@@ -1,13 +1,69 @@
 <div class="admin-connectors">
   <div class="section">
-    <div class="section-title">Analytics connectors</div>
+    <div class="section-header">
+      <div class="section-title">Analytics connectors</div>
+      <button class="primary-btn small" (click)="openNewForm()">
+        <mat-icon>add</mat-icon> Add connection
+      </button>
+    </div>
+
+    @if (showForm()) {
+      <div class="connector-form glass-card">
+        <div class="form-grid">
+          <label>
+            <span>Connector ID</span>
+            <input class="text-input" [(ngModel)]="form.id" [readonly]="!!editingId()" />
+          </label>
+          <label>
+            <span>Display name</span>
+            <input class="text-input" [(ngModel)]="form.display_name" />
+          </label>
+          <label>
+            <span>Host</span>
+            <input class="text-input" [(ngModel)]="form.host" />
+          </label>
+          <label>
+            <span>Port</span>
+            <input class="text-input" type="number" [(ngModel)]="form.port" />
+          </label>
+          <label>
+            <span>Database</span>
+            <input class="text-input" [(ngModel)]="form.database" />
+          </label>
+          <label>
+            <span>Username</span>
+            <input class="text-input" [(ngModel)]="form.username" />
+          </label>
+          <label>
+            <span>Password</span>
+            <input class="text-input" type="password" [(ngModel)]="form.password" placeholder="Leave blank to keep existing" />
+          </label>
+          <label>
+            <span>Auth</span>
+            <select class="text-input" [(ngModel)]="form.auth">
+              <option value="NONE">NONE</option>
+              <option value="NOSASL">NOSASL</option>
+              <option value="LDAP">LDAP</option>
+              <option value="KERBEROS">KERBEROS</option>
+            </select>
+          </label>
+        </div>
+        <div class="form-actions">
+          <button class="primary-btn small" [disabled]="saving() || !form.id.trim()" (click)="saveConnector()">
+            <mat-icon>save</mat-icon> Save connection
+          </button>
+          <button class="ghost-btn small" (click)="cancelForm()">Cancel</button>
+        </div>
+      </div>
+    }
+
     <div class="connector-grid">
       @for (c of connectors(); track c['id']) {
         <div class="connector-card glass-card">
           <div class="connector-header">
             <mat-icon>cable</mat-icon>
             <span class="connector-name">{{ c['display_name'] || c['id'] }}</span>
-            @if (c['id'] === defaultId()) { <span class="chip good">default</span> }
+            @if (c['id'] === defaultId()) { <span class="chip good">active</span> }
             <span class="chip neutral">{{ c['type'] }}</span>
           </div>
           <div class="connector-meta muted">
@@ -15,7 +71,18 @@
           </div>
           <div class="connector-actions">
             <button class="ghost-btn small" [disabled]="testing() === c['id']" (click)="test(c['id'])">
-              <mat-icon>network_check</mat-icon> Test connection
+              <mat-icon>network_check</mat-icon> Test
+            </button>
+            @if (c['id'] !== defaultId()) {
+              <button class="ghost-btn small" (click)="setDefault(c['id'])">
+                <mat-icon>check_circle</mat-icon> Set active
+              </button>
+            }
+            <button class="ghost-btn small" (click)="openEditForm(c)">
+              <mat-icon>edit</mat-icon> Edit
+            </button>
+            <button class="ghost-btn small" [disabled]="syncing()" (click)="triggerSync('incremental', c['id'])">
+              <mat-icon>sync</mat-icon> Sync
             </button>
             @if (testResults()[c['id']]; as result) {
               <span class="chip" [class.good]="result.ok" [class.bad]="!result.ok">
@@ -35,10 +102,10 @@
     <div class="section-title">Metadata synchronization</div>
     <div class="sync-actions">
       <button class="primary-btn" [disabled]="syncing()" (click)="triggerSync('incremental')">
-        <mat-icon>sync</mat-icon> Incremental sync
+        <mat-icon>sync</mat-icon> Incremental sync (active)
       </button>
       <button class="ghost-btn" [disabled]="syncing()" (click)="triggerSync('full')">
-        <mat-icon>refresh</mat-icon> Full sync
+        <mat-icon>refresh</mat-icon> Full sync (active)
       </button>
       <button class="ghost-btn" [disabled]="enriching()" (click)="triggerEnrichment()">
         <mat-icon>auto_awesome</mat-icon> Run AI enrichment
@@ -47,12 +114,13 @@
 
     <table class="bl-table">
       <thead>
-        <tr><th>Started</th><th>Mode</th><th>Status</th><th>Tables</th><th>Columns</th><th>Error</th></tr>
+        <tr><th>Started</th><th>Connector</th><th>Mode</th><th>Status</th><th>Tables</th><th>Columns</th><th>Error</th></tr>
       </thead>
       <tbody>
         @for (run of syncRuns(); track run.id) {
           <tr>
             <td>{{ run.created_at | date: 'short' }}</td>
+            <td>{{ run.connector_id || 'default' }}</td>
             <td>{{ run.mode }}</td>
             <td>
               <span class="chip" [class.good]="run.status === 'success'" [class.bad]="run.status === 'failed'" [class.warn]="run.status === 'running'">
@@ -64,7 +132,7 @@
             <td class="muted error-cell">{{ run.error || '-' }}</td>
           </tr>
         } @empty {
-          <tr><td colspan="6" class="muted">No sync runs yet.</td></tr>
+          <tr><td colspan="7" class="muted">No sync runs yet.</td></tr>
         }
       </tbody>
     </table>

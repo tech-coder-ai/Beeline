@@ -31,14 +31,23 @@ services:
   # Not for production scale - intended for local demo / development only.
   hive-server:
     image: apache/hive:3.1.3
+    user: "0:0"
     environment:
       SERVICE_NAME: hiveserver2
-      IS_RESUME: "true"
+      HIVE_CUSTOM_CONF_DIR: /hive-custom-conf
+    entrypoint: ["bash", "/hive-custom-conf/entrypoint.sh"]
     ports:
       - "10000:10000"
       - "10002:10002"
     volumes:
+      - beeline-hive-metastore:/opt/hive/metastore
       - beeline-hive-warehouse:/opt/hive/data/warehouse
+      - ./hive:/hive-custom-conf:ro
+      # LOAD DATA LOCAL INPATH resolves against the filesystem of the
+      # HiveServer2 process itself (not the beeline client that issues the
+      # statement), so the seed CSVs must be mounted here too, not only into
+      # hive-init.
+      - ./backend/sample_data:/seed:ro
 
   # One-shot job: waits for HiveServer2, creates the sample sales database,
   # and loads the generated CSV data. Exits after seeding.
@@ -90,4 +99,5 @@ services:
 
 volumes:
   beeline-postgres:
+  beeline-hive-metastore:
   beeline-hive-warehouse:

@@ -37,7 +37,9 @@ class HiveDialect(ISQLDialect):
         return (
             "Target engine is Apache Hive. Use Hive SQL syntax: backtick identifiers, "
             "date functions like date_sub/add_months/trunc, no full OUTER APPLY, "
-            "prefer explicit JOIN ... ON, always filter partition columns when present."
+            "prefer explicit JOIN ... ON, always filter partition columns when present. "
+            "Always alias every FROM/JOIN table and reference columns as alias.column "
+            "(never `database`.`table`.`column`)."
         )
 
 
@@ -50,6 +52,12 @@ class _HiveClient:
     def _connect(self):
         from pyhive import hive
 
+        # PyHive's `auth` must match HiveServer2's own hive.server2.authentication
+        # value verbatim - NONE means "SASL PLAIN, credentials unchecked" (Hive's
+        # actual default), which is a different wire protocol from NOSASL
+        # (raw socket, no SASL negotiation at all). Sending NOSASL against a
+        # server configured for NONE (or vice versa) fails the handshake with
+        # a bare "TSocket read 0 bytes" - no other error detail.
         auth = (self._config.get("auth") or "NONE").upper()
         return hive.connect(
             host=self._config.get("host", "localhost"),
@@ -57,13 +65,15 @@ class _HiveClient:
             username=self._config.get("username") or "hive",
             password=self._config.get("password") or None,
             database=self._config.get("database", "default"),
-            auth=auth if auth != "NONE" else "NOSASL",
+            auth=auth,
         )
 
     def run(self, sql: str, max_rows: int | None = None) -> tuple[list[str], list[str], list[list[Any]]]:
         conn = self._connect()
         try:
             cursor = conn.cursor()
+            for key, value in (self._config.get("session_settings") or {}).items():
+                cursor.execute(f"SET {key}={value}")
             cursor.execute(sql)
             if cursor.description is None:
                 return [], [], []
@@ -154,6 +164,9 @@ def _parse_describe_formatted(database: str, table: str, rows: list[list[Any]]) 
     return harvested
 
 
+STATS_QUERY_TIMEOUT_SECONDS = 20
+
+
 class HiveStatisticsProvider(IStatisticsProvider):
     def __init__(self, client: _HiveClient):
         self._client = client
@@ -171,7 +184,9 @@ class HiveStatisticsProvider(IStatisticsProvider):
                 f"MIN({col}) AS min_v, MAX({col}) AS max_v "
                 f"FROM (SELECT {col} FROM {qualified} LIMIT 100000) sample"
             )
-            _, _, rows = await asyncio.to_thread(self._client.run, sql)
+            _, _, rows = await asyncio.wait_for(
+                asyncio.to_thread(self._client.run, sql), timeout=STATS_QUERY_TIMEOUT_SECONDS
+            )
             if rows:
                 total, non_null, distinct_c, min_v, max_v = rows[0]
                 total = total or 0
@@ -179,14 +194,18 @@ class HiveStatisticsProvider(IStatisticsProvider):
                 stats.null_percentage = round(100.0 * (total - (non_null or 0)) / total, 2) if total else None
                 stats.min_value = str(min_v) if min_v is not None else None
                 stats.max_value = str(max_v) if max_v is not None else None
-        except Exception as exc:  # noqa: BLE001 - stats are best-effort
+        except Exception as exc:  # noqa: BLE001 - stats are best-effort; a hung or
+            # slow query (e.g. a multi-stage GROUP BY under a resource-constrained
+            # execution engine) must never block the whole metadata sync.
             logger.debug("column stats failed for %s.%s.%s: %s", database, table, column, exc)
         try:
             sql = (
                 f"SELECT {col} AS v, COUNT(*) AS c FROM {qualified} "
                 f"WHERE {col} IS NOT NULL GROUP BY {col} ORDER BY c DESC LIMIT {sample_limit}"
             )
-            _, _, rows = await asyncio.to_thread(self._client.run, sql)
+            _, _, rows = await asyncio.wait_for(
+                asyncio.to_thread(self._client.run, sql), timeout=STATS_QUERY_TIMEOUT_SECONDS
+            )
             stats.top_values = [{"value": str(r[0]), "count": r[1]} for r in rows]
             stats.sample_values = [str(r[0]) for r in rows[:sample_limit]]
         except Exception as exc:  # noqa: BLE001
@@ -284,7 +303,15 @@ class HiveConnector(IAnalyticsConnector):
                 logger.warning("Hive execute attempt %d/%d failed: %s", attempt, attempts, exc)
                 if attempt < attempts:
                     await asyncio.sleep(backoff * attempt)
-        raise ConnectorError(f"Hive execution failed after {attempts} attempts: {last_error}")
+        raise ConnectorError(
+            f"Hive execution failed after {attempts} attempts: {self._compact_error(last_error)}"
+        )
+
+    @staticmethod
+    def _compact_error(exc: Exception | None) -> str:
+        from app.pipeline.sql_utils import compact_connector_error
+
+        return compact_connector_error(str(exc) if exc else "Unknown error")
 
     async def test_connection(self) -> tuple[bool, str]:
         try:

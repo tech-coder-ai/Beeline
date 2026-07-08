@@ -4,6 +4,25 @@
   }
 
   <div class="section">
+    <div class="section-title">Query execution</div>
+    <div class="flag-grid">
+      <div class="flag-row glass-card">
+        <div class="flag-copy">
+          <span>Manual review</span>
+          <p class="muted note">
+            When on, every query is shown for your approval before it runs. When off, Beeline
+            auto-reviews SQL and executes unless confidence is low.
+          </p>
+        </div>
+        <mat-slide-toggle
+          [checked]="queryPreview['manual_review'] !== false"
+          (change)="toggleManualReview(queryPreview['manual_review'])"
+        ></mat-slide-toggle>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
     <div class="section-title">Feature flags</div>
     <div class="flag-grid">
       @for (key of flagKeys; track key) {

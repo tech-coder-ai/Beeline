@@ -5,8 +5,9 @@ plain English and get governed, explainable Hive SQL, safe execution, and
 adaptive visualizations back — not a chatbot that hallucinates queries.
 
 **New here? Start with [SETUP.md](SETUP.md)** for step-by-step installation
-(Docker Compose or manual local setup), LLM provider configuration, and
-troubleshooting. This README covers architecture and reference material.
+(Docker Compose with local Hive, manual local setup, or backend + UI with cloud
+Hive), LLM provider configuration, prerequisites, and troubleshooting. This
+README covers architecture and reference material.
 
 The LLM never generates executable SQL directly. Every question flows through a
 chain of independent, auditable stages:
@@ -68,9 +69,12 @@ docker-compose.yml       Postgres, Redis, standalone Hive + seeding job, backend
 
 ## Setup
 
-See **[SETUP.md](SETUP.md)** for full step-by-step instructions covering both
-Docker Compose (full stack incl. a seeded standalone Hive) and manual local
-setup (backend + frontend directly on your machine), plus troubleshooting.
+See **[SETUP.md](SETUP.md)** for full step-by-step instructions covering:
+
+- **Option A** — Docker Compose (local Postgres, Redis, Hive with seeded sample data + sync)
+- **Option B** — Manual local setup (backend + frontend, optional local Hive via partial Docker)
+- **Option C** — Backend + UI with cloud Hive (no Docker)
+- Backend and frontend prerequisites, and troubleshooting
 
 Quick reference once everything is running:
 

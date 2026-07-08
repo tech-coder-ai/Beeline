@@ -1,4 +1,5 @@
 import { Routes } from '@angular/router';
+import { featureFlagGuard } from './core/feature-flag.guard';
 
 export const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'chat' },
@@ -9,11 +10,13 @@ export const routes: Routes = [
   },
   {
     path: 'metadata',
+    canActivate: [featureFlagGuard('metadata_manager')],
     loadComponent: () =>
       import('./features/metadata/metadata-page.component').then((m) => m.MetadataPageComponent),
   },
   {
     path: 'dashboards',
+    canActivate: [featureFlagGuard('dashboards')],
     loadComponent: () =>
       import('./features/dashboards/dashboards-page.component').then(
         (m) => m.DashboardsPageComponent,
@@ -21,6 +24,7 @@ export const routes: Routes = [
   },
   {
     path: 'queries',
+    canActivate: [featureFlagGuard('saved_queries')],
     loadComponent: () =>
       import('./features/queries/queries-page.component').then((m) => m.QueriesPageComponent),
   },

@@ -12,9 +12,11 @@ from __future__ import annotations
 
 import re
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Any
 
 from app.core.config import get_settings
+from app.core.json_utils import json_safe
 from app.pipeline.types import PipelineContext
 from app.schemas.response import ChartSeries, ChartSpec, KpiCard, TableColumn, TableSpec
 
@@ -31,7 +33,7 @@ def _base_type(raw: str) -> str:
 def _is_numeric_value(value: Any) -> bool:
     if isinstance(value, bool):
         return False
-    if isinstance(value, (int, float)):
+    if isinstance(value, (int, float, Decimal)):
         return True
     if isinstance(value, str):
         try:
@@ -43,7 +45,7 @@ def _is_numeric_value(value: Any) -> bool:
 
 
 def _to_number(value: Any) -> float | None:
-    if isinstance(value, (int, float)) and not isinstance(value, bool):
+    if isinstance(value, (int, float, Decimal)) and not isinstance(value, bool):
         return float(value)
     if isinstance(value, str):
         try:
@@ -221,21 +223,13 @@ class VisualizationPlanner:
             for p in profiles
         ]
         rows = [
-            {p.name: self._json_safe(row[i]) if i < len(row) else None
+            {p.name: json_safe(row[i]) if i < len(row) else None
              for i, p in enumerate(profiles)}
             for row in ctx.result_rows
         ]
         return TableSpec(
             columns=columns, rows=rows, total_rows=ctx.row_count, truncated=ctx.truncated
         )
-
-    @staticmethod
-    def _json_safe(value: Any) -> Any:
-        if isinstance(value, (datetime, date)):
-            return value.isoformat()
-        if isinstance(value, bytes):
-            return value.decode("utf-8", errors="replace")
-        return value
 
     @staticmethod
     def _pretty(name: str) -> str:

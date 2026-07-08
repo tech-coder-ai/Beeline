@@ -9,18 +9,27 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.connectors.registry import (
     available_types,
+    close_all,
     default_connector_id,
     get_connector,
     list_connector_ids,
 )
 from app.core.config import get_settings
 from app.core.database import get_db
+from app.core.exceptions import NotFound, ValidationFailed
 from app.models.catalog import SyncRun
 from app.models.chat import ExecutionHistory
 from app.models.governance import AuditLog
-from app.schemas.api import ConfigUpdate, ConnectorTestResult, EnrichRequest, SyncRequest
+from app.schemas.api import (
+    ConfigUpdate,
+    ConnectorTestResult,
+    ConnectorUpsert,
+    EnrichRequest,
+    SyncRequest,
+)
 from app.services.audit import audit
 from app.services.enrichment import enrichment_service
+from app.services.logs_purge import purge_all, purge_audit, purge_executions
 from app.services.metadata_sync import metadata_sync_service
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -52,6 +61,37 @@ async def connectors():
             {"id": cid, **_redact(cfg)} for cid, cfg in definitions.items()
         ],
     }
+
+
+@router.post("/connectors")
+async def upsert_connector(body: ConnectorUpsert, db: AsyncSession = Depends(get_db)):
+    settings = get_settings()
+    cid = body.id.strip()
+    if not cid:
+        raise ValidationFailed("Connector id is required")
+    if not body.type:
+        raise ValidationFailed("Connector type is required")
+    cfg = body.model_dump(exclude={"id"})
+    definitions = settings.raw.setdefault("connectors", {}).setdefault("definitions", {})
+    existing = definitions.get(cid, {})
+    if not cfg.get("password") and existing.get("password"):
+        cfg["password"] = existing["password"]
+    definitions[cid] = cfg
+    await close_all()
+    await audit(db, "default", "admin.connector_upsert", detail={"id": cid, "type": body.type})
+    await db.commit()
+    return {"id": cid}
+
+
+@router.put("/connectors/{connector_id}/default")
+async def set_default_connector(connector_id: str, db: AsyncSession = Depends(get_db)):
+    settings = get_settings()
+    if connector_id not in settings.section("connectors.definitions"):
+        raise NotFound(f"Connector '{connector_id}' is not configured")
+    settings.raw.setdefault("connectors", {})["default"] = connector_id
+    await audit(db, "default", "admin.connector_default", detail={"connector_id": connector_id})
+    await db.commit()
+    return {"default": connector_id}
 
 
 @router.post("/connectors/{connector_id}/test", response_model=ConnectorTestResult)
@@ -120,6 +160,8 @@ async def update_config(update: ConfigUpdate, db: AsyncSession = Depends(get_db)
     for part in path[:-1]:
         node = node.setdefault(part, {})
     node[path[-1]] = update.value
+    if update.key.startswith("connectors."):
+        await close_all()
     await audit(db, "default", "admin.config_change",
                 detail={"key": update.key, "value": update.value}, severity="warning")
     await db.commit()
@@ -190,6 +232,38 @@ async def usage_analytics(db: AsyncSession = Depends(get_db)):
         "by_status": {status: count for status, count in by_status},
         "avg_execution_ms": round(avg_ms, 1) if avg_ms else None,
     }
+
+
+@router.delete("/logs/executions")
+async def clear_execution_logs(confirm: bool = False, db: AsyncSession = Depends(get_db)):
+    if not confirm:
+        raise ValidationFailed("Pass confirm=true to clear execution history and analytics")
+    deleted = await purge_executions(db)
+    await db.commit()
+    return {"deleted": deleted}
+
+
+@router.delete("/logs/audit")
+async def clear_audit_logs(confirm: bool = False, db: AsyncSession = Depends(get_db)):
+    if not confirm:
+        raise ValidationFailed("Pass confirm=true to clear the audit trail")
+    deleted = await purge_audit(db)
+    await db.commit()
+    return {"deleted": deleted}
+
+
+@router.delete("/logs")
+async def clear_logs_and_analytics(
+    confirm: bool = False,
+    include_sync_runs: bool = False,
+    db: AsyncSession = Depends(get_db),
+):
+    """Clear execution history, usage analytics, and audit logs."""
+    if not confirm:
+        raise ValidationFailed("Pass confirm=true to clear logs and analytics")
+    deleted = await purge_all(db, include_sync_runs=include_sync_runs)
+    await db.commit()
+    return {"deleted": deleted}
 
 
 # ------------------------------------------------------------------ health

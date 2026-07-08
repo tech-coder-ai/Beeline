@@ -63,7 +63,12 @@ single {dialect} SELECT statement. Rules:
 - SELECT only. Never any DDL/DML. One statement. No comments. No CTE writes.
 - Use ONLY tables/columns present in the plan and schema context; never invent identifiers.
 - Qualify tables as database.table. Use clear column aliases.
+- For {dialect}, always assign short table aliases (e.g. fact_sales AS fs) and reference
+  columns as alias.column - never use three-part backtick identifiers like `db`.`table`.`col`.
 - Apply every filter, join, aggregation, grouping, ordering and limit from the plan.
+- When GROUP BY is present, ORDER BY must use SELECT column aliases (not raw table.column refs).
+- Backtick-quoted identifiers must always be paired. Function calls such as trunc(col, 'MM')
+  are plain expressions - never add a stray trailing backtick after GROUP BY items.
 - {dialect_hints}
 Return JSON: {{"sql": "SELECT ...", "explanation": "one-paragraph business explanation of the query"}}"""
 
@@ -119,3 +124,16 @@ business user. Return JSON:
   "aggregation_reasons": ["why each aggregate is computed", ...],
   "grouping_reasons": ["why results are grouped this way", ...]
 }"""
+
+SQL_REVIEWER_SYSTEM = """You are the automated SQL review stage of Beeline. Given the user's question
+and the generated SQL, decide whether the query safely and correctly answers the question.
+Return JSON:
+{
+  "approved": true,
+  "confidence": 0.0-1.0,
+  "issues": ["concise issue if any"],
+  "clarifying_question": null
+}
+Approve when the SQL is a read-only SELECT that matches the question intent. Set approved=false only
+when user input is genuinely required; include a single clarifying_question in that case. Otherwise
+leave clarifying_question null."""

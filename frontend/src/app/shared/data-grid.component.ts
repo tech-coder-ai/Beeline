@@ -1,5 +1,5 @@
-import { DecimalPipe } from '@angular/common';
-import { Component, computed, inject, input, output } from '@angular/core';
+import { isPlatformBrowser, DecimalPipe } from '@angular/common';
+import { Component, PLATFORM_ID, computed, inject, input, output } from '@angular/core';
 import { AgGridAngular } from 'ag-grid-angular';
 import {
   AllCommunityModule,
@@ -36,17 +36,23 @@ ModuleRegistry.registerModules([AllCommunityModule]);
           <mat-icon>content_copy</mat-icon>
         </button>
         @if (showActions()) {
-          <button class="icon-btn" matTooltip="Save query" (click)="saveQuery.emit()">
-            <mat-icon>bookmark_add</mat-icon>
-          </button>
-          <button class="icon-btn" matTooltip="Pin to dashboard" (click)="pinToDashboard.emit()">
-            <mat-icon>push_pin</mat-icon>
-          </button>
-          <button class="icon-btn" matTooltip="Explain query" (click)="explainQuery.emit()">
-            <mat-icon>psychology_alt</mat-icon>
-          </button>
-          <button class="icon-btn" matTooltip="Regenerate SQL" (click)="regenerate.emit()">
-            <mat-icon>refresh</mat-icon>
+          @if (showSaveQuery()) {
+            <button class="icon-btn" matTooltip="Save query" (click)="saveQuery.emit()">
+              <mat-icon>bookmark_add</mat-icon>
+            </button>
+          }
+          @if (showPinToDashboard()) {
+            <button class="icon-btn" matTooltip="Pin to dashboard" (click)="pinToDashboard.emit()">
+              <mat-icon>push_pin</mat-icon>
+            </button>
+          }
+          @if (showExplainQuery()) {
+            <button class="icon-btn" matTooltip="Explain query" (click)="explainQuery.emit()">
+              <mat-icon>psychology_alt</mat-icon>
+            </button>
+          }
+          <button class="icon-btn" matTooltip="Edit question" (click)="regenerate.emit()">
+            <mat-icon>edit</mat-icon>
           </button>
         }
       </div>
@@ -60,22 +66,38 @@ ModuleRegistry.registerModules([AllCommunityModule]);
         [paginationPageSize]="50"
         [domLayout]="table().rows.length <= 12 ? 'autoHeight' : 'normal'"
         [style.height]="table().rows.length > 12 ? '420px' : null"
+        [popupParent]="popupParent"
       />
     </div>
   `,
   styles: [`
-    .grid-container { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+    .grid-container {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      width: 100%;
+      position: relative;
+      z-index: 0;
+    }
     .grid-toolbar {
       display: flex; align-items: center; gap: 2px;
       .spacer { flex: 1; }
       .rowcount { font-size: 12px; display: flex; gap: 8px; align-items: center; }
     }
-    .grid { width: 100%; }
+    .grid {
+      width: 100%;
+      border: 1px solid var(--bl-border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
   `],
 })
 export class DataGridComponent {
   readonly table = input.required<TableSpec>();
   readonly showActions = input(true);
+  readonly showSaveQuery = input(true);
+  readonly showPinToDashboard = input(true);
+  readonly showExplainQuery = input(true);
 
   readonly saveQuery = output<void>();
   readonly pinToDashboard = output<void>();
@@ -83,6 +105,8 @@ export class DataGridComponent {
   readonly regenerate = output<void>();
 
   private theme = inject(ThemeService);
+  private platformId = inject(PLATFORM_ID);
+  readonly popupParent = isPlatformBrowser(this.platformId) ? document.body : undefined;
 
   readonly defaultColDef: ColDef = {
     sortable: true,
@@ -96,16 +120,22 @@ export class DataGridComponent {
     themeQuartz.withParams(
       this.theme.dark()
         ? {
-            backgroundColor: 'transparent',
+            backgroundColor: '#171e30',
             foregroundColor: '#e7ecf6',
-            headerBackgroundColor: 'rgba(255,255,255,0.04)',
-            borderColor: 'rgba(255,255,255,0.09)',
-            rowHoverColor: 'rgba(255,255,255,0.05)',
+            headerBackgroundColor: '#1f2940',
+            headerTextColor: '#c5d0e6',
+            borderColor: 'rgba(255,255,255,0.12)',
+            rowHoverColor: 'rgba(255,255,255,0.06)',
+            oddRowBackgroundColor: '#1a2338',
           }
         : {
-            backgroundColor: 'transparent',
-            headerBackgroundColor: 'rgba(20,30,60,0.04)',
-            borderColor: 'rgba(20,30,60,0.1)',
+            backgroundColor: '#ffffff',
+            foregroundColor: '#1a2333',
+            headerBackgroundColor: '#f0f3fa',
+            headerTextColor: '#3d4a63',
+            borderColor: 'rgba(20,30,60,0.12)',
+            rowHoverColor: 'rgba(20,30,60,0.04)',
+            oddRowBackgroundColor: '#fafbfd',
           },
     ),
   );

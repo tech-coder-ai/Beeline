@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { ApiService } from '../../core/api.service';
+import { FeatureFlagService } from '../../core/feature-flags.service';
 
 interface ConfigNode {
   [key: string]: unknown;
@@ -16,6 +17,7 @@ interface ConfigNode {
 })
 export class AdminConfigComponent implements OnInit {
   private api = inject(ApiService);
+  private featureFlagsService = inject(FeatureFlagService);
 
   readonly config = signal<ConfigNode>({});
   readonly saved = signal(false);
@@ -39,6 +41,9 @@ export class AdminConfigComponent implements OnInit {
   get confidence(): ConfigNode {
     return (this.pipeline['confidence'] as ConfigNode) ?? {};
   }
+  get queryPreview(): ConfigNode {
+    return (this.pipeline['query_preview'] as ConfigNode) ?? {};
+  }
   get blockedKeywords(): string[] {
     return (this.guardrails['blocked_keywords'] as string[]) ?? [];
   }
@@ -49,6 +54,9 @@ export class AdminConfigComponent implements OnInit {
   update(key: string, value: unknown): void {
     this.api.updateConfig(key, value).subscribe(() => {
       this.saved.set(true);
+      if (key.startsWith('feature_flags.')) {
+        this.featureFlagsService.refresh();
+      }
       setTimeout(() => this.saved.set(false), 1200);
     });
   }
@@ -56,6 +64,11 @@ export class AdminConfigComponent implements OnInit {
   toggleFlag(name: string, current: unknown): void {
     this.update(`feature_flags.${name}`, !current);
     (this.featureFlags as Record<string, unknown>)[name] = !current;
+  }
+
+  toggleManualReview(current: unknown): void {
+    this.update('pipeline.query_preview.manual_review', !current);
+    (this.queryPreview as Record<string, unknown>)['manual_review'] = !current;
   }
 
   numberFields = [
