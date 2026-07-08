@@ -1,0 +1,128 @@
+app:
+  name: Beeline Test
+  environment: test
+  api_prefix: /api/v1
+  cors_origins: []
+
+metadata_repository:
+  url: "sqlite+aiosqlite:///:memory:"
+  echo: false
+
+connectors:
+  default: hive
+  definitions:
+    hive:
+      type: hive
+      display_name: Test Hive
+      host: localhost
+      port: 10000
+      username: hive
+      password: ""
+      database: default
+      auth: NONE
+      connect_timeout_seconds: 5
+      allowed_schemas: []
+      retry:
+        attempts: 1
+        backoff_seconds: 1
+
+llm:
+  active: openai
+  request_timeout_seconds: 5
+  providers:
+    openai:
+      type: openai
+      base_url: http://localhost:1/v1
+      api_key: test
+      model: gpt-4o
+      temperature: 0.1
+      max_tokens: 512
+
+pipeline:
+  confidence:
+    clarification_threshold: 0.65
+    autoexecute_threshold: 0.85
+  query_preview:
+    enabled: true
+  query_refinement:
+    enabled: false
+  python_fallback:
+    enabled: false
+  context:
+    max_history_messages: 12
+    summarize_after_messages: 30
+  query_library:
+    enabled: true
+    reuse_similarity_threshold: 0.82
+
+guardrails:
+  read_only: true
+  max_result_rows: 10000
+  default_limit: 1000
+  query_timeout_seconds: 300
+  max_joins: 8
+  max_subquery_depth: 3
+  forbid_select_star: false
+  allowed_functions: []
+  blocked_keywords:
+    - DROP
+    - DELETE
+    - UPDATE
+    - INSERT
+    - MERGE
+    - TRUNCATE
+    - ALTER
+    - CREATE
+    - EXEC
+    - EXECUTE
+    - CALL
+    - GRANT
+    - REVOKE
+    - LOAD
+    - MSCK
+    - ANALYZE
+    - SET
+    - RELOAD
+
+cost:
+  max_estimated_rows_scanned: 500000000
+  max_estimated_runtime_seconds: 600
+  max_estimated_result_rows: 100000
+  warn_estimated_rows_scanned: 50000000
+  require_partition_filter_tables: []
+
+metadata_sync:
+  enabled: false
+  interval_minutes: 720
+  sample_values_per_column: 8
+  collect_distinct_counts: true
+  collect_null_percentages: true
+  max_tables_per_run: 500
+
+enrichment:
+  enabled: false
+  batch_size: 10
+  require_approval: true
+
+cache:
+  redis_url: redis://localhost:6379/1
+  enabled: false
+  result_ttl_seconds: 900
+  metadata_ttl_seconds: 3600
+
+visualization:
+  max_categories_pie: 8
+  max_categories_bar: 30
+  max_points_scatter: 5000
+  kpi_max_values: 6
+
+api_actions: []
+
+feature_flags:
+  dashboards: true
+  metadata_manager: true
+  saved_queries: true
+  approvals: true
+  csv_import: true
+  explain_sql: true
+  feedback: true

@@ -1,0 +1,93 @@
+name: beeline
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: beeline
+      POSTGRES_PASSWORD: beeline
+      POSTGRES_DB: beeline
+    ports:
+      - "5432:5432"
+    volumes:
+      - beeline-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U beeline"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Standalone Apache Hive (HiveServer2 + embedded Derby metastore).
+  # Not for production scale - intended for local demo / development only.
+  hive-server:
+    image: apache/hive:3.1.3
+    environment:
+      SERVICE_NAME: hiveserver2
+      IS_RESUME: "true"
+    ports:
+      - "10000:10000"
+      - "10002:10002"
+    volumes:
+      - beeline-hive-warehouse:/opt/hive/data/warehouse
+
+  # One-shot job: waits for HiveServer2, creates the sample sales database,
+  # and loads the generated CSV data. Exits after seeding.
+  hive-init:
+    image: apache/hive:3.1.3
+    depends_on:
+      - hive-server
+    volumes:
+      - ./backend/sample_data:/seed:ro
+    entrypoint: >
+      bash -c "
+      echo 'Waiting for HiveServer2...';
+      until beeline -u jdbc:hive2://hive-server:10000/default -e 'SHOW DATABASES;' > /dev/null 2>&1; do
+        sleep 5;
+      done;
+      echo 'HiveServer2 ready, loading sample data...';
+      beeline -u jdbc:hive2://hive-server:10000/default -f /seed/seed.hql;
+      echo 'Sample data loaded.'
+      "
+    restart: "no"
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      BEELINE_CONFIG: /app/config/settings.docker.yaml
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      STELLAR_ENDPOINT: ${STELLAR_ENDPOINT:-http://host.docker.internal:9000/generate}
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      hive-server:
+        condition: service_started
+    volumes:
+      - ./backend/app:/app/app
+      - ./backend/config:/app/config
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+
+volumes:
+  beeline-postgres:
+  beeline-hive-warehouse:
