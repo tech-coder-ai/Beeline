@@ -130,10 +130,15 @@ export BEELINE__CONNECTORS__DEFINITIONS__HIVE__PORT=10000
 export BEELINE__CONNECTORS__DEFINITIONS__HIVE__DATABASE=default
 ```
 
-No Hive available but want to try the full NL→SQL flow? Run
-`docker compose up hive-server hive-init` from the repo root to bring up just
-the Hive pieces (Postgres/Redis/backend/frontend stay off), then point the
-local backend above at `localhost:10000`.
+No Hive available but want to try the full NL→SQL flow? You can bring up just
+the Hive pieces with `docker compose up -d hive-server hive-init` and point
+the local backend above at `localhost:10000` — **but only if you have never
+run `docker compose up` for this project before** (i.e. `docker network ls`
+shows no `beeline_default` network yet). If you later run the full
+`docker compose up` for all services, tear this partial stack down first
+(`docker compose down`) rather than layering it on top — see
+[Troubleshooting](#containers-cant-reach-each-other--namegaierror-name-or-service-not-known)
+below for why.
 
 ### 2. Frontend
 
@@ -304,3 +309,33 @@ SELECT statement, no comments, no cartesian joins, bounded join depth). See
 `backend/tests/test_guardrails.py` for the exact rules and
 `backend/config/settings.yaml` → `guardrails` for the adjustable thresholds
 (the SELECT-only enforcement itself is not configurable).
+
+**Containers can't reach each other — `socket.gaierror: Name or service not known`**
+The backend crashes on startup trying to resolve `postgres` (or `redis`,
+`hive-server`) by hostname. This means the containers ended up on different
+Docker networks — typically because some services were started in an earlier
+`docker compose up <specific-service>` run, and the rest were brought up
+later in a separate invocation. Docker Compose only guarantees every service
+lands on the same network (`beeline_default`) when they're created together;
+layering a second `up` on top of a stack that was partially started earlier
+can leave the older containers stranded on a network the newer ones aren't
+attached to.
+
+Confirm this is the cause: `docker network inspect beeline_default` and check
+whether every service you expect (`postgres`, `redis`, `hive-server`,
+`backend`, `frontend`) actually appears in the container list.
+
+Fix: tear down and bring the whole stack up together.
+
+```bash
+docker compose down          # removes containers only — named volumes
+                              # (beeline-postgres, beeline-hive-warehouse)
+                              # are preserved, so your synced catalog and
+                              # Postgres data survive
+docker compose up -d
+```
+
+Avoid re-triggering this by not mixing `docker compose up <service>` and
+`docker compose up` (no args) across separate invocations for the same
+project — always bring up the full stack, or tear down first if you
+deliberately want a subset running.
