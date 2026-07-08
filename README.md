@@ -4,6 +4,10 @@ Beeline is an enterprise AI Data Intelligence Platform: ask business questions i
 plain English and get governed, explainable Hive SQL, safe execution, and
 adaptive visualizations back — not a chatbot that hallucinates queries.
 
+**New here? Start with [SETUP.md](SETUP.md)** for step-by-step installation
+(Docker Compose or manual local setup), LLM provider configuration, and
+troubleshooting. This README covers architecture and reference material.
+
 The LLM never generates executable SQL directly. Every question flows through a
 chain of independent, auditable stages:
 
@@ -62,51 +66,16 @@ frontend/
 docker-compose.yml       Postgres, Redis, standalone Hive + seeding job, backend, frontend
 ```
 
-## Local development (no Docker)
+## Setup
 
-Backend:
+See **[SETUP.md](SETUP.md)** for full step-by-step instructions covering both
+Docker Compose (full stack incl. a seeded standalone Hive) and manual local
+setup (backend + frontend directly on your machine), plus troubleshooting.
 
-```bash
-cd backend
-uv venv --python 3.12 .venv        # or python3.12 -m venv .venv
-uv pip install -e ".[dev]" --python .venv/bin/python
-.venv/bin/uvicorn app.main:app --reload --port 8010
-```
+Quick reference once everything is running:
 
-The backend defaults to a local SQLite metadata repository
-(`backend/beeline_meta.db`, created automatically) and expects Hive at
-`localhost:10000`. Edit `backend/config/settings.yaml` or set
-`BEELINE__CONNECTORS__DEFINITIONS__HIVE__HOST=...` style env overrides.
-
-Frontend:
-
-```bash
-cd frontend
-npm install --legacy-peer-deps
-npm run start -- --port 4210       # proxy.conf.json forwards /api to :8010
-```
-
-Open http://localhost:4210.
-
-## Docker Compose (full stack incl. Hive)
-
-```bash
-cp .env.example .env      # add OPENAI_API_KEY or STELLAR_ENDPOINT
-docker compose up --build
-```
-
-This starts Postgres (metadata repository), Redis, a standalone HiveServer2
-(embedded Derby metastore — demo/dev only), a one-shot `hive-init` job that
-loads ~4,300 rows of generated sample sales data (`sales.dim_customers`,
-`sales.dim_products`, `sales.fact_sales`), the backend, and the frontend.
-
-- Frontend: http://localhost:8080
-- Backend API docs: http://localhost:8000/api/docs
-
-After the stack is up, trigger a metadata sync from **Admin → Connectors & Sync
-→ Incremental sync** (or `POST /api/v1/admin/sync`) so the catalog picks up the
-seeded Hive tables — the NL pipeline only ever reads the synchronized catalog,
-never the live Hive metastore.
+- Docker: frontend at http://localhost:8080, API docs at http://localhost:8000/api/docs
+- Manual: frontend at http://localhost:4210, API docs at http://localhost:8010/api/docs
 
 ## Configuring the LLM provider
 
