@@ -273,6 +273,7 @@ class ConnectorUpsert(BaseModel):
     principal: str = ""
     keytab_path: str = ""
     krb5_ccache: str = ""
+    krb5_config: str = ""  # path to krb5.conf (Linux/macOS) or krb5.ini (Windows MIT Kerberos)
     krb_host: str = ""
     connect_timeout_seconds: int = 15
     allowed_schemas: list[str] = Field(default_factory=list)

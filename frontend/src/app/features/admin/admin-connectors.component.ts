@@ -23,6 +23,7 @@ interface ConnectorForm {
   principal: string;
   keytab_path: string;
   krb5_ccache: string;
+  krb5_config: string;
   krb_host: string;
 }
 
@@ -71,6 +72,7 @@ export class AdminConnectorsComponent implements OnInit {
       principal: '',
       keytab_path: '',
       krb5_ccache: '',
+      krb5_config: '',
       krb_host: '',
     };
   }
@@ -108,6 +110,7 @@ export class AdminConnectorsComponent implements OnInit {
       principal: String(connector['principal'] ?? connector['username'] ?? ''),
       keytab_path: String(connector['keytab_path'] ?? ''),
       krb5_ccache: String(connector['krb5_ccache'] ?? ''),
+      krb5_config: String(connector['krb5_config'] ?? connector['krb5_conf'] ?? ''),
       krb_host: String(connector['krb_host'] ?? ''),
     };
     this.showForm.set(true);
@@ -139,7 +142,7 @@ export class AdminConnectorsComponent implements OnInit {
   authHelp(): string {
     switch (this.form.auth) {
       case 'KERBEROS':
-        return 'Kerberos uses tickets from keytab/kinit on the Beeline backend host. Set service name and principal; optionally point at a keytab or credential cache file.';
+        return 'Kerberos uses tickets from keytab/kinit on the Beeline backend host. Set krb5.conf (or krb5.ini on Windows), service name, and principal; optionally point at a keytab or credential cache file.';
       case 'LDAP':
         return 'LDAP requires a username and password for HiveServer2.';
       case 'NOSASL':
@@ -169,6 +172,7 @@ export class AdminConnectorsComponent implements OnInit {
       base['username'] = this.form.principal || this.form.username;
       base['keytab_path'] = this.form.keytab_path;
       base['krb5_ccache'] = this.form.krb5_ccache;
+      base['krb5_config'] = this.form.krb5_config;
       base['krb_host'] = this.form.krb_host;
       base['host'] = this.form.host;
     } else if (this.form.auth === 'NONE') {

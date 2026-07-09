@@ -53,18 +53,20 @@ class _HiveClient:
         import os
         import subprocess
 
+        krb5_config = (self._config.get("krb5_config") or self._config.get("krb5_conf") or "").strip()
+        if krb5_config:
+            os.environ["KRB5_CONFIG"] = krb5_config
         ccache = (self._config.get("krb5_ccache") or "").strip()
         if ccache:
             os.environ["KRB5CCNAME"] = ccache
         keytab = (self._config.get("keytab_path") or "").strip()
         principal = (self._config.get("principal") or self._config.get("username") or "").strip()
         if keytab and principal:
-            subprocess.run(
-                ["kinit", "-kt", keytab, principal],
-                check=True,
-                capture_output=True,
-                timeout=30,
-            )
+            cmd = ["kinit"]
+            if ccache:
+                cmd.extend(["-c", ccache])
+            cmd.extend(["-kt", keytab, principal])
+            subprocess.run(cmd, check=True, capture_output=True, timeout=30)
 
     def _connect(self):
         from pyhive import hive

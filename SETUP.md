@@ -326,19 +326,53 @@ export BEELINE__CONNECTORS__DEFINITIONS__HIVE__AUTH=LDAP
 **Cloud Hive — Kerberos** (ticket-based; configure on the machine running the
 backend):
 
+Yes — you **need a Kerberos config file** unless the host is already joined to
+the correct Active Directory realm and resolves KDCs automatically.
+
+| OS | Config file | Typical path |
+|---|---|---|
+| Linux | `krb5.conf` | `/etc/krb5.conf` |
+| macOS | `krb5.conf` | `/etc/krb5.conf` or `/Library/Preferences/edu.mit.Kerberos` |
+| Windows (MIT Kerberos) | `krb5.ini` | `C:\ProgramData\MIT\Kerberos5\krb5.ini` |
+
+Ask your Hadoop/Kerberos admin for the correct **realm**, **KDC host(s)**, and
+**principal**. Example `krb5.conf` / `krb5.ini` (adjust values):
+
+```ini
+[libdefaults]
+  default_realm = YOUR.REALM.COM
+  dns_lookup_kdc = false
+  ticket_lifetime = 24h
+  renew_lifetime = 7d
+  forwardable = true
+
+[realms]
+  YOUR.REALM.COM = {
+    kdc = kdc1.your.realm.com
+    kdc = kdc2.your.realm.com
+    admin_server = kdc1.your.realm.com
+  }
+
+[domain_realm]
+  .your.realm.com = YOUR.REALM.COM
+  your.realm.com = YOUR.REALM.COM
+```
+
+**Linux / macOS:**
+
 ```bash
-# 1. Ensure Kerberos client tools are installed (macOS: built-in; Linux example):
-#    sudo apt-get install krb5-user libsasl2-modules-gssapi-mit
+# 1. Install Kerberos client + SASL GSSAPI (Linux example):
+sudo apt-get install krb5-user libsasl2-modules-gssapi-mit
 
-# 2. Point at your realm (or use your org's /etc/krb5.conf)
-#    Edit /etc/krb5.conf if needed — ask your Hadoop admin for the correct realm/KDC.
+# 2. Place or edit krb5.conf (see template above)
+sudo nano /etc/krb5.conf
 
-# 3. Obtain a ticket (pick one approach):
-kinit your_principal@YOUR.REALM
+# 3. Obtain a ticket:
+kinit your_principal@YOUR.REALM.COM
 # or with a keytab:
-kinit -kt /path/to/beeline.keytab your_principal@YOUR.REALM
+kinit -kt /path/to/beeline.keytab your_principal@YOUR.REALM.COM
 
-# 4. Verify the ticket:
+# 4. Verify:
 klist
 
 # 5. Export connector settings for Beeline:
@@ -347,12 +381,19 @@ export BEELINE__CONNECTORS__DEFINITIONS__HIVE__PORT=10000
 export BEELINE__CONNECTORS__DEFINITIONS__HIVE__DATABASE=default
 export BEELINE__CONNECTORS__DEFINITIONS__HIVE__AUTH=KERBEROS
 export BEELINE__CONNECTORS__DEFINITIONS__HIVE__KERBEROS_SERVICE_NAME=hive
-export BEELINE__CONNECTORS__DEFINITIONS__HIVE__PRINCIPAL=your_principal@YOUR.REALM
+export BEELINE__CONNECTORS__DEFINITIONS__HIVE__PRINCIPAL=your_principal@YOUR.REALM.COM
+export BEELINE__CONNECTORS__DEFINITIONS__HIVE__KRB5_CONFIG=/etc/krb5.conf
 export BEELINE__CONNECTORS__DEFINITIONS__HIVE__KEYTAB_PATH=/path/to/beeline.keytab
 export BEELINE__CONNECTORS__DEFINITIONS__HIVE__KRB5_CCACHE=/tmp/krb5cc_beeline
-# Optional: FQDN used in the Kerberos SPN if it differs from host:
+# Optional FQDN for the service principal if it differs from host:
 # export BEELINE__CONNECTORS__DEFINITIONS__HIVE__KRB_HOST=hive-server.example.com
 ```
+
+Set `KRB5_CONFIG` / `krb5_config` whenever your config file is **not** in the
+default location, or when you keep a project-specific copy.
+
+**Windows (native — PowerShell):** see [§ Windows setup](#windows-setup-powershell)
+below for full commands including `krb5.ini`, MIT Kerberos, backend, and frontend.
 
 **Cloud Hive — NONE / NOSASL** (no credentials):
 
@@ -506,6 +547,162 @@ Admin → Connectors & Sync → **Incremental sync (active)**
 | Admin → Connectors | Works (test connection fails until Hive is reachable) |
 | NL→SQL with real data | Needs catalog sync from Hive |
 
+### Windows setup (PowerShell)
+
+Use this when running Beeline on **Windows 10/11** against a **cloud Hive**
+cluster (no Docker). Commands below are for **PowerShell** in two windows:
+one for the backend, one for the frontend.
+
+#### 1. Install prerequisites
+
+| Tool | Install | Verify |
+|---|---|---|
+| Python 3.12 | https://www.python.org/downloads/ (check **Add to PATH**) | `py -3.12 --version` |
+| Node.js 20+ | https://nodejs.org/ | `node --version` |
+| Git | https://git-scm.com/download/win | `git --version` |
+| MIT Kerberos (for KERBEROS auth) | https://web.mit.edu/kerberos/dist/ | `klist` (after install) |
+
+For **LDAP** or **NONE** auth you can skip MIT Kerberos.
+
+#### 2. Clone the repo
+
+```powershell
+git clone https://github.com/tech-coder-ai/Beeline.git
+cd Beeline
+```
+
+#### 3. Kerberos config (`krb5.ini`) — required for KERBEROS
+
+1. Install **MIT Kerberos for Windows** (adds `kinit`, `klist` to PATH).
+2. Create or edit `C:\ProgramData\MIT\Kerberos5\krb5.ini` using the
+   `[libdefaults]` / `[realms]` template in the Kerberos section above.
+3. Verify KDC reachability (VPN on if required):
+
+```powershell
+# Test DNS / network to your KDC
+Test-NetConnection kdc1.your.realm.com -Port 88
+
+# Obtain a ticket (password prompt):
+kinit your_principal@YOUR.REALM.COM
+
+# Or with a keytab:
+kinit -kt C:\path\to\beeline.keytab your_principal@YOUR.REALM.COM
+
+# Confirm ticket:
+klist
+```
+
+If you keep `krb5.ini` somewhere else, set:
+
+```powershell
+$env:KRB5_CONFIG = "C:\path\to\krb5.ini"
+```
+
+Beeline connector field **Kerberos config** maps to this path
+(`krb5_config` / `BEELINE__...__KRB5_CONFIG`).
+
+#### 4. Backend — install and start
+
+```powershell
+cd Beeline\backend
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -e ".[dev]"
+```
+
+**LLM:**
+
+```powershell
+$env:OPENAI_API_KEY = "sk-your-key-here"
+# or: $env:STELLAR_ENDPOINT = "http://your-llm-host:9000/generate"
+```
+
+**Cloud Hive — LDAP:**
+
+```powershell
+$env:BEELINE__CONNECTORS__DEFINITIONS__HIVE__HOST = "hive.cloud.example.com"
+$env:BEELINE__CONNECTORS__DEFINITIONS__HIVE__PORT = "10000"
+$env:BEELINE__CONNECTORS__DEFINITIONS__HIVE__DATABASE = "default"
+$env:BEELINE__CONNECTORS__DEFINITIONS__HIVE__USERNAME = "your_ldap_user"
+$env:BEELINE__CONNECTORS__DEFINITIONS__HIVE__PASSWORD = "your_ldap_password"
+$env:BEELINE__CONNECTORS__DEFINITIONS__HIVE__AUTH = "LDAP"
+```
+
+**Cloud Hive — Kerberos:**
+
+```powershell
+$env:BEELINE__CONNECTORS__DEFINITIONS__HIVE__HOST = "hive.cloud.example.com"
+$env:BEELINE__CONNECTORS__DEFINITIONS__HIVE__PORT = "10000"
+$env:BEELINE__CONNECTORS__DEFINITIONS__HIVE__DATABASE = "default"
+$env:BEELINE__CONNECTORS__DEFINITIONS__HIVE__AUTH = "KERBEROS"
+$env:BEELINE__CONNECTORS__DEFINITIONS__HIVE__KERBEROS_SERVICE_NAME = "hive"
+$env:BEELINE__CONNECTORS__DEFINITIONS__HIVE__PRINCIPAL = "your_principal@YOUR.REALM.COM"
+$env:BEELINE__CONNECTORS__DEFINITIONS__HIVE__KRB5_CONFIG = "C:\ProgramData\MIT\Kerberos5\krb5.ini"
+$env:BEELINE__CONNECTORS__DEFINITIONS__HIVE__KEYTAB_PATH = "C:\path\to\beeline.keytab"
+$env:BEELINE__CONNECTORS__DEFINITIONS__HIVE__KRB5_CCACHE = "FILE:C:\temp\krb5cc_beeline"
+# Optional:
+# $env:BEELINE__CONNECTORS__DEFINITIONS__HIVE__KRB_HOST = "hive-server.example.com"
+```
+
+Run `kinit` **before** starting the backend (or rely on keytab + Beeline's
+auto-`kinit` when `keytab_path` and `principal` are set).
+
+**Start API** (keep window open):
+
+```powershell
+.\.venv\Scripts\uvicorn app.main:app --reload --port 8010
+```
+
+Verify: http://localhost:8010/api/docs
+
+#### 5. Frontend — install and start
+
+Open a **new PowerShell** window:
+
+```powershell
+cd Beeline\frontend
+npm install --legacy-peer-deps
+```
+
+Check `proxy.conf.json` targets port `8010`:
+
+```powershell
+Get-Content proxy.conf.json
+```
+
+Start dev server (keep window open):
+
+```powershell
+npm run start -- --port 4210
+```
+
+Open http://localhost:4210
+
+#### 6. Connect, sync, and use Chat (UI)
+
+Same as [§4 Connect and sync cloud Hive (UI)](#4-connect-and-sync-cloud-hive-ui)
+above:
+
+1. **Admin → Connectors & Sync → Add/Edit connection**
+2. Auth **KERBEROS** → fill principal, service name, **krb5.ini path**, keytab
+3. **Test connection** → **Full sync**
+4. **Metadata → Catalog** → confirm tables
+5. Ask questions on **Chat**
+
+#### 7. Windows troubleshooting
+
+| Issue | Fix |
+|---|---|
+| `kinit` not found | Install MIT Kerberos; add `C:\Program Files\MIT\Kerberos\bin` to PATH |
+| `krb5.conf` / realm errors | Fix `krb5.ini`; set `KRB5_CONFIG` or connector **Kerberos config** field |
+| SASL / GSSAPI errors from PyHive | Ensure ticket valid (`klist`); confirm VPN; service name is usually `hive` |
+| `Activate.ps1` blocked | `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` |
+| Port in use | Change `8010` / `4210` and update `frontend/proxy.conf.json` |
+
+**Alternative:** run the Linux/macOS backend steps inside **WSL2** (Ubuntu) if
+native Windows Kerberos/SASL proves difficult — keep the frontend on Windows
+or run both in WSL.
+
 ---
 
 ## Configuring the LLM provider
@@ -653,7 +850,14 @@ For Kerberos, verify `klist` shows a valid ticket and that
 Run `kinit` (or `kinit -kt keytab principal`) on the machine hosting the
 backend before testing. Confirm `kerberos_service_name` matches your cluster
 (usually `hive`) and that `krb_host` is set to the FQDN in the service
-principal if it differs from the connection host.
+principal if it differs from the connection host. Verify `krb5.conf` /
+`krb5.ini` has the correct realm and KDC — set `krb5_config` in the connector
+or `KRB5_CONFIG` in the environment if the file is not in the default path.
+
+**Windows: `kinit` not recognized or Kerberos ticket missing**
+Install MIT Kerberos for Windows and ensure `kinit`/`klist` are on PATH.
+Create `C:\ProgramData\MIT\Kerberos5\krb5.ini` (see Option C § Windows setup).
+Use `FILE:C:\path\ccache` format for `krb5_ccache` on Windows.
 
 **`docker compose up` — `hive-init` keeps retrying**
 HiveServer2 can take 30–90 seconds to become ready on first boot (Derby

@@ -69,6 +69,10 @@
               <input class="text-input" [(ngModel)]="form.krb_host" placeholder="hive-server.example.com" />
             </label>
             <label class="wide">
+              <span>Kerberos config (krb5.conf / krb5.ini)</span>
+              <input class="text-input" [(ngModel)]="form.krb5_config" placeholder="C:\ProgramData\MIT\Kerberos5\krb5.ini or /etc/krb5.conf" />
+            </label>
+            <label class="wide">
               <span>Keytab path on backend host</span>
               <input class="text-input" [(ngModel)]="form.keytab_path" placeholder="/etc/security/keytabs/beeline.keytab" />
             </label>
