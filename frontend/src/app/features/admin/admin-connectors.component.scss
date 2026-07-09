@@ -10,6 +10,21 @@
   font-weight: 600;
 }
 
+.section-help {
+  font-size: 12.5px;
+  line-height: 1.6;
+  margin: 0 0 12px;
+  max-width: 920px;
+
+  strong { color: var(--bl-text); font-weight: 600; }
+}
+
+.auth-help {
+  font-size: 12px;
+  line-height: 1.55;
+  margin: 0;
+}
+
 .section-header {
   display: flex;
   align-items: center;
@@ -36,6 +51,8 @@
     gap: 4px;
     font-size: 12px;
     color: var(--bl-text-muted);
+
+    &.wide { grid-column: 1 / -1; }
   }
 }
 

@@ -49,6 +49,23 @@ class _HiveClient:
     def __init__(self, config: dict):
         self._config = config
 
+    def _prepare_kerberos(self) -> None:
+        import os
+        import subprocess
+
+        ccache = (self._config.get("krb5_ccache") or "").strip()
+        if ccache:
+            os.environ["KRB5CCNAME"] = ccache
+        keytab = (self._config.get("keytab_path") or "").strip()
+        principal = (self._config.get("principal") or self._config.get("username") or "").strip()
+        if keytab and principal:
+            subprocess.run(
+                ["kinit", "-kt", keytab, principal],
+                check=True,
+                capture_output=True,
+                timeout=30,
+            )
+
     def _connect(self):
         from pyhive import hive
 
@@ -59,12 +76,30 @@ class _HiveClient:
         # server configured for NONE (or vice versa) fails the handshake with
         # a bare "TSocket read 0 bytes" - no other error detail.
         auth = (self._config.get("auth") or "NONE").upper()
+        host = (self._config.get("krb_host") or self._config.get("host") or "localhost").strip()
+        port = int(self._config.get("port", 10000))
+        database = self._config.get("database", "default")
+        username = self._config.get("username") or "hive"
+        password = self._config.get("password") or None
+
+        if auth == "KERBEROS":
+            self._prepare_kerberos()
+            service = (self._config.get("kerberos_service_name") or "hive").strip()
+            return hive.connect(
+                host=host,
+                port=port,
+                database=database,
+                auth="KERBEROS",
+                kerberos_service_name=service,
+                username=username or None,
+            )
+
         return hive.connect(
-            host=self._config.get("host", "localhost"),
-            port=int(self._config.get("port", 10000)),
-            username=self._config.get("username") or "hive",
-            password=self._config.get("password") or None,
-            database=self._config.get("database", "default"),
+            host=host,
+            port=port,
+            username=username,
+            password=password if auth == "LDAP" else None,
+            database=database,
             auth=auth,
         )
 

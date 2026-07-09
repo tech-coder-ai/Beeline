@@ -271,47 +271,229 @@ Open http://localhost:4210.
 
 ## Option C: Backend + UI with cloud Hive (no Docker)
 
-Same as [Option B](#option-b-manual-local-setup) for starting the backend and
-frontend — but **without any Docker services**. Use this when your Hive
-cluster runs in the cloud and you only run Beeline's API and UI locally.
+Run **only** Beeline's Python API and Angular UI on your laptop. Hive lives in
+the cloud — no Docker, no local Hive, no local Postgres/Redis required (SQLite
+and in-memory cache are used by default).
 
-### 1. Start backend and frontend
+You need network access to your cloud HiveServer2 endpoint (VPN, security
+group, or bastion as required by your provider).
 
-Follow [Option B §1 Backend](#1-backend) and [Option B §2 Frontend](#2-frontend).
+### 1. Clone and verify prerequisites
 
-### 2. Connect to cloud Hive
+```bash
+git clone https://github.com/tech-coder-ai/Beeline.git
+cd Beeline
 
-Edit `backend/config/settings.yaml` → `connectors.definitions.hive`, **or**
-override with environment variables:
+python3.12 --version    # 3.11+ required; 3.12 recommended
+node --version          # 20+
+npm --version           # 10+
+```
+
+### 2. Backend — install and configure
+
+```bash
+cd backend
+uv venv --python 3.12 .venv
+uv pip install -e ".[dev]" --python .venv/bin/python
+```
+
+No `uv`? Use pip instead:
+
+```bash
+python3.12 -m venv .venv
+.venv/bin/pip install -e ".[dev]"
+```
+
+**LLM** — set one provider before starting the API:
+
+```bash
+export OPENAI_API_KEY=sk-your-key-here
+# or for Stellar:
+# export STELLAR_ENDPOINT=http://your-llm-host:9000/generate
+```
+
+**Cloud Hive — LDAP** (username/password):
 
 ```bash
 export BEELINE__CONNECTORS__DEFINITIONS__HIVE__HOST=hive.cloud.example.com
 export BEELINE__CONNECTORS__DEFINITIONS__HIVE__PORT=10000
 export BEELINE__CONNECTORS__DEFINITIONS__HIVE__DATABASE=default
-export BEELINE__CONNECTORS__DEFINITIONS__HIVE__USERNAME=your_user
-export BEELINE__CONNECTORS__DEFINITIONS__HIVE__PASSWORD=your_password
-export BEELINE__CONNECTORS__DEFINITIONS__HIVE__AUTH=LDAP    # NONE | NOSASL | LDAP | KERBEROS
+export BEELINE__CONNECTORS__DEFINITIONS__HIVE__USERNAME=your_ldap_user
+export BEELINE__CONNECTORS__DEFINITIONS__HIVE__PASSWORD=your_ldap_password
+export BEELINE__CONNECTORS__DEFINITIONS__HIVE__AUTH=LDAP
 ```
 
-Or use **Admin → Connectors & Sync** in the UI to add/update the connector
-(host, port, auth, credentials) without restarting.
+**Cloud Hive — Kerberos** (ticket-based; configure on the machine running the
+backend):
 
-### 3. Sync the catalog
+```bash
+# 1. Ensure Kerberos client tools are installed (macOS: built-in; Linux example):
+#    sudo apt-get install krb5-user libsasl2-modules-gssapi-mit
+
+# 2. Point at your realm (or use your org's /etc/krb5.conf)
+#    Edit /etc/krb5.conf if needed — ask your Hadoop admin for the correct realm/KDC.
+
+# 3. Obtain a ticket (pick one approach):
+kinit your_principal@YOUR.REALM
+# or with a keytab:
+kinit -kt /path/to/beeline.keytab your_principal@YOUR.REALM
+
+# 4. Verify the ticket:
+klist
+
+# 5. Export connector settings for Beeline:
+export BEELINE__CONNECTORS__DEFINITIONS__HIVE__HOST=hive.cloud.example.com
+export BEELINE__CONNECTORS__DEFINITIONS__HIVE__PORT=10000
+export BEELINE__CONNECTORS__DEFINITIONS__HIVE__DATABASE=default
+export BEELINE__CONNECTORS__DEFINITIONS__HIVE__AUTH=KERBEROS
+export BEELINE__CONNECTORS__DEFINITIONS__HIVE__KERBEROS_SERVICE_NAME=hive
+export BEELINE__CONNECTORS__DEFINITIONS__HIVE__PRINCIPAL=your_principal@YOUR.REALM
+export BEELINE__CONNECTORS__DEFINITIONS__HIVE__KEYTAB_PATH=/path/to/beeline.keytab
+export BEELINE__CONNECTORS__DEFINITIONS__HIVE__KRB5_CCACHE=/tmp/krb5cc_beeline
+# Optional: FQDN used in the Kerberos SPN if it differs from host:
+# export BEELINE__CONNECTORS__DEFINITIONS__HIVE__KRB_HOST=hive-server.example.com
+```
+
+**Cloud Hive — NONE / NOSASL** (no credentials):
+
+```bash
+export BEELINE__CONNECTORS__DEFINITIONS__HIVE__HOST=hive.cloud.example.com
+export BEELINE__CONNECTORS__DEFINITIONS__HIVE__PORT=10000
+export BEELINE__CONNECTORS__DEFINITIONS__HIVE__DATABASE=default
+export BEELINE__CONNECTORS__DEFINITIONS__HIVE__AUTH=NONE
+```
+
+Alternatively, skip env vars and configure the connector later in the UI
+(**Admin → Connectors & Sync → Add connection**). The form shows only the
+fields required for the selected auth method (LDAP password, Kerberos
+principal/keytab/cache, etc.).
+
+**Start the API** (keep this terminal open):
+
+```bash
+cd backend
+.venv/bin/uvicorn app.main:app --reload --port 8010
+```
+
+- SQLite metadata DB is auto-created at `backend/beeline_meta.db` on first start.
+- API docs: http://localhost:8010/api/docs
+- Health check: `curl http://localhost:8010/api/v1/health`
+
+If port `8010` is taken, pick another port and update `frontend/proxy.conf.json`
+in step 3 to match.
+
+### 3. Frontend — install and start
+
+Open a **second terminal**:
+
+```bash
+cd Beeline/frontend
+npm install --legacy-peer-deps
+```
+
+Confirm the API proxy points at your backend (default `8010`):
+
+```bash
+cat proxy.conf.json
+```
+
+Expected contents:
+
+```json
+{ "/api": { "target": "http://localhost:8010", "secure": false, "changeOrigin": true } }
+```
+
+If you changed the backend port, edit `target` before starting.
+
+**Start the dev server** (keep this terminal open):
+
+```bash
+npm run start -- --port 4210
+```
+
+Open http://localhost:4210 in your browser.
+
+### 4. Connect and sync cloud Hive (UI)
 
 1. Open http://localhost:4210 → **Admin → Connectors & Sync**
-2. Click **Test connection** on your Hive connector
-3. Click **Full sync** to harvest databases/tables/columns into Beeline's catalog
-4. Confirm tables under **Metadata → Catalog**
-5. Ask questions on the **Chat** page
+2. Click **Add connection** (or **Edit** on the existing `hive` connector)
+3. Fill in host, port, database, and auth method:
+   - **LDAP** — username + password
+   - **KERBEROS** — principal, kerberos service name (`hive`), optional keytab
+     path and credential cache
+4. Click **Save connection**
+5. Click **Test connection** — must show **Connected**
+6. Click **Set active** if this is not already the default connector
+7. Click **Full sync** under **Metadata synchronization** (first time)
+8. Open **Metadata → Catalog** and confirm your tables appear
 
-**Network notes for cloud Hive:**
+### 5. Optional — AI enrichment and approvals
+
+Back in **Admin → Connectors & Sync**:
+
+1. Click **Run AI enrichment** — proposes business descriptions, tags, and
+   glossary terms for tables missing descriptions
+2. Open **Metadata → Approvals** to review and approve/reject each proposal
+3. Approved items are written to the catalog; nothing is auto-applied
+
+### 6. Sanity check
+
+```bash
+# Backend healthy
+curl http://localhost:8010/api/v1/health
+
+# Deep health (metadata DB + connector test)
+curl http://localhost:8010/api/v1/health/deep
+```
+
+In the UI:
+
+- **Chat** page loads with suggestion chips
+- After **Full sync**, ask a question against a synced table — you should get
+  SQL results (or a preview/clarification depending on confidence), not a
+  connection error
+- Before sync, the **clarification** flow is expected — Beeline will not guess
+  at tables it has not verified
+
+### 7. Day-two commands
+
+**Restart backend** (after env var or config changes):
+
+```bash
+cd Beeline/backend
+export OPENAI_API_KEY=sk-...   # re-export if needed
+export BEELINE__CONNECTORS__DEFINITIONS__HIVE__HOST=...
+.venv/bin/uvicorn app.main:app --reload --port 8010
+```
+
+**Restart frontend:**
+
+```bash
+cd Beeline/frontend
+npm run start -- --port 4210
+```
+
+**Refresh Kerberos ticket** (when using KERBEROS):
+
+```bash
+kinit your_principal@YOUR.REALM
+# or: kinit -kt /path/to/beeline.keytab your_principal@YOUR.REALM
+klist
+```
+
+**Incremental catalog refresh** (after schema changes in Hive):
+
+Admin → Connectors & Sync → **Incremental sync (active)**
+
+### Network notes for cloud Hive
 
 - Your machine must reach the HiveServer2 host/port (VPN, security group, or
   bastion as required by your cloud provider).
 - TLS-terminated endpoints may need a different port or a tunnel — point
   `host`/`port` at whatever endpoint accepts the Hive thrift protocol.
-- Kerberos setups need additional client configuration on the machine running
-  the backend (keytab, `krb5.conf`); LDAP/NOSASL are simpler for first tests.
+- Kerberos requires `krb5.conf`, a valid ticket or keytab on the **backend
+  host**, and often `cyrus-sasl-gssapi` / `libsasl2-modules-gssapi-mit` for
+  PyHive SASL. LDAP/NOSASL are simpler for first connectivity tests.
 
 ### What works without Hive
 
@@ -464,6 +646,14 @@ design. Confirm tables appear under Metadata → Catalog first.
 **Cannot reach cloud Hive**
 Check VPN, firewall rules, and that `host`/`port`/`auth` match your cluster's
 HiveServer2 endpoint. Use Admin → Test connection for the exact error message.
+For Kerberos, verify `klist` shows a valid ticket and that
+`libsasl2-modules-gssapi-mit` (or macOS equivalent) is installed.
+
+**Kerberos connection fails with SASL / GSSAPI errors**
+Run `kinit` (or `kinit -kt keytab principal`) on the machine hosting the
+backend before testing. Confirm `kerberos_service_name` matches your cluster
+(usually `hive`) and that `krb_host` is set to the FQDN in the service
+principal if it differs from the connection host.
 
 **`docker compose up` — `hive-init` keeps retrying**
 HiveServer2 can take 30–90 seconds to become ready on first boot (Derby

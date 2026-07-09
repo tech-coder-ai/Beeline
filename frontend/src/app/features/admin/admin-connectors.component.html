@@ -31,15 +31,7 @@
             <input class="text-input" [(ngModel)]="form.database" />
           </label>
           <label>
-            <span>Username</span>
-            <input class="text-input" [(ngModel)]="form.username" />
-          </label>
-          <label>
-            <span>Password</span>
-            <input class="text-input" type="password" [(ngModel)]="form.password" placeholder="Leave blank to keep existing" />
-          </label>
-          <label>
-            <span>Auth</span>
+            <span>Auth method</span>
             <select class="text-input" [(ngModel)]="form.auth">
               <option value="NONE">NONE</option>
               <option value="NOSASL">NOSASL</option>
@@ -47,7 +39,48 @@
               <option value="KERBEROS">KERBEROS</option>
             </select>
           </label>
+
+          @if (isKerberos()) {
+            <label>
+              <span>Principal</span>
+              <input class="text-input" [(ngModel)]="form.principal" placeholder="user@REALM.EXAMPLE.COM" />
+            </label>
+          } @else if (showUsername()) {
+            <label>
+              <span>{{ usernameLabel() }}</span>
+              <input class="text-input" [(ngModel)]="form.username" />
+            </label>
+          }
+
+          @if (isLdap()) {
+            <label>
+              <span>Password</span>
+              <input class="text-input" type="password" [(ngModel)]="form.password" placeholder="Leave blank to keep existing" />
+            </label>
+          }
+
+          @if (isKerberos()) {
+            <label>
+              <span>Kerberos service name</span>
+              <input class="text-input" [(ngModel)]="form.kerberos_service_name" placeholder="hive" />
+            </label>
+            <label>
+              <span>Kerberos host FQDN (optional)</span>
+              <input class="text-input" [(ngModel)]="form.krb_host" placeholder="hive-server.example.com" />
+            </label>
+            <label class="wide">
+              <span>Keytab path on backend host</span>
+              <input class="text-input" [(ngModel)]="form.keytab_path" placeholder="/etc/security/keytabs/beeline.keytab" />
+            </label>
+            <label class="wide">
+              <span>Credential cache (KRB5CCNAME)</span>
+              <input class="text-input" [(ngModel)]="form.krb5_ccache" placeholder="/tmp/krb5cc_beeline" />
+            </label>
+          }
         </div>
+
+        <p class="auth-help muted">{{ authHelp() }}</p>
+
         <div class="form-actions">
           <button class="primary-btn small" [disabled]="saving() || !form.id.trim()" (click)="saveConnector()">
             <mat-icon>save</mat-icon> Save connection
@@ -65,9 +98,13 @@
             <span class="connector-name">{{ c['display_name'] || c['id'] }}</span>
             @if (c['id'] === defaultId()) { <span class="chip good">active</span> }
             <span class="chip neutral">{{ c['type'] }}</span>
+            @if (c['auth']) { <span class="chip neutral">{{ c['auth'] }}</span> }
           </div>
           <div class="connector-meta muted">
             {{ c['host'] }}:{{ c['port'] }} · {{ c['database'] }}
+            @if (c['auth'] === 'KERBEROS' && c['kerberos_service_name']) {
+              · svc/{{ c['kerberos_service_name'] }}
+            }
           </div>
           <div class="connector-actions">
             <button class="ghost-btn small" [disabled]="testing() === c['id']" (click)="test(c['id'])">
@@ -100,14 +137,37 @@
 
   <div class="section">
     <div class="section-title">Metadata synchronization</div>
+    <p class="section-help muted">
+      Sync harvests databases, tables, columns, and statistics from Hive into Beeline's catalog.
+      <strong>Incremental sync</strong> refreshes tables that changed since the last run.
+      <strong>Full sync</strong> re-harvests everything (use after schema changes).
+      <strong>Run AI enrichment</strong> proposes business descriptions, tags, and glossary terms
+      for tables missing descriptions — each proposal goes to <strong>Metadata → Approvals</strong>
+      for human review before it is applied.
+    </p>
     <div class="sync-actions">
-      <button class="primary-btn" [disabled]="syncing()" (click)="triggerSync('incremental')">
+      <button
+        class="primary-btn"
+        [disabled]="syncing()"
+        (click)="triggerSync('incremental')"
+        matTooltip="Refresh changed tables for the active connector"
+      >
         <mat-icon>sync</mat-icon> Incremental sync (active)
       </button>
-      <button class="ghost-btn" [disabled]="syncing()" (click)="triggerSync('full')">
+      <button
+        class="ghost-btn"
+        [disabled]="syncing()"
+        (click)="triggerSync('full')"
+        matTooltip="Re-harvest the full catalog for the active connector"
+      >
         <mat-icon>refresh</mat-icon> Full sync (active)
       </button>
-      <button class="ghost-btn" [disabled]="enriching()" (click)="triggerEnrichment()">
+      <button
+        class="ghost-btn"
+        [disabled]="enriching()"
+        (click)="triggerEnrichment()"
+        matTooltip="Generate AI metadata proposals for the approval queue"
+      >
         <mat-icon>auto_awesome</mat-icon> Run AI enrichment
       </button>
     </div>

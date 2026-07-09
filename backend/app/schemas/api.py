@@ -267,6 +267,13 @@ class ConnectorUpsert(BaseModel):
     password: str = ""
     database: str = "default"
     auth: str = "NONE"
+    # Kerberos (auth=KERBEROS). PyHive uses kerberos_service_name + host for GSSAPI;
+    # tickets come from the environment (kinit/keytab) or krb5_ccache.
+    kerberos_service_name: str = "hive"
+    principal: str = ""
+    keytab_path: str = ""
+    krb5_ccache: str = ""
+    krb_host: str = ""
     connect_timeout_seconds: int = 15
     allowed_schemas: list[str] = Field(default_factory=list)
     read_replicas: list[dict[str, Any]] = Field(default_factory=list)

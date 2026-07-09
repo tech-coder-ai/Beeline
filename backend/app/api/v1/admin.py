@@ -35,7 +35,7 @@ from app.services.metadata_sync import metadata_sync_service
 router = APIRouter(prefix="/admin", tags=["admin"])
 health_router = APIRouter(tags=["health"])
 
-_REDACT = ("password", "api_key", "secret", "token")
+_REDACT = ("password", "api_key", "secret", "token", "keytab_path", "krb5_ccache")
 
 
 def _redact(value):
