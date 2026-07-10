@@ -45,6 +45,7 @@ export class AdminConnectorsComponent implements OnInit {
   readonly syncing = signal(false);
   readonly enriching = signal(false);
   readonly saving = signal(false);
+  readonly saveError = signal<string | null>(null);
   readonly showForm = signal(false);
   readonly editingId = signal<string | null>(null);
   readonly syncConnectorId = signal<string | null>(null);
@@ -90,12 +91,19 @@ export class AdminConnectorsComponent implements OnInit {
 
   openNewForm(): void {
     this.editingId.set(null);
+    this.saveError.set(null);
     this.form = { ...this.emptyForm(), display_name: 'New Hive connection' };
     this.showForm.set(true);
   }
 
+  private sanitizeStored(value: unknown): string {
+    const text = String(value ?? '');
+    return text === '***' ? '' : text;
+  }
+
   openEditForm(connector: ConnectorInfo): void {
     this.editingId.set(connector.id);
+    this.saveError.set(null);
     this.form = {
       id: connector.id,
       type: String(connector.type ?? 'hive'),
@@ -107,10 +115,10 @@ export class AdminConnectorsComponent implements OnInit {
       database: String(connector.database ?? 'default'),
       auth: (String(connector['auth'] ?? 'NONE').toUpperCase() as ConnectorAuth),
       kerberos_service_name: String(connector['kerberos_service_name'] ?? 'hive'),
-      principal: String(connector['principal'] ?? connector['username'] ?? ''),
-      keytab_path: String(connector['keytab_path'] ?? ''),
-      krb5_ccache: String(connector['krb5_ccache'] ?? ''),
-      krb5_config: String(connector['krb5_config'] ?? connector['krb5_conf'] ?? ''),
+      principal: this.sanitizeStored(connector['principal'] ?? connector['username'] ?? ''),
+      keytab_path: this.sanitizeStored(connector['keytab_path']),
+      krb5_ccache: this.sanitizeStored(connector['krb5_ccache']),
+      krb5_config: this.sanitizeStored(connector['krb5_config'] ?? connector['krb5_conf']),
       krb_host: String(connector['krb_host'] ?? ''),
     };
     this.showForm.set(true);
@@ -168,13 +176,14 @@ export class AdminConnectorsComponent implements OnInit {
       if (this.form.password) base['password'] = this.form.password;
     } else if (this.form.auth === 'KERBEROS') {
       base['kerberos_service_name'] = this.form.kerberos_service_name || 'hive';
-      base['principal'] = this.form.principal;
-      base['username'] = this.form.principal || this.form.username;
-      base['keytab_path'] = this.form.keytab_path;
-      base['krb5_ccache'] = this.form.krb5_ccache;
-      base['krb5_config'] = this.form.krb5_config;
-      base['krb_host'] = this.form.krb_host;
-      base['host'] = this.form.host;
+      if (this.form.principal.trim()) {
+        base['principal'] = this.form.principal.trim();
+        base['username'] = this.form.principal.trim();
+      }
+      if (this.form.keytab_path.trim()) base['keytab_path'] = this.form.keytab_path.trim();
+      if (this.form.krb5_ccache.trim()) base['krb5_ccache'] = this.form.krb5_ccache.trim();
+      if (this.form.krb5_config.trim()) base['krb5_config'] = this.form.krb5_config.trim();
+      if (this.form.krb_host.trim()) base['krb_host'] = this.form.krb_host.trim();
     } else if (this.form.auth === 'NONE') {
       base['username'] = this.form.username;
     } else if (this.form.auth === 'NOSASL') {
@@ -188,6 +197,7 @@ export class AdminConnectorsComponent implements OnInit {
     const id = this.form.id.trim();
     if (!id) return;
     this.saving.set(true);
+    this.saveError.set(null);
     this.api.upsertConnector(this.buildPayload()).subscribe({
       next: () => {
         this.saving.set(false);
@@ -195,7 +205,10 @@ export class AdminConnectorsComponent implements OnInit {
         this.load();
         this.connectorService.load();
       },
-      error: () => this.saving.set(false),
+      error: (err) => {
+        this.saving.set(false);
+        this.saveError.set(err?.error?.message ?? 'Failed to save connector');
+      },
     });
   }
 

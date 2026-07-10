@@ -14,7 +14,7 @@ from app.connectors.registry import (
     get_connector,
     list_connector_ids,
 )
-from app.core.config import get_settings
+from app.core.config import get_settings, persist_connector_definitions
 from app.core.database import get_db
 from app.core.exceptions import NotFound, ValidationFailed
 from app.models.catalog import SyncRun
@@ -35,7 +35,8 @@ from app.services.metadata_sync import metadata_sync_service
 router = APIRouter(prefix="/admin", tags=["admin"])
 health_router = APIRouter(tags=["health"])
 
-_REDACT = ("password", "api_key", "secret", "token", "keytab_path", "krb5_ccache")
+_REDACT = ("password", "api_key", "secret", "token")
+_KEEP_ON_EMPTY = frozenset({"password", "keytab_path", "krb5_ccache"})
 
 
 def _redact(value):
@@ -47,6 +48,16 @@ def _redact(value):
     if isinstance(value, list):
         return [_redact(v) for v in value]
     return value
+
+
+def _merge_connector_config(existing: dict, incoming: dict) -> dict:
+    """Merge incoming connector fields; keep stored secrets/paths when UI sends blanks."""
+    merged = {**existing, **incoming}
+    for key in _KEEP_ON_EMPTY:
+        val = incoming.get(key)
+        if val in (None, "", "***") and existing.get(key):
+            merged[key] = existing[key]
+    return merged
 
 
 # ------------------------------------------------------------------ connectors
@@ -74,9 +85,8 @@ async def upsert_connector(body: ConnectorUpsert, db: AsyncSession = Depends(get
     cfg = body.model_dump(exclude={"id"})
     definitions = settings.raw.setdefault("connectors", {}).setdefault("definitions", {})
     existing = definitions.get(cid, {})
-    if not cfg.get("password") and existing.get("password"):
-        cfg["password"] = existing["password"]
-    definitions[cid] = cfg
+    definitions[cid] = _merge_connector_config(existing, cfg)
+    persist_connector_definitions(definitions)
     await close_all()
     await audit(db, "default", "admin.connector_upsert", detail={"id": cid, "type": body.type})
     await db.commit()
@@ -89,6 +99,10 @@ async def set_default_connector(connector_id: str, db: AsyncSession = Depends(ge
     if connector_id not in settings.section("connectors.definitions"):
         raise NotFound(f"Connector '{connector_id}' is not configured")
     settings.raw.setdefault("connectors", {})["default"] = connector_id
+    persist_connector_definitions(
+        settings.section("connectors.definitions"),
+        default_id=connector_id,
+    )
     await audit(db, "default", "admin.connector_default", detail={"connector_id": connector_id})
     await db.commit()
     return {"default": connector_id}

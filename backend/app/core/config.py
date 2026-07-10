@@ -104,3 +104,26 @@ def _load_config_data() -> dict:
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     return Settings(_load_config_data())
+
+
+def persist_connector_definitions(definitions: dict, default_id: str | None = None) -> None:
+    """Write connector definitions back to the on-disk settings file."""
+    from app.core.logging import get_logger
+
+    logger = get_logger(__name__)
+    path = _config_path()
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = yaml.safe_load(fh) or {}
+    except OSError as exc:
+        logger.warning("Could not read settings file for connector persist: %s", exc)
+        return
+    connectors = data.setdefault("connectors", {})
+    connectors["definitions"] = definitions
+    if default_id is not None:
+        connectors["default"] = default_id
+    try:
+        with open(path, "w", encoding="utf-8") as fh:
+            yaml.dump(data, fh, default_flow_style=False, sort_keys=False, allow_unicode=True)
+    except OSError as exc:
+        logger.warning("Could not write connector settings to %s: %s", path, exc)

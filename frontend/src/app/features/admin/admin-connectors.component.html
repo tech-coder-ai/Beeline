@@ -84,6 +84,9 @@
         </div>
 
         <p class="auth-help muted">{{ authHelp() }}</p>
+        @if (saveError(); as err) {
+          <p class="error-text">{{ err }}</p>
+        }
 
         <div class="form-actions">
           <button class="primary-btn small" [disabled]="saving() || !form.id.trim()" (click)="saveConnector()">
