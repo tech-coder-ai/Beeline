@@ -1,0 +1,47 @@
+server:
+  port: 8010
+
+spring:
+  application:
+    name: datalens-backend
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+  datasource:
+    url: jdbc:sqlite:file:../backend/beeline_meta.db?mode=rwc
+    driver-class-name: org.sqlite.JDBC
+  jpa:
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.community.dialect.SQLiteDialect
+        jdbc:
+          time_zone: UTC
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 2s
+
+datalens:
+  config-path: ../backend/config/settings.yaml
+  api-prefix: /api/v1
+  metadata-sync-interval-ms: 3600000
+
+springdoc:
+  api-docs:
+    path: /api/openapi.json
+  swagger-ui:
+    path: /api/docs
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+logging:
+  level:
+    com.datalens: INFO
+    org.hibernate.SQL: WARN

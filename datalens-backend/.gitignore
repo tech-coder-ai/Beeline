@@ -1,0 +1,7 @@
+/target/
+apache-maven-3.9.9/
+.idea/
+*.iml
+.classpath
+.project
+.settings/
