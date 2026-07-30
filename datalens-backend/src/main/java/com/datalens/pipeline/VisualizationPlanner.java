@@ -161,11 +161,11 @@ public class VisualizationPlanner {
     ChartSpecDto chart = new ChartSpecDto();
     chart.setChartType(chartType);
     chart.setTitle(pretty(columns.get(numeric.get(0))) + " over time");
-    chart.setCategories(ordered.stream().map(r -> String.valueOf(r.get(tIdx))).toList());
+    chart.setCategories(objectList(ordered.stream().map(r -> String.valueOf(r.get(tIdx))).toList()));
     for (int i : numeric.stream().limit(4).toList()) {
       ChartSeriesDto s = new ChartSeriesDto();
       s.setName(pretty(columns.get(i)));
-      s.setData(ordered.stream().map(r -> toNumber(r.get(i))).toList());
+      s.setData(objectList(ordered.stream().map(r -> toNumber(r.get(i))).toList()));
       chart.getSeries().add(s);
     }
     chart.setXLabel(pretty(columns.get(tIdx)));
@@ -180,11 +180,11 @@ public class VisualizationPlanner {
     ChartSpecDto chart = new ChartSpecDto();
     chart.setChartType("bar");
     chart.setTitle(pretty(columns.get(primary)) + " by " + pretty(columns.get(cat)));
-    chart.setCategories(ordered.stream().map(r -> String.valueOf(r.get(cat))).toList());
+    chart.setCategories(objectList(ordered.stream().map(r -> String.valueOf(r.get(cat))).toList()));
     for (int i : numeric.stream().limit(3).toList()) {
       ChartSeriesDto s = new ChartSeriesDto();
       s.setName(pretty(columns.get(i)));
-      s.setData(ordered.stream().map(r -> toNumber(r.get(i))).toList());
+      s.setData(objectList(ordered.stream().map(r -> toNumber(r.get(i))).toList()));
       chart.getSeries().add(s);
     }
     chart.setXLabel(pretty(columns.get(cat)));
@@ -225,7 +225,7 @@ public class VisualizationPlanner {
     chart.setChartType("heatmap");
     chart.setTitle(
         pretty(columns.get(metric)) + ": " + pretty(columns.get(catA)) + " × " + pretty(columns.get(catB)));
-    chart.setCategories(xs);
+    chart.setCategories(objectList(xs));
     ChartSeriesDto s = new ChartSeriesDto();
     s.setName(pretty(columns.get(catB)));
     s.setData(data);
@@ -233,6 +233,10 @@ public class VisualizationPlanner {
     chart.setXLabel(pretty(columns.get(catA)));
     chart.setYLabel(pretty(columns.get(catB)));
     return chart;
+  }
+
+  private static List<Object> objectList(List<?> source) {
+    return new ArrayList<>(source);
   }
 
   private static Set<String> intentTypes(PipelineContext ctx) {
