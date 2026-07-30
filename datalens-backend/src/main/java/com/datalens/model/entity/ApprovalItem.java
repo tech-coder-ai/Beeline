@@ -24,10 +24,10 @@ public class ApprovalItem extends BaseEntity {
   @Convert(converter = JsonAttributeConverter.class)
   @Column(name = "proposed_payload")
   private Object proposedPayload;
-  private String source;
+  private String source = "ai";
   private Double confidence;
   private String rationale;
-  private String status;
+  private String status = "pending";
   @Column(name = "reviewed_by")
   private String reviewedBy;
   @Column(name = "reviewed_at")

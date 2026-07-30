@@ -72,6 +72,7 @@ public class EnrichmentService {
     item.setSource("ai");
     item.setConfidence(((Number) parsed.getOrDefault("confidence", 0.5)).doubleValue());
     item.setRationale(String.valueOf(parsed.getOrDefault("rationale", "")));
+    item.setStatus("pending");
     approvals.save(item);
     return 1;
   }

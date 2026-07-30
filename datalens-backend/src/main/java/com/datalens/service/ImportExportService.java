@@ -120,6 +120,7 @@ public class ImportExportService {
       item.setSource("import");
       item.setConfidence(1.0);
       item.setRationale("Imported from uploaded file");
+      item.setStatus("pending");
       approvals.save(item);
       queued++;
     }
