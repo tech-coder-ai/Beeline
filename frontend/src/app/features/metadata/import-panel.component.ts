@@ -3,11 +3,13 @@ import { MatIconModule } from '@angular/material/icon';
 import { ApiService } from '../../core/api.service';
 
 interface ImportChange {
-  entity_type: string;
-  label: string;
+  entity_type?: string;
+  label?: string;
+  entity?: string;
   field: string;
-  current: string | null;
-  proposed: string;
+  current?: string | null;
+  proposed?: string;
+  value?: string;
 }
 
 interface PreviewResult {

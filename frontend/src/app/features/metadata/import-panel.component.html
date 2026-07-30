@@ -29,10 +29,10 @@
           <tbody>
             @for (c of p.changes; track $index) {
               <tr>
-                <td>{{ c.label }}</td>
+                <td>{{ c.label || c.entity || '-' }}</td>
                 <td>{{ c.field }}</td>
                 <td class="muted">{{ c.current || '-' }}</td>
-                <td>{{ c.proposed }}</td>
+                <td>{{ c.proposed || c.value || '-' }}</td>
               </tr>
             }
           </tbody>

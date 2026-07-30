@@ -14,6 +14,5 @@ public class Synonym extends BaseEntity {
   private String termId;
   private String synonym;
   private String source;
-  @Column(name = "Double")
-  private String confidence;
+  private Double confidence;
 }

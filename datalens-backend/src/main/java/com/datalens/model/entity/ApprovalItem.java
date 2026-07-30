@@ -25,8 +25,7 @@ public class ApprovalItem extends BaseEntity {
   @Column(name = "proposed_payload")
   private Object proposedPayload;
   private String source;
-  @Column(name = "Double")
-  private String confidence;
+  private Double confidence;
   private String rationale;
   private String status;
   @Column(name = "reviewed_by")

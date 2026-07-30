@@ -1,0 +1,9 @@
+database,table,column,description,glossary,owner,tags,classification
+prod_retail,fact_orders,,Transactional order facts; one row per order line,Revenue-bearing order line items from the sales system,,sales,kpi,internal
+prod_retail,dim_customer,,Customer master dimension; one row per customer,Registered customer account,,master-data,public
+prod_retail,dim_products,,Product catalog dimension,Item sold or referenced on an order,,catalog,internal
+prod_retail,fact_orders,order_id,Surrogate primary key for the order line,Unique identifier for each order line,,,
+prod_retail,fact_orders,customer_id,Foreign key to dim_customer,Customer associated with the order,,,
+prod_retail,fact_orders,order_amount,Monetary value of the order line in USD,Order line amount before tax,,,
+prod_retail,fact_orders,order_date,Date the order was placed,Calendar date of the transaction,,,
+prod_retail,dim_customer,customer_name,Display name of the customer,Human-readable customer label,,,

@@ -22,6 +22,5 @@ public class Feedback extends BaseEntity {
   @Column(name = "corrected_sql")
   private String correctedSql;
   private String status;
-  @Column(name = "Double")
-  private String learning;
+  private Double learning;
 }
