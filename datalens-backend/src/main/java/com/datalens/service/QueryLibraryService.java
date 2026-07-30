@@ -36,7 +36,7 @@ public class QueryLibraryService {
           .findById(ctx.getLibraryMatch().getEntryId())
           .ifPresent(
               entry -> {
-                entry.setSuccessCount(entry.getSuccessCount() + 1);
+                entry.setSuccessCount((entry.getSuccessCount() != null ? entry.getSuccessCount() : 0) + 1);
                 if (ctx.getExecutionTimeMs() > 0) {
                   double prev = entry.getAvgExecutionMs() != null ? entry.getAvgExecutionMs() : ctx.getExecutionTimeMs();
                   entry.setAvgExecutionMs(Math.round(0.7 * prev + 0.3 * ctx.getExecutionTimeMs() * 10) / 10.0);
@@ -48,7 +48,7 @@ public class QueryLibraryService {
     if (existing.isPresent()) {
       QueryLibraryEntry e = existing.get();
       e.setSql(sql);
-      e.setSuccessCount(e.getSuccessCount() + 1);
+      e.setSuccessCount((e.getSuccessCount() != null ? e.getSuccessCount() : 0) + 1);
       e.setIsActive(true);
       return;
     }
@@ -61,6 +61,10 @@ public class QueryLibraryService {
     if (ctx.getIntent() != null) entry.setIntent(mapper.convertValue(ctx.getIntent(), java.util.Map.class));
     if (ctx.getPlan() != null) entry.setExecutionPlan(mapper.convertValue(ctx.getPlan(), java.util.Map.class));
     if (ctx.getExecutionTimeMs() > 0) entry.setAvgExecutionMs((double) ctx.getExecutionTimeMs());
+    entry.setSuccessCount(1);
+    entry.setPositiveFeedback(0);
+    entry.setNegativeFeedback(0);
+    entry.setIsActive(true);
     library.save(entry);
   }
 
@@ -72,9 +76,9 @@ public class QueryLibraryService {
         .findById(h.getReusedQueryId())
         .ifPresent(
             entry -> {
-              if (positive) entry.setPositiveFeedback(entry.getPositiveFeedback() + 1);
+              if (positive) entry.setPositiveFeedback((entry.getPositiveFeedback() != null ? entry.getPositiveFeedback() : 0) + 1);
               else {
-                entry.setNegativeFeedback(entry.getNegativeFeedback() + 1);
+                entry.setNegativeFeedback((entry.getNegativeFeedback() != null ? entry.getNegativeFeedback() : 0) + 1);
                 if (entry.getNegativeFeedback() >= 3 && entry.getNegativeFeedback() > entry.getPositiveFeedback()) {
                   entry.setIsActive(false);
                 }

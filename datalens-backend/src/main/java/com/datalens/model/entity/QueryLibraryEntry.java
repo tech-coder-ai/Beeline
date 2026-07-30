@@ -25,14 +25,14 @@ public class QueryLibraryEntry extends BaseEntity {
   @Convert(converter = JsonAttributeConverter.class)
   @Column(name = "execution_plan")
   private Object executionPlan;
-  @Column(name = "success_count")
-  private Integer successCount;
-  @Column(name = "positive_feedback")
-  private Integer positiveFeedback;
-  @Column(name = "negative_feedback")
-  private Integer negativeFeedback;
+  @Column(name = "success_count", nullable = false)
+  private Integer successCount = 1;
+  @Column(name = "positive_feedback", nullable = false)
+  private Integer positiveFeedback = 0;
+  @Column(name = "negative_feedback", nullable = false)
+  private Integer negativeFeedback = 0;
   @Column(name = "avg_execution_ms")
   private Double avgExecutionMs;
-  @Column(name = "is_active")
-  private Boolean isActive;
+  @Column(name = "is_active", nullable = false)
+  private Boolean isActive = true;
 }

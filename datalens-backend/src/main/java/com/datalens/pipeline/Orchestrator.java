@@ -313,7 +313,8 @@ public class Orchestrator {
     DataLensResponseDto r = new DataLensResponseDto();
     r.setKind("answer");
     r.setSummary(stages.buildMetadataSummary(ctx));
-    r.setVisualization("text");
+    r.setVisualization("grid");
+    r.setTable(stages.buildMetadataTable(ctx));
     r.setConfidence(confidenceBreakdown(ctx));
     r.setTablesUsed(shown.stream().map(ResolvedTableModel::qualifiedName).toList());
     if (!shown.isEmpty()) {

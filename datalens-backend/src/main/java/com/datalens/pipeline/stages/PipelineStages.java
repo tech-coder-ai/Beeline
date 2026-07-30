@@ -31,6 +31,8 @@ import com.datalens.pipeline.SqlValidator;
 import com.datalens.pipeline.VisualizationPlanner;
 import com.datalens.schema.response.ClarificationOptionDto;
 import com.datalens.schema.response.ClarificationRequestDto;
+import com.datalens.schema.response.TableColumnDto;
+import com.datalens.schema.response.TableSpecDto;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -371,26 +373,53 @@ public class PipelineStages {
     if (toShow.isEmpty()) {
       return "I couldn't find matching metadata in the catalog.";
     }
-    List<String> lines = new ArrayList<>();
+    int count = isListAllTablesQuestion(ctx.effectivePrompt()) ? toShow.size() : Math.min(toShow.size(), 5);
+    return count == 1
+        ? "Found 1 table in the catalog."
+        : String.format("Found %,d tables in the catalog.", count);
+  }
+
+  public TableSpecDto buildMetadataTable(PipelineContext ctx) {
+    List<ResolvedTableModel> toShow =
+        isListAllTablesQuestion(ctx.effectivePrompt()) ? loadAllCatalogTables() : ctx.getResolvedTables();
+    TableSpecDto table = new TableSpecDto();
+    if (toShow.isEmpty()) return table;
+
+    table.getColumns().add(metadataColumn("table", "Table"));
+    table.getColumns().add(metadataColumn("description", "Description"));
+    table.getColumns().add(metadataColumn("rows", "Rows"));
+    table.getColumns().add(metadataColumn("columns", "Columns"));
+
     int limit = isListAllTablesQuestion(ctx.effectivePrompt()) ? toShow.size() : Math.min(toShow.size(), 5);
-    for (ResolvedTableModel table : toShow.stream().limit(limit).toList()) {
-      String cols =
-          table.getColumns().stream()
-              .limit(12)
-              .map(c -> String.valueOf(c.get("name")))
-              .reduce((a, b) -> a + ", " + b)
-              .orElse("");
-      StringBuilder line = new StringBuilder("**").append(table.qualifiedName()).append("**");
-      if (table.getDescription() != null && !table.getDescription().isBlank()) {
-        line.append(" — ").append(table.getDescription());
-      }
-      if (table.getRowCount() != null) {
-        line.append(" (~").append(String.format("%,d", table.getRowCount())).append(" rows)");
-      }
-      if (!cols.isBlank()) line.append("\nColumns: ").append(cols);
-      lines.add(line.toString());
+    for (ResolvedTableModel t : toShow.stream().limit(limit).toList()) {
+      Map<String, Object> row = new HashMap<>();
+      row.put("table", t.qualifiedName());
+      row.put("description", t.getDescription() != null && !t.getDescription().isBlank() ? t.getDescription() : "—");
+      row.put("rows", t.getRowCount() != null ? String.format("%,d", t.getRowCount()) : "—");
+      row.put("columns", formatColumnList(t));
+      table.getRows().add(row);
     }
-    return "Here is what I found in the catalog:\n\n" + String.join("\n\n", lines);
+    table.setTotalRows(table.getRows().size());
+    table.setTruncated(false);
+    return table;
+  }
+
+  private static TableColumnDto metadataColumn(String field, String header) {
+    TableColumnDto col = new TableColumnDto();
+    col.setField(field);
+    col.setHeader(header);
+    col.setDataType("string");
+    col.setMetric(false);
+    return col;
+  }
+
+  private static String formatColumnList(ResolvedTableModel table) {
+    List<String> names =
+        table.getColumns().stream().map(c -> String.valueOf(c.get("name"))).filter(n -> !n.isBlank()).toList();
+    if (names.isEmpty()) return "—";
+    int max = 20;
+    if (names.size() <= max) return String.join(", ", names);
+    return String.join(", ", names.subList(0, max)) + String.format(" … +%d more", names.size() - max);
   }
 
   public List<ResolvedTableModel> metadataTablesForResponse(PipelineContext ctx) {
