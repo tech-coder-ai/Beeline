@@ -1,6 +1,7 @@
 package com.datalens.service;
 
 import com.datalens.config.DataLensSettings;
+import com.datalens.core.exception.NotFound;
 import com.datalens.llm.LlmPrompts;
 import com.datalens.llm.LlmProviderRegistry;
 import com.datalens.model.entity.ApprovalItem;
@@ -11,6 +12,7 @@ import com.datalens.model.repository.ApprovalItemRepository;
 import com.datalens.model.repository.CatalogColumnRepository;
 import com.datalens.model.repository.CatalogDatabaseRepository;
 import com.datalens.model.repository.CatalogTableRepository;
+import com.datalens.schema.api.TableEnrichRequest;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -29,6 +31,7 @@ public class EnrichmentService {
   private final ApprovalItemRepository approvals;
   private final LlmProviderRegistry llm;
   private final ObjectMapper mapper;
+  private final MetadataSyncService syncService;
 
   public EnrichmentService(
       DataLensSettings settings,
@@ -37,7 +40,8 @@ public class EnrichmentService {
       CatalogDatabaseRepository databases,
       ApprovalItemRepository approvals,
       LlmProviderRegistry llm,
-      ObjectMapper mapper) {
+      ObjectMapper mapper,
+      MetadataSyncService syncService) {
     this.settings = settings;
     this.tables = tables;
     this.columns = columns;
@@ -45,19 +49,24 @@ public class EnrichmentService {
     this.approvals = approvals;
     this.llm = llm;
     this.mapper = mapper;
+    this.syncService = syncService;
   }
 
   @Transactional
-  public Map<String, Object> enrich(List<String> tableIds) {
+  public Map<String, Object> enrich(List<String> tableIds, Integer batchSizeOverride) {
     if (!Boolean.TRUE.equals(settings.get("enrichment.enabled", true))) {
       return Map.of("enriched", 0, "proposals", 0, "skipped", "enrichment disabled");
     }
+
+    int batchSize =
+        batchSizeOverride != null
+            ? batchSizeOverride
+            : ((Number) settings.get("enrichment.batch_size", 10)).intValue();
 
     List<CatalogTable> target;
     if (tableIds != null && !tableIds.isEmpty()) {
       target = tables.findAllById(tableIds).stream().filter(t -> !Boolean.FALSE.equals(t.getIsActive())).toList();
     } else {
-      int batchSize = ((Number) settings.get("enrichment.batch_size", 10)).intValue();
       var stream =
           tables.findByIsActiveTrueOrderByUsageCountDescNameAsc().stream()
               .filter(t -> t.getDescription() == null || t.getDescription().isBlank());
@@ -75,7 +84,7 @@ public class EnrichmentService {
     Map<String, Object> result = new LinkedHashMap<>();
     result.put("enriched", target.size());
     result.put("proposals", proposals);
-    result.put("batch_size", settings.get("enrichment.batch_size", 10));
+    result.put("batch_size", batchSize);
     result.put(
         "note",
         tableIds == null || tableIds.isEmpty()
@@ -84,7 +93,81 @@ public class EnrichmentService {
     return result;
   }
 
+  @Transactional
+  public Map<String, Object> enrichTable(String tableId, TableEnrichRequest request) throws Exception {
+    if (!Boolean.TRUE.equals(settings.get("enrichment.enabled", true))) {
+      return Map.of("enriched", 0, "proposals", 0, "skipped", "enrichment disabled");
+    }
+
+    CatalogTable table =
+        tables.findById(tableId).orElseThrow(() -> new NotFound("Table not found"));
+
+    if (request != null) {
+      if (request.description() != null && !request.description().isBlank()) {
+        table.setDescription(request.description().trim());
+      }
+      if (request.tags() != null && !request.tags().isEmpty()) {
+        table.setTags(request.tags());
+      }
+      tables.save(table);
+    }
+
+    Map<String, Object> rowRefresh = Map.of();
+    boolean shouldRefresh =
+        request == null
+            || request.refreshRowCount() == null
+            || Boolean.TRUE.equals(request.refreshRowCount());
+    if (shouldRefresh && table.getRowCount() == null) {
+      try {
+        rowRefresh = syncService.refreshTableStats(tableId);
+        table = tables.findById(tableId).orElseThrow(() -> new NotFound("Table not found"));
+      } catch (Exception ignored) {
+        rowRefresh = Map.of("row_count_refresh", "failed");
+      }
+    }
+
+    Map<String, Object> userContext = buildUserContext(table, request);
+    int proposals = enrichOne(table, userContext);
+
+    Map<String, Object> result = new LinkedHashMap<>();
+    result.put("enriched", 1);
+    result.put("proposals", proposals);
+    result.put("table_id", tableId);
+    result.put("row_count", table.getRowCount());
+    if (!rowRefresh.isEmpty()) result.put("row_count_refresh", rowRefresh);
+    result.put(
+        "note",
+        "AI proposals were queued for approval. Review them in the Approvals tab.");
+    return result;
+  }
+
+  private Map<String, Object> buildUserContext(CatalogTable table, TableEnrichRequest request) {
+    Map<String, Object> ctx = new LinkedHashMap<>();
+    if (table.getDescription() != null && !table.getDescription().isBlank()) {
+      ctx.put("description", table.getDescription());
+    }
+    if (table.getTags() instanceof List<?> tags && !tags.isEmpty()) {
+      ctx.put("tags", tags);
+    }
+    if (request != null && request.glossaryHints() != null && !request.glossaryHints().isEmpty()) {
+      List<Map<String, String>> hints = new ArrayList<>();
+      for (TableEnrichRequest.GlossaryHint hint : request.glossaryHints()) {
+        if (hint.term() == null || hint.term().isBlank()) continue;
+        Map<String, String> row = new LinkedHashMap<>();
+        row.put("term", hint.term().trim());
+        if (hint.definition() != null) row.put("definition", hint.definition().trim());
+        hints.add(row);
+      }
+      if (!hints.isEmpty()) ctx.put("glossary_hints", hints);
+    }
+    return ctx;
+  }
+
   private int enrichOne(CatalogTable table) throws Exception {
+    return enrichOne(table, Map.of());
+  }
+
+  private int enrichOne(CatalogTable table, Map<String, Object> userContext) throws Exception {
     CatalogDatabase database =
         databases.findById(table.getDatabaseId()).orElse(null);
     String dbName = database != null ? database.getName() : "";
@@ -114,6 +197,7 @@ public class EnrichmentService {
     payload.put("row_count", table.getRowCount());
     payload.put("partition_columns", table.getPartitionColumns());
     payload.put("columns", columnPayload);
+    if (!userContext.isEmpty()) payload.put("user_context", userContext);
 
     Map<String, Object> parsed =
         llm.completeJson(LlmPrompts.ENRICHMENT_SYSTEM, mapper.writeValueAsString(payload));

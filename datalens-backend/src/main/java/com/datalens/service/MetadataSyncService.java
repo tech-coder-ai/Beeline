@@ -5,6 +5,7 @@ import com.datalens.connectors.AnalyticsConnector;
 import com.datalens.connectors.ConnectorRegistry;
 import com.datalens.connectors.HarvestedColumn;
 import com.datalens.connectors.HarvestedTable;
+import com.datalens.core.exception.NotFound;
 import com.datalens.model.entity.CatalogColumn;
 import com.datalens.model.entity.CatalogDatabase;
 import com.datalens.model.entity.CatalogTable;
@@ -14,6 +15,7 @@ import com.datalens.model.repository.CatalogDatabaseRepository;
 import com.datalens.model.repository.CatalogTableRepository;
 import com.datalens.model.repository.SyncRunRepository;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -144,5 +146,36 @@ public class MetadataSyncService {
   public void scheduledSync() {
     if (!Boolean.TRUE.equals(settings.get("metadata_sync.enabled", true))) return;
     syncAsync(null, "incremental");
+  }
+
+  /** Re-harvest row count and size for one catalog table from the source connector. */
+  @Transactional
+  public Map<String, Object> refreshTableStats(String tableId) throws Exception {
+    CatalogTable table =
+        tables.findById(tableId).orElseThrow(() -> new NotFound("Table not found"));
+    CatalogDatabase database =
+        databases
+            .findById(table.getDatabaseId())
+            .orElseThrow(() -> new NotFound("Database not found"));
+    AnalyticsConnector connector = connectors.get(database.getConnectorId());
+    HarvestedTable harvested =
+        connector.metadataProvider().describeTable(database.getName(), table.getName());
+
+    Long previousRowCount = table.getRowCount();
+    table.setRowCount(harvested.getRowCount());
+    table.setSizeBytes(harvested.getSizeBytes());
+    table.setStorageFormat(harvested.getStorageFormat());
+    table.setPartitionColumns(harvested.getPartitionColumns());
+    table.setTechnicalComment(harvested.getComment());
+    table.setOwner(harvested.getOwner());
+    table.setLastSyncedAt(Instant.now());
+    tables.save(table);
+
+    Map<String, Object> result = new HashMap<>();
+    result.put("table_id", tableId);
+    result.put("row_count", table.getRowCount());
+    result.put("size_bytes", table.getSizeBytes());
+    result.put("refreshed", previousRowCount == null || !previousRowCount.equals(table.getRowCount()));
+    return result;
   }
 }

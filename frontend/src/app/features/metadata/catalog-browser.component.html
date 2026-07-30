@@ -78,6 +78,51 @@
         <div class="stat"><span class="muted">Format</span><strong>{{ table.storage_format || '-' }}</strong></div>
       </div>
 
+      <div class="drawer-section enrich-section">
+        <div class="section-label">AI enrichment</div>
+        <p class="enrich-help muted">Provide optional business context, then generate column descriptions and glossary suggestions for approval.</p>
+
+        <label class="field-label muted">Tags</label>
+        <input class="text-input" placeholder="finance, daily, core" [(ngModel)]="tagsDraft" />
+
+        <label class="field-label muted">Glossary hints</label>
+        @for (hint of glossaryHints; track $index) {
+          <div class="glossary-row">
+            <input class="text-input" placeholder="Term" [(ngModel)]="hint.term" />
+            <input class="text-input" placeholder="Definition (optional)" [(ngModel)]="hint.definition" />
+            <button class="icon-btn" type="button" (click)="removeGlossaryHint($index)">
+              <mat-icon>close</mat-icon>
+            </button>
+          </div>
+        }
+        <button class="ghost-btn small-btn" type="button" (click)="addGlossaryHint()">Add glossary term</button>
+
+        @if (!table.row_count) {
+          <label class="checkbox-row">
+            <input type="checkbox" [(ngModel)]="refreshRowCount" />
+            Refresh row count from source before enriching
+          </label>
+        }
+
+        <div class="drawer-actions">
+          <button class="primary-btn" type="button" [disabled]="enriching()" (click)="enrichSelectedTable()">
+            @if (enriching()) { Enriching... } @else { AI Enrich table }
+          </button>
+        </div>
+        @if (enrichMessage()) {
+          <p class="enrich-result">{{ enrichMessage() }}</p>
+        }
+      </div>
+
+      @if (table.tags?.length) {
+        <div class="drawer-section">
+          <div class="section-label">Tags</div>
+          <div class="pill-list">
+            @for (tag of table.tags; track tag) { <span class="chip neutral">{{ tag }}</span> }
+          </div>
+        </div>
+      }
+
       @if (table.partition_columns?.length) {
         <div class="drawer-section">
           <div class="section-label">Partition columns</div>

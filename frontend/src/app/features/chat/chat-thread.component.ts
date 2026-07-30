@@ -15,6 +15,7 @@ import { ResponseRendererComponent } from '../../shared/response-renderer.compon
 export class ChatThreadComponent {
   readonly state = inject(ChatStateService);
   readonly scrollEl = viewChild<ElementRef<HTMLDivElement>>('scroll');
+  readonly editInputEl = viewChild<ElementRef<HTMLTextAreaElement>>('editInput');
   readonly editingMessageId = signal<string | null>(null);
   editText = '';
 
@@ -71,6 +72,26 @@ export class ChatThreadComponent {
   startEdit(messageId: string, content: string): void {
     this.editingMessageId.set(messageId);
     this.editText = content;
+    queueMicrotask(() => {
+      const el = this.editInputEl()?.nativeElement;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+      this.autoGrowEdit(el);
+    });
+  }
+
+  autoGrowEdit(el: HTMLTextAreaElement): void {
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(Math.max(el.scrollHeight, 120), 280)}px`;
+  }
+
+  onEditEnter(event: Event, messageId: string): void {
+    const keyboardEvent = event as KeyboardEvent;
+    if (!keyboardEvent.shiftKey) {
+      keyboardEvent.preventDefault();
+      this.submitEdit(messageId);
+    }
   }
 
   cancelEdit(): void {

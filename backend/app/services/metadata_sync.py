@@ -188,6 +188,36 @@ class MetadataSyncService:
             except Exception as exc:  # noqa: BLE001 - stats are best-effort
                 logger.debug("stats skipped for %s.%s: %s", table.name, col.name, exc)
 
+    async def refresh_table_stats(self, db: AsyncSession, table_id: str) -> dict:
+        table = (
+            await db.execute(
+                select(CatalogTable)
+                .options(selectinload(CatalogTable.database))
+                .where(CatalogTable.id == table_id)
+            )
+        ).scalar_one_or_none()
+        if not table:
+            raise ValueError("Table not found")
+        connector = get_connector(table.database.connector_id)
+        harvested = await connector.metadata_provider.describe_table(
+            table.database.name, table.name
+        )
+        previous_row_count = table.row_count
+        table.row_count = harvested.row_count
+        table.size_bytes = harvested.size_bytes
+        table.storage_format = harvested.storage_format
+        table.partition_columns = harvested.partition_columns
+        table.technical_comment = harvested.comment
+        table.owner = harvested.owner
+        table.last_synced_at = datetime.now(timezone.utc)
+        await db.flush()
+        return {
+            "table_id": table_id,
+            "row_count": table.row_count,
+            "size_bytes": table.size_bytes,
+            "refreshed": previous_row_count != table.row_count,
+        }
+
 
 metadata_sync_service = MetadataSyncService()
 

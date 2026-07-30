@@ -11,6 +11,7 @@ import com.datalens.connectors.QueryResult;
 import com.datalens.connectors.SqlDialect;
 import com.datalens.connectors.StatisticsProvider;
 import com.datalens.core.exception.ConnectorError;
+import com.datalens.pipeline.SqlUtils;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -18,6 +19,7 @@ import java.sql.ResultSetMetaData;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import lombok.Getter;
@@ -166,9 +168,13 @@ public class HiveAnalyticsConnector implements AnalyticsConnector {
     @Override
     public String dialectHints() {
       return """
-          Target engine is Apache Hive. Use Hive SQL syntax: backtick identifiers,
-          date functions like date_sub/add_months/trunc, prefer explicit JOIN ... ON,
-          always filter partition columns when present. Alias every FROM/JOIN table.""";
+          Target engine is Apache Hive. Use Hive SQL syntax only:
+          - Backtick identifiers; assign short table aliases (e.g. sales AS s) and use alias.column.
+          - Never use three-part refs like `db`.`table`.`col` — always alias tables first.
+          - Date filters: date_sub, add_months, trunc; never T-SQL/PostgreSQL functions.
+          - When GROUP BY is present, ORDER BY must use SELECT aliases, not raw table.column.
+          - Prefer explicit JOIN ... ON; filter partition columns when available.
+          - No CTE writes, no semicolons, no comments.""";
     }
   }
 
@@ -221,6 +227,11 @@ public class HiveAnalyticsConnector implements AnalyticsConnector {
   }
 
   static class HiveQueryEstimator implements QueryEstimator {
+    private static final java.util.regex.Pattern NUM_ROWS =
+        java.util.regex.Pattern.compile("Num rows:\\s*([\\d,]+)", java.util.regex.Pattern.CASE_INSENSITIVE);
+    private static final java.util.regex.Pattern DATA_SIZE =
+        java.util.regex.Pattern.compile("Data size:\\s*([\\d,]+)", java.util.regex.Pattern.CASE_INSENSITIVE);
+
     private final HiveAnalyticsConnector connector;
 
     HiveQueryEstimator(HiveAnalyticsConnector connector) {
@@ -229,7 +240,80 @@ public class HiveAnalyticsConnector implements AnalyticsConnector {
 
     @Override
     public CostEstimation estimate(String sql) {
-      return CostEstimation.builder().estimatedResultRows(1000).estimatedRuntimeSeconds(5.0).build();
+      CostEstimation.CostEstimationBuilder builder = CostEstimation.builder();
+      try {
+        QueryResult result = connector.runSql("EXPLAIN " + sql, null);
+        String planText = explainText(result);
+        java.util.Map<String, Object> details = new java.util.HashMap<>();
+        details.put("explain", planText.length() > 4000 ? planText.substring(0, 4000) : planText);
+        builder.details(details);
+
+        java.util.List<Integer> rowCounts = new ArrayList<>();
+        java.util.regex.Matcher m = NUM_ROWS.matcher(planText);
+        while (m.find()) rowCounts.add(parseInt(m.group(1)));
+        if (!rowCounts.isEmpty()) {
+          int max = rowCounts.stream().max(Integer::compareTo).orElse(0);
+          builder.estimatedRowsScanned(max);
+          builder.estimatedResultRows(rowCounts.get(rowCounts.size() - 1));
+          builder.estimatedRuntimeSeconds(Math.round(max / 2_000_000.0 * 10) / 10.0);
+        }
+        java.util.regex.Matcher size = DATA_SIZE.matcher(planText);
+        java.util.List<Long> sizes = new ArrayList<>();
+        while (size.find()) sizes.add(parseLong(size.group(1)));
+        if (!sizes.isEmpty()) builder.scanBytes(sizes.stream().max(Long::compareTo).orElse(0L));
+        builder.partitionPruned(planText.toLowerCase(Locale.ROOT).contains("partition"));
+      } catch (Exception e) {
+        java.util.Map<String, Object> details = new java.util.HashMap<>();
+        details.put("explain_error", e.getMessage());
+        builder.details(details);
+      }
+      CostEstimation built = builder.build();
+      if (built.getEstimatedRowsScanned() == null) {
+        return CostEstimation.builder().estimatedRowsScanned(1000).estimatedRuntimeSeconds(5.0).build();
+      }
+      return built;
+    }
+
+    @Override
+    public void validateCompilation(String sql) throws Exception {
+      try {
+        QueryResult result = connector.runSql("EXPLAIN " + sql, null);
+        String planText = explainText(result);
+        String upper = planText.toUpperCase(Locale.ROOT);
+        if (upper.contains("FAILED")
+            || planText.contains("SemanticException")
+            || planText.contains("ParseException")
+            || planText.contains("AnalysisException")
+            || planText.contains("Invalid table alias")) {
+          throw new com.datalens.core.exception.GuardRailViolation(
+              "Hive could not compile this query: " + SqlUtils.compactConnectorError(planText));
+        }
+      } catch (com.datalens.core.exception.GuardRailViolation e) {
+        throw e;
+      } catch (Exception e) {
+        throw new com.datalens.core.exception.GuardRailViolation(
+            "Hive could not compile this query: " + SqlUtils.compactConnectorError(e.getMessage()));
+      }
+    }
+
+    private static String explainText(QueryResult result) {
+      return result.getRows().stream().map(r -> r.isEmpty() ? "" : String.valueOf(r.get(0))).reduce((a, b) -> a + "\n" + b).orElse("");
+    }
+
+    private static int parseInt(String raw) {
+      try {
+        return Integer.parseInt(raw.replace(",", ""));
+      } catch (NumberFormatException e) {
+        return 0;
+      }
+    }
+
+    private static long parseLong(String raw) {
+      try {
+        return Long.parseLong(raw.replace(",", ""));
+      } catch (NumberFormatException e) {
+        return 0L;
+      }
     }
   }
 }

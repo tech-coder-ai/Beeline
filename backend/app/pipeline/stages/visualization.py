@@ -6,7 +6,7 @@ Charts are chosen by rules over the result shape - never by the LLM:
   low-cardinality category + metric -> bar (pie for share questions)
   two categories + metric -> heatmap
   two numerics, many rows -> scatter
-  anything tabular -> AG Grid (always included alongside charts)
+  tabular detail is included based on question intent, not always with charts
 """
 from __future__ import annotations
 
@@ -24,6 +24,17 @@ _DATE_TYPES = {"date", "timestamp", "datetime"}
 _NUMERIC_TYPES = {"int", "integer", "bigint", "smallint", "tinyint", "float", "double",
                   "decimal", "numeric", "real", "number"}
 _DATE_NAME_HINT = re.compile(r"(date|month|year|week|quarter|day|period|time)", re.I)
+_CHART_PRIMARY_INTENTS = {
+    "time_series", "trend", "comparison", "yoy", "mom", "qoq", "distribution", "grouping",
+    "top_n", "bottom_n", "ranking", "correlation", "cumulative_sum", "running_total",
+    "rolling_average", "forecasting", "anomaly", "aggregation",
+}
+_TABLE_PRIMARY_INTENTS = {
+    "lookup", "filtering", "exploration", "distinct_count", "summarization",
+    "median", "stddev", "variance", "window", "percentile",
+}
+_PROMPT_TABLE_HINT = re.compile(r"\b(list|show me|details|rows|records|breakdown|tabular|table data)\b", re.I)
+_PROMPT_CHART_HINT = re.compile(r"\b(trend|over time|chart|graph|plot|visuali[sz]e|histogram)\b", re.I)
 
 
 def _base_type(raw: str) -> str:
@@ -91,7 +102,6 @@ class VisualizationPlanner:
         col_values = [[row[i] if i < len(row) else None for row in rows] for i in range(len(columns))]
         types = ctx.result_types or ["string"] * len(columns)
         profiles = [ColumnProfile(columns[i], types[i], col_values[i]) for i in range(len(columns))]
-        table = self._table_spec(ctx, profiles)
 
         temporal = [i for i, p in enumerate(profiles) if p.is_temporal]
         numeric = [i for i, p in enumerate(profiles) if p.is_numeric]
@@ -111,7 +121,7 @@ class VisualizationPlanner:
                     raw_value=value,
                 ))
             viz = "kpi"
-            return {"visualization": viz, "cards": cards, "charts": charts, "table": table}
+            return {"visualization": viz, "cards": cards, "charts": charts, "table": None}
 
         intent_types = set(ctx.intent.intent_types) if ctx.intent else set()
 
@@ -145,8 +155,12 @@ class VisualizationPlanner:
                 y_label=self._pretty(columns[numeric[1]]),
             ))
 
+        table = None
+        if self._should_include_table(ctx, charts, columns, rows, intent_types):
+            table = self._table_spec(ctx, profiles)
+
         if charts:
-            viz = "mixed" if len(rows) > 1 else charts[0].chart_type
+            viz = "mixed" if table and len(rows) > 1 else charts[0].chart_type
         elif len(rows) > 1:
             viz = "grid"
         elif rows:
@@ -154,6 +168,33 @@ class VisualizationPlanner:
         else:
             viz = "text"
         return {"visualization": viz, "cards": cards, "charts": charts, "table": table}
+
+    @staticmethod
+    def _should_include_table(
+        ctx: PipelineContext,
+        charts: list[ChartSpec],
+        columns: list[str],
+        rows: list[list[Any]],
+        intent_types: set[str],
+    ) -> bool:
+        if not rows:
+            return False
+        if not charts:
+            return True
+        if intent_types & _TABLE_PRIMARY_INTENTS:
+            return True
+        if intent_types & _CHART_PRIMARY_INTENTS:
+            return False
+        prompt = ctx.effective_prompt
+        if prompt and _PROMPT_TABLE_HINT.search(prompt):
+            return True
+        if prompt and _PROMPT_CHART_HINT.search(prompt):
+            return False
+        if len(columns) > 4:
+            return True
+        if len(rows) > 25:
+            return False
+        return False
 
     # ------------------------------------------------------------ helpers
     def _time_chart(self, columns, rows, t_idx, numeric, intent_types) -> ChartSpec:

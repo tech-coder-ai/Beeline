@@ -22,10 +22,12 @@ import com.datalens.schema.api.ColumnUpdate;
 import com.datalens.schema.api.GlossaryTermIn;
 import com.datalens.schema.api.GlossaryTermOut;
 import com.datalens.schema.api.TableDetailOut;
+import com.datalens.schema.api.TableEnrichRequest;
 import com.datalens.schema.api.TableOut;
 import com.datalens.schema.api.TableUpdate;
 import com.datalens.service.ApprovalService;
 import com.datalens.service.AuditService;
+import com.datalens.service.EnrichmentService;
 import com.datalens.service.ImportExportService;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -53,6 +55,7 @@ public class MetadataController {
   private final GlossaryTermRepository glossary;
   private final SynonymRepository synonyms;
   private final BusinessMetricRepository metrics;
+  private final EnrichmentService enrichment;
 
   public MetadataController(
       CatalogDatabaseRepository databases,
@@ -63,7 +66,8 @@ public class MetadataController {
       ImportExportService importExport,
       GlossaryTermRepository glossary,
       SynonymRepository synonyms,
-      BusinessMetricRepository metrics) {
+      BusinessMetricRepository metrics,
+      EnrichmentService enrichment) {
     this.databases = databases;
     this.tables = tables;
     this.columns = columns;
@@ -73,6 +77,7 @@ public class MetadataController {
     this.glossary = glossary;
     this.synonyms = synonyms;
     this.metrics = metrics;
+    this.enrichment = enrichment;
   }
 
   @GetMapping("/metadata/databases")
@@ -145,6 +150,15 @@ public class MetadataController {
     tables.save(table);
     audit.audit("default", "metadata.edit", "table", tableId, Map.of(), "info");
     return Map.of("updated", tableId);
+  }
+
+  @PostMapping("/metadata/tables/{tableId}/enrich")
+  public Map<String, Object> enrichTable(
+      @PathVariable String tableId, @RequestBody(required = false) TableEnrichRequest request)
+      throws Exception {
+    Map<String, Object> result = enrichment.enrichTable(tableId, request);
+    audit.audit("default", "metadata.enrich", "table", tableId, result, "info");
+    return result;
   }
 
   @PatchMapping("/metadata/columns/{columnId}")

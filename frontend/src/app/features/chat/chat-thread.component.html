@@ -10,14 +10,16 @@
   @for (message of state.messages(); track message.id) {
     <div class="message-row" [class.user]="message.role === 'user'">
       @if (message.role === 'user') {
-        <div class="user-block">
+        <div class="user-block" [class.editing]="editingMessageId() === message.id">
           @if (editingMessageId() === message.id) {
             <div class="edit-box glass-card">
               <textarea
+                #editInput
                 class="edit-input"
-                rows="3"
+                rows="4"
                 [(ngModel)]="editText"
-                (keydown.enter)="$event.preventDefault(); submitEdit(message.id)"
+                (input)="autoGrowEdit(editInput)"
+                (keydown.enter)="onEditEnter($event, message.id)"
               ></textarea>
               <div class="edit-actions">
                 <button class="primary-btn small" (click)="submitEdit(message.id)">

@@ -40,10 +40,29 @@ def test_category_metric_renders_bar_chart():
     assert result["charts"][0].chart_type == "bar"
 
 
-def test_table_always_populated_for_tabular_result():
-    rows = [["APAC", 500], ["EMEA", 800]]
-    ctx = _ctx(["region", "revenue"], ["string", "decimal"], rows)
+def test_category_metric_renders_bar_chart_without_table():
+    rows = [["APAC", 500], ["EMEA", 800], ["NA", 1200]]
+    ctx = _ctx(["region", "revenue"], ["string", "decimal"], rows, intent_types=["aggregation"])
     result = planner.run(ctx)
+    assert result["charts"]
+    assert result["charts"][0].chart_type == "bar"
+    assert result["table"] is None
+
+
+def test_exploration_includes_table_with_chart():
+    rows = [["APAC", 500], ["EMEA", 800]]
+    ctx = _ctx(["region", "revenue"], ["string", "decimal"], rows, intent_types=["exploration"])
+    result = planner.run(ctx)
+    assert result["table"] is not None
+    assert len(result["table"].rows) == 2
+
+
+def test_grid_when_result_is_not_chartable():
+    rows = [["a", "b", "c"], ["d", "e", "f"]]
+    ctx = _ctx(["col1", "col2", "col3"], ["string", "string", "string"], rows, intent_types=["lookup"])
+    result = planner.run(ctx)
+    assert not result["charts"]
+    assert result["visualization"] == "grid"
     assert result["table"] is not None
     assert len(result["table"].rows) == 2
 

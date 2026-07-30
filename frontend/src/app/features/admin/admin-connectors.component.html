@@ -150,7 +150,8 @@
       <strong>Full sync</strong> re-harvests everything (use after schema changes).
       <strong>Run AI enrichment</strong> proposes business descriptions, tags, and glossary terms
       for tables missing descriptions — each proposal goes to <strong>Metadata → Approvals</strong>
-      for human review before it is applied.
+      for human review before it is applied. Use <strong>Batch size</strong> to limit how many
+      undocumented tables are processed per run (<strong>0</strong> = all).
     </p>
     <div class="sync-actions">
       <button
@@ -169,6 +170,17 @@
       >
         <mat-icon>refresh</mat-icon> Full sync (active)
       </button>
+      <label class="batch-field" matTooltip="Tables without descriptions processed per enrichment run. 0 = all.">
+        <span class="muted">Batch size</span>
+        <input
+          class="text-input batch-input"
+          type="number"
+          min="0"
+          step="1"
+          [(ngModel)]="enrichmentBatchSize"
+          [disabled]="enriching()"
+        />
+      </label>
       <button
         class="ghost-btn"
         [disabled]="enriching()"
@@ -178,6 +190,9 @@
         <mat-icon>auto_awesome</mat-icon> Run AI enrichment
       </button>
     </div>
+    @if (enrichNotice()) {
+      <p class="enrich-notice">{{ enrichNotice() }}</p>
+    }
 
     <table class="bl-table">
       <thead>

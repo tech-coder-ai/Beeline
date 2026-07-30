@@ -40,6 +40,7 @@ public class PipelineContext {
   private List<String> warnings = new ArrayList<>();
   private List<Map<String, Object>> llmCalls = new ArrayList<>();
   private String executionId;
+  private boolean sqlFromDeterministicBuilder;
 
   public String effectivePrompt() {
     return refinedPrompt != null && !refinedPrompt.isBlank() ? refinedPrompt : prompt;

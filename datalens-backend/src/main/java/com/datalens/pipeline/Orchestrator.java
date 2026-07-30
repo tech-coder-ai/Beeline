@@ -15,6 +15,7 @@ import com.datalens.model.repository.ExecutionHistoryRepository;
 import com.datalens.pipeline.stages.PipelineStages;
 import com.datalens.schema.response.DataLensResponseDto;
 import com.datalens.schema.response.ChartSpecDto;
+import com.datalens.schema.response.ClarificationRequestDto;
 import com.datalens.schema.response.ConfidenceBreakdownDto;
 import com.datalens.schema.response.CostEstimateDto;
 import com.datalens.schema.response.ExecutionStatsDto;
@@ -125,6 +126,7 @@ public class Orchestrator {
   @Transactional
   public DataLensResponseDto executeAndRespond(PipelineContext ctx, ExecutionHistory history) throws Exception {
     AnalyticsConnector connector = connectors.get(ctx.getConnectorId());
+    stages.validateCompilation(ctx, connector);
     stages.execute(ctx, connector);
     history.setStatus("executed");
     history.setExecutedAt(Instant.now());
@@ -251,11 +253,7 @@ public class Orchestrator {
     }
 
     String dialect = connector.dialect().sqlglotDialect();
-    if (ctx.getSql() != null) ctx.setSql(SqlUtils.sanitizeSql(ctx.getSql(), dialect));
-    Set<String> known = stages.knownTables();
-    validator.validate(ctx.getSql() != null ? ctx.getSql() : "", dialect, ctx, known);
-    ctx.setOptimizedSql(stages.optimize(ctx.getSql() != null ? ctx.getSql() : "", dialect, ctx));
-    stages.estimateCost(ctx, connector);
+    stages.prepareSql(ctx, connector);
 
     if (Boolean.TRUE.equals(ctx.getCost().get("blocked"))) {
       history.setStatus("blocked");
@@ -293,15 +291,23 @@ public class Orchestrator {
     }
 
     Map<String, Object> review = stages.sqlReview(ctx, dialect);
+    if (review.get("issues") instanceof List<?> issues) {
+      issues.stream().map(String::valueOf).forEach(i -> ctx.getWarnings().add(i));
+    }
     if (!Boolean.TRUE.equals(review.get("approved"))
         && ((Number) review.getOrDefault("confidence", 1.0)).doubleValue() < threshold) {
       history.setStatus("clarification");
       DataLensResponseDto r = new DataLensResponseDto();
       r.setKind("clarification");
       r.setSummary("I need one detail before I query the data.");
-      r.setClarification(stages.clarification(ctx));
+      if (review.get("clarification") instanceof ClarificationRequestDto clar) {
+        r.setClarification(clar);
+      } else {
+        r.setClarification(stages.clarification(ctx));
+      }
       r.setSql(ctx.getOptimizedSql());
       r.setConfidence(confidenceBreakdown(ctx));
+      r.setWarnings(ctx.getWarnings());
       return r;
     }
 

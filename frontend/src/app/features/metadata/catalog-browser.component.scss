@@ -110,7 +110,7 @@
   top: 12px;
   right: 12px;
   bottom: 12px;
-  width: 420px;
+  width: min(480px, calc(100vw - 24px));
   z-index: 21;
   padding: 20px;
   overflow-y: auto;
@@ -157,5 +157,56 @@
 }
 
 .pill-list { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.enrich-section {
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--bl-hover);
+  gap: 10px;
+}
+
+.enrich-help { margin: 0; font-size: 12px; line-height: 1.5; }
+
+.field-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.text-input {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--bl-border, rgba(255,255,255,0.08));
+  background: var(--bl-surface, transparent);
+  color: var(--bl-text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.glossary-row {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--bl-text-muted);
+}
+
+.small-btn { align-self: flex-start; font-size: 12px; padding: 4px 10px; }
+
+.enrich-result {
+  margin: 0;
+  font-size: 12px;
+  color: var(--bl-accent);
+  line-height: 1.5;
+}
 
 .bl-table { font-size: 12px; }

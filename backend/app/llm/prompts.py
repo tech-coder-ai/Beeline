@@ -113,7 +113,10 @@ Return JSON:
   "confidence": 0.0-1.0,
   "rationale": "brief reasoning"
 }
-Be factual; base descriptions only on the evidence provided."""
+Be factual; base descriptions only on the evidence provided.
+When user_context is present, treat description/tags/glossary_hints as authoritative
+business guidance from a data steward. Align table and column documentation with it,
+expand glossary_suggestions from glossary_hints where appropriate, and do not contradict it."""
 
 EXPLAIN_SQL_SYSTEM = """You are the SQL explainability stage of Beeline. Explain the given SQL to a
 business user. Return JSON:

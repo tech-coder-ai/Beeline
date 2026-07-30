@@ -44,6 +44,8 @@ export class AdminConnectorsComponent implements OnInit {
   readonly syncRuns = signal<SyncRun[]>([]);
   readonly syncing = signal(false);
   readonly enriching = signal(false);
+  readonly enrichNotice = signal<string | null>(null);
+  enrichmentBatchSize = 10;
   readonly saving = signal(false);
   readonly saveError = signal<string | null>(null);
   readonly showForm = signal(false);
@@ -56,6 +58,14 @@ export class AdminConnectorsComponent implements OnInit {
     this.load();
     this.loadRuns();
     this.connectorService.load();
+    this.api.getConfig().subscribe({
+      next: (cfg) => {
+        const enrichment = cfg['enrichment'] as { batch_size?: number } | undefined;
+        if (enrichment?.batch_size !== undefined) {
+          this.enrichmentBatchSize = enrichment.batch_size;
+        }
+      },
+    });
   }
 
   emptyForm(): ConnectorForm {
@@ -252,8 +262,19 @@ export class AdminConnectorsComponent implements OnInit {
 
   triggerEnrichment(): void {
     this.enriching.set(true);
-    this.api.triggerEnrichment().subscribe({
-      next: () => this.enriching.set(false),
+    this.enrichNotice.set(null);
+    const batchSize = Math.max(0, Math.trunc(Number(this.enrichmentBatchSize) || 0));
+    this.enrichmentBatchSize = batchSize;
+    this.api.triggerEnrichment([], batchSize).subscribe({
+      next: (result) => {
+        this.enriching.set(false);
+        const count = result.enriched ?? 0;
+        const proposals = result.proposals ?? 0;
+        const usedBatch = result.batch_size ?? batchSize;
+        this.enrichNotice.set(
+          `Enriched ${count} table${count === 1 ? '' : 's'} (batch ${usedBatch === 0 ? 'all' : usedBatch}), ${proposals} proposal${proposals === 1 ? '' : 's'} queued for approval.`,
+        );
+      },
       error: () => this.enriching.set(false),
     });
   }

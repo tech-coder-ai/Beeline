@@ -109,6 +109,18 @@ class TableUpdate(BaseModel):
     classification: str | None = None
 
 
+class GlossaryHintIn(BaseModel):
+    term: str
+    definition: str | None = None
+
+
+class TableEnrichRequest(BaseModel):
+    description: str | None = None
+    tags: list[str] | None = None
+    glossary_hints: list[GlossaryHintIn] = Field(default_factory=list)
+    refresh_row_count: bool | None = None
+
+
 class ColumnUpdate(BaseModel):
     description: str | None = None
     tags: list[str] | None = None
@@ -289,3 +301,4 @@ class SyncRequest(BaseModel):
 
 class EnrichRequest(BaseModel):
     table_ids: list[str] = Field(default_factory=list)  # empty = all pending
+    batch_size: int | None = None  # override settings enrichment.batch_size; 0 = all pending

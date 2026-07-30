@@ -4,4 +4,4 @@ import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
 
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-public record EnrichRequest(java.util.List<String> tableIds) {}
+public record EnrichRequest(java.util.List<String> tableIds, Integer batchSize) {}

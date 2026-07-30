@@ -20,11 +20,13 @@ from app.schemas.api import (
     GlossaryTermIn,
     GlossaryTermOut,
     TableDetailOut,
+    TableEnrichRequest,
     TableOut,
     TableUpdate,
 )
 from app.services.approval import approval_service
 from app.services.audit import audit
+from app.services.enrichment import enrichment_service
 from app.services.import_export import import_service
 
 router = APIRouter(prefix="/metadata", tags=["metadata"])
@@ -123,6 +125,18 @@ async def update_table(table_id: str, update: TableUpdate, db: AsyncSession = De
     await audit(db, "default", "metadata.edit", entity_type="table", entity_id=table_id)
     await db.commit()
     return {"updated": table_id}
+
+
+@router.post("/tables/{table_id}/enrich")
+async def enrich_table(
+    table_id: str,
+    request: TableEnrichRequest | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await enrichment_service.enrich_table(db, table_id, request)
+    await audit(db, "default", "metadata.enrich", entity_type="table", entity_id=table_id, detail=result)
+    await db.commit()
+    return result
 
 
 @router.patch("/columns/{column_id}")

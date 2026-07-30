@@ -5,6 +5,7 @@ import com.datalens.connectors.AnalyticsConnector;
 import com.datalens.connectors.ConnectorRegistry;
 import com.datalens.connectors.QueryResult;
 import com.datalens.core.cache.ResultCache;
+import com.datalens.core.exception.GuardRailViolation;
 import com.datalens.core.exception.LLMUnavailable;
 import com.datalens.core.exception.ValidationFailed;
 import com.datalens.llm.LlmPrompts;
@@ -26,6 +27,7 @@ import com.datalens.pipeline.IntentModel;
 import com.datalens.pipeline.LibraryMatchModel;
 import com.datalens.pipeline.PipelineContext;
 import com.datalens.pipeline.ResolvedTableModel;
+import com.datalens.pipeline.SqlReviewer;
 import com.datalens.pipeline.SqlUtils;
 import com.datalens.pipeline.SqlValidator;
 import com.datalens.pipeline.VisualizationPlanner;
@@ -59,6 +61,7 @@ public class PipelineStages {
   private final ConnectorRegistry connectors;
   private final ResultCache cache;
   private final SqlValidator validator;
+  private final SqlReviewer sqlReviewer;
   private final CatalogTableRepository tables;
   private final CatalogColumnRepository columns;
   private final CatalogDatabaseRepository databases;
@@ -75,6 +78,7 @@ public class PipelineStages {
       ConnectorRegistry connectors,
       ResultCache cache,
       SqlValidator validator,
+      SqlReviewer sqlReviewer,
       CatalogTableRepository tables,
       CatalogColumnRepository columns,
       CatalogDatabaseRepository databases,
@@ -88,6 +92,7 @@ public class PipelineStages {
     this.connectors = connectors;
     this.cache = cache;
     this.validator = validator;
+    this.sqlReviewer = sqlReviewer;
     this.tables = tables;
     this.columns = columns;
     this.databases = databases;
@@ -200,6 +205,8 @@ public class PipelineStages {
             + mapper.writeValueAsString(plan)
             + "\n\nSchema (only these identifiers exist):\n"
             + buildSchemaContext(ctx)
+            + "\n\nRelative date translations: "
+            + mapper.writeValueAsString(SqlUtils.relativeDateTranslations())
             + "\n\nQuestion:\n"
             + ctx.effectivePrompt();
     try {
@@ -221,7 +228,38 @@ public class PipelineStages {
       ctx.getWarnings().add("LLM SQL generation failed; using deterministic builder: " + e.getMessage());
     }
     ctx.setSql(SqlUtils.buildDeterministic(plan));
+    ctx.setSqlFromDeterministicBuilder(true);
     ctx.getConfidence().put("sql", Math.max(ctx.getConfidence().getOrDefault("sql", 0.0), 0.5));
+  }
+
+  /** Sanitize, validate guardrails, optimize, Hive EXPLAIN dry-run, and estimate cost. Retries with deterministic SQL once. */
+  public void prepareSql(PipelineContext ctx, AnalyticsConnector connector) throws Exception {
+    String dialect = connector.dialect().sqlglotDialect();
+    Set<String> known = knownTables();
+    try {
+      applySqlChecks(ctx, connector, dialect, known);
+    } catch (GuardRailViolation e) {
+      if (ctx.isSqlFromDeterministicBuilder() || ctx.getPlan() == null) throw e;
+      ctx.getWarnings().add("Regenerated SQL from the structured plan after Hive rejected the AI-generated query.");
+      ctx.setSql(SqlUtils.buildDeterministic(ctx.getPlan()));
+      ctx.setSqlFromDeterministicBuilder(true);
+      applySqlChecks(ctx, connector, dialect, known);
+    }
+  }
+
+  private void applySqlChecks(PipelineContext ctx, AnalyticsConnector connector, String dialect, Set<String> known)
+      throws Exception {
+    if (ctx.getSql() != null) ctx.setSql(SqlUtils.sanitizeSql(ctx.getSql(), dialect));
+    validator.validate(ctx.getSql() != null ? ctx.getSql() : "", dialect, ctx, known);
+    ctx.setOptimizedSql(optimize(ctx.getSql() != null ? ctx.getSql() : "", dialect, ctx));
+    validateCompilation(ctx, connector);
+    estimateCost(ctx, connector);
+  }
+
+  public void validateCompilation(PipelineContext ctx, AnalyticsConnector connector) throws Exception {
+    String sql = ctx.getOptimizedSql() != null ? ctx.getOptimizedSql() : ctx.getSql();
+    if (sql == null || sql.isBlank()) return;
+    connector.estimator().validateCompilation(sql);
   }
 
   public String optimize(String sql, String dialect, PipelineContext ctx) {
@@ -344,13 +382,7 @@ public class PipelineStages {
   }
 
   public Map<String, Object> sqlReview(PipelineContext ctx, String dialect) {
-    try {
-      return llm.completeJson(
-          LlmPrompts.SQL_REVIEWER_SYSTEM,
-          "Question:\n" + ctx.effectivePrompt() + "\nSQL:\n" + ctx.getOptimizedSql());
-    } catch (Exception e) {
-      return Map.of("approved", true, "confidence", 0.8, "issues", List.of());
-    }
+    return sqlReviewer.review(ctx, dialect);
   }
 
   public Set<String> knownTables() {

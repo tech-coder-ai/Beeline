@@ -75,6 +75,25 @@ export class ApiService {
     return this.http.patch(`${API}/metadata/tables/${tableId}`, update);
   }
 
+  enrichTable(
+    tableId: string,
+    body: {
+      description?: string | null;
+      tags?: string[];
+      glossary_hints?: { term: string; definition?: string | null }[];
+      refresh_row_count?: boolean;
+    } = {},
+  ): Observable<{
+    enriched: number;
+    proposals: number;
+    table_id: string;
+    row_count?: number | null;
+    note?: string;
+    row_count_refresh?: Record<string, unknown>;
+  }> {
+    return this.http.post(`${API}/metadata/tables/${tableId}/enrich`, body);
+  }
+
   updateColumn(columnId: string, update: Record<string, unknown>): Observable<unknown> {
     return this.http.patch(`${API}/metadata/columns/${columnId}`, update);
   }
@@ -241,8 +260,10 @@ export class ApiService {
     return this.http.get<SyncRun[]>(`${API}/admin/sync/runs`);
   }
 
-  triggerEnrichment(tableIds: string[] = []): Observable<unknown> {
-    return this.http.post(`${API}/admin/enrich`, { table_ids: tableIds });
+  triggerEnrichment(tableIds: string[] = [], batchSize?: number): Observable<{ enriched: number; proposals: number; batch_size?: number }> {
+    const body: { table_ids: string[]; batch_size?: number } = { table_ids: tableIds };
+    if (batchSize !== undefined) body.batch_size = batchSize;
+    return this.http.post<{ enriched: number; proposals: number; batch_size?: number }>(`${API}/admin/enrich`, body);
   }
 
   getConfig(): Observable<Record<string, unknown>> {

@@ -152,7 +152,9 @@ async def sync_runs(db: AsyncSession = Depends(get_db)):
 
 @router.post("/enrich")
 async def trigger_enrichment(request: EnrichRequest, db: AsyncSession = Depends(get_db)):
-    result = await enrichment_service.enrich_tables(db, request.table_ids or None)
+    result = await enrichment_service.enrich_tables(
+        db, request.table_ids or None, request.batch_size
+    )
     await audit(db, "default", "admin.enrich_trigger", detail=result)
     await db.commit()
     return result

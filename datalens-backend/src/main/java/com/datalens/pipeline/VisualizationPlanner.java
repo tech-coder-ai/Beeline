@@ -30,6 +30,43 @@ public class VisualizationPlanner {
       Pattern.compile("(date|month|year|week|quarter|day|period|time)", Pattern.CASE_INSENSITIVE);
   private static final Pattern DATE_STRING = Pattern.compile("^\\d{4}([-/]\\d{1,2}){1,2}");
 
+  private static final Set<String> CHART_PRIMARY_INTENTS =
+      Set.of(
+          "time_series",
+          "trend",
+          "comparison",
+          "yoy",
+          "mom",
+          "qoq",
+          "distribution",
+          "grouping",
+          "top_n",
+          "bottom_n",
+          "ranking",
+          "correlation",
+          "cumulative_sum",
+          "running_total",
+          "rolling_average",
+          "forecasting",
+          "anomaly",
+          "aggregation");
+  private static final Set<String> TABLE_PRIMARY_INTENTS =
+      Set.of(
+          "lookup",
+          "filtering",
+          "exploration",
+          "distinct_count",
+          "summarization",
+          "median",
+          "stddev",
+          "variance",
+          "window",
+          "percentile");
+  private static final Pattern PROMPT_TABLE_HINT =
+      Pattern.compile("\\b(list|show me|details|rows|records|breakdown|tabular|table data)\\b", Pattern.CASE_INSENSITIVE);
+  private static final Pattern PROMPT_CHART_HINT =
+      Pattern.compile("\\b(trend|over time|chart|graph|plot|visuali[sz]e|histogram)\\b", Pattern.CASE_INSENSITIVE);
+
   private final DataLensSettings settings;
 
   public VisualizationPlanner(DataLensSettings settings) {
@@ -57,7 +94,7 @@ public class VisualizationPlanner {
       profiles.add(new ColumnProfile(columns.get(i), types.get(i), colValues.get(i)));
     }
 
-    TableSpecDto table = tableSpec(ctx, profiles);
+    TableSpecDto table = null;
     List<Integer> temporal = indicesWhere(profiles, ColumnProfile::isTemporal);
     List<Integer> numeric = indicesWhere(profiles, ColumnProfile::isNumeric);
     List<Integer> categorical = indicesWhere(profiles, ColumnProfile::isCategorical);
@@ -76,7 +113,7 @@ public class VisualizationPlanner {
         card.setRawValue(value);
         cards.add(card);
       }
-      return new VisualizationResult("kpi", cards, charts, table);
+      return new VisualizationResult("kpi", cards, charts, null);
     }
 
     if (!temporal.isEmpty() && !numeric.isEmpty() && rows.size() > 1) {
@@ -116,9 +153,13 @@ public class VisualizationPlanner {
       charts.add(scatter);
     }
 
+    if (shouldIncludeTable(ctx, charts, columns, rows, intentTypes)) {
+      table = tableSpec(ctx, profiles);
+    }
+
     String viz;
     if (!charts.isEmpty()) {
-      viz = rows.size() > 1 ? "mixed" : charts.get(0).getChartType();
+      viz = table != null && rows.size() > 1 ? "mixed" : charts.get(0).getChartType();
     } else if (rows.size() > 1) {
       viz = "grid";
     } else if (!rows.isEmpty()) {
@@ -127,6 +168,29 @@ public class VisualizationPlanner {
       viz = "text";
     }
     return new VisualizationResult(viz, cards, charts, table);
+  }
+
+  /** Include the data grid when the question calls for tabular detail, not when a chart alone answers it. */
+  private boolean shouldIncludeTable(
+      PipelineContext ctx,
+      List<ChartSpecDto> charts,
+      List<String> columns,
+      List<List<Object>> rows,
+      Set<String> intentTypes) {
+    if (rows.isEmpty()) return false;
+    if (charts.isEmpty()) return true;
+
+    if (intentTypes.stream().anyMatch(TABLE_PRIMARY_INTENTS::contains)) return true;
+    if (intentTypes.stream().anyMatch(CHART_PRIMARY_INTENTS::contains)) return false;
+
+    String prompt = ctx.effectivePrompt();
+    if (prompt != null && PROMPT_TABLE_HINT.matcher(prompt).find()) return true;
+    if (prompt != null && PROMPT_CHART_HINT.matcher(prompt).find()) return false;
+
+    if (columns.size() > 4) return true;
+    if (rows.size() > 25) return false;
+
+    return false;
   }
 
   private TableSpecDto tableSpec(PipelineContext ctx, List<ColumnProfile> profiles) {

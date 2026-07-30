@@ -21,6 +21,28 @@ public final class SqlUtils {
       Pattern.compile("(?i)(\\b(?:FROM|JOIN)\\s+)`([^`]+)`\\.`([^`]+)`(\\s|$)");
   private static final Pattern SQL_FENCE =
       Pattern.compile("```(?:sql)?\\s*(.+?)\\s*```", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+  private static final Map<String, String> RELATIVE_HIVE =
+      Map.of(
+          "relative:last_7_days", "date_sub(current_date, 7)",
+          "relative:last_30_days", "date_sub(current_date, 30)",
+          "relative:last_90_days", "date_sub(current_date, 90)",
+          "relative:last_month", "add_months(current_date, -1)",
+          "relative:last_3_months", "add_months(current_date, -3)",
+          "relative:last_6_months", "add_months(current_date, -6)",
+          "relative:last_12_months", "add_months(current_date, -12)",
+          "relative:last_year", "add_months(current_date, -12)",
+          "relative:ytd", "trunc(current_date, 'YYYY')");
+  private static final Map<String, String> AGG_SQL =
+      Map.of(
+          "sum", "SUM({c})",
+          "avg", "AVG({c})",
+          "count", "COUNT({c})",
+          "count_distinct", "COUNT(DISTINCT {c})",
+          "min", "MIN({c})",
+          "max", "MAX({c})",
+          "median", "PERCENTILE_APPROX({c}, 0.5)",
+          "stddev", "STDDEV({c})",
+          "variance", "VARIANCE({c})");
 
   private SqlUtils() {}
 
@@ -29,7 +51,10 @@ public final class SqlUtils {
     String text = sql.strip().replaceAll(";\\s*$", "").strip();
     if (text.isBlank()) return text;
     text = stripTrailingStrayBackticks(text);
-    if ("hive".equalsIgnoreCase(dialect)) text = normalizeHiveIdentifiers(text);
+    if ("hive".equalsIgnoreCase(dialect)) {
+      text = normalizeHiveIdentifiers(text);
+      text = fixHiveGroupedOrderBy(text);
+    }
     if (canParse(text)) return text;
     String repaired = text;
     while (repaired.endsWith("`") && !canParse(repaired)) repaired = repaired.substring(0, repaired.length() - 1).strip();
@@ -104,8 +129,64 @@ public final class SqlUtils {
   public static String compactConnectorError(String message) {
     if (message == null) return "";
     message = message.replaceFirst("(?i)^Hive execution failed after \\d+ attempts:\\s*", "");
+    if (message.startsWith("TExecuteStatementResp")) {
+      for (Pattern pattern :
+          List.of(
+              Pattern.compile("Error while processing statement:\\s*FAILED:\\s*([^']+)", Pattern.CASE_INSENSITIVE),
+              Pattern.compile("SemanticException[^:]*:\\s*([^\\]\"]+)", Pattern.CASE_INSENSITIVE),
+              Pattern.compile("ParseException[^:]*:\\s*([^\\]\"]+)", Pattern.CASE_INSENSITIVE),
+              Pattern.compile("AnalysisException[^:]*:\\s*([^\\]\"]+)", Pattern.CASE_INSENSITIVE),
+              Pattern.compile("Execution Error[^:]*:\\s*([^\\]']+)", Pattern.CASE_INSENSITIVE))) {
+        Matcher match = pattern.matcher(message);
+        if (match.find()) {
+          return "Hive query failed: " + match.group(match.groupCount()).trim();
+        }
+      }
+    }
+    for (Pattern pattern :
+        List.of(
+            Pattern.compile("SemanticException[^:]*:\\s*([^\\]\"]+)", Pattern.CASE_INSENSITIVE),
+            Pattern.compile("ParseException[^:]*:\\s*([^\\]\"]+)", Pattern.CASE_INSENSITIVE),
+            Pattern.compile("Invalid table alias '[^']+'", Pattern.CASE_INSENSITIVE))) {
+      Matcher match = pattern.matcher(message);
+      if (match.find()) {
+        String detail = match.groupCount() > 0 ? match.group(1) : match.group(0);
+        return "Hive query failed: " + detail.trim();
+      }
+    }
     if (message.length() <= 700) return message;
     return message.substring(0, 700).strip() + "… (see Admin → Logs for full trace)";
+  }
+
+  /** Hive rejects ORDER BY table.column after GROUP BY — rewrite to SELECT aliases when possible. */
+  public static String fixHiveGroupedOrderBy(String sql) {
+    if (sql == null || !sql.toLowerCase(Locale.ROOT).contains("group by")) return sql;
+    int groupIdx = sql.toLowerCase(Locale.ROOT).indexOf("group by");
+    int orderIdx = sql.toLowerCase(Locale.ROOT).indexOf("order by", groupIdx);
+    if (orderIdx < 0) return sql;
+    Map<String, String> exprToAlias = new java.util.LinkedHashMap<>();
+    Matcher selectMatcher = Pattern.compile("(?is)SELECT\\s+(.*?)\\s+FROM\\s").matcher(sql);
+    if (!selectMatcher.find()) return sql;
+    String selectList = selectMatcher.group(1);
+    Matcher aliasMatcher =
+        Pattern.compile("(?i)(.+?)\\s+AS\\s+`([^`]+)`").matcher(selectList);
+    while (aliasMatcher.find()) {
+      String expr = aliasMatcher.group(1).trim();
+      String alias = aliasMatcher.group(2);
+      exprToAlias.put(expr, alias);
+      exprToAlias.put(expr.toLowerCase(Locale.ROOT), alias);
+    }
+    if (exprToAlias.isEmpty()) return sql;
+    String before = sql.substring(0, orderIdx);
+    String orderPart = sql.substring(orderIdx);
+    for (Map.Entry<String, String> e : exprToAlias.entrySet()) {
+      orderPart = orderPart.replace(e.getKey(), "`" + e.getValue() + "`");
+    }
+    return before + orderPart;
+  }
+
+  public static Map<String, String> relativeDateTranslations() {
+    return RELATIVE_HIVE;
   }
 
   public static String injectLimit(String sql, int limit) {
@@ -159,24 +240,31 @@ public final class SqlUtils {
       throw new ValidationFailed(
           "I couldn't map your question to any known tables. Try mentioning the dataset explicitly.");
     }
+
+    java.util.Map<String, String> tableAliases = aliasMap(plan.getTables());
     List<String> selectParts = new ArrayList<>();
     for (String col : plan.getColumns()) {
-      selectParts.add(colRef(col) + " AS `" + col.split("\\.")[col.split("\\.").length - 1] + "`");
+      selectParts.add(hiveColRef(col, tableAliases) + " AS `" + shortName(col) + "`");
     }
     for (PlanAggregation agg : plan.getAggregations()) {
-      String fn = agg.getFunction() != null ? agg.getFunction().toUpperCase(Locale.ROOT) : "SUM";
-      String target = "*".equals(agg.getColumn()) ? "*" : colRef(agg.getColumn());
+      String fn = agg.getFunction() != null ? agg.getFunction().toLowerCase(Locale.ROOT) : "sum";
+      String template = AGG_SQL.getOrDefault(fn, "SUM({c})");
+      String target = "*".equals(agg.getColumn()) ? "*" : hiveColRef(agg.getColumn(), tableAliases);
       String alias =
           agg.getAlias() != null && !agg.getAlias().isBlank()
               ? agg.getAlias()
-              : fn + "_" + (agg.getColumn() != null ? agg.getColumn().split("\\.")[agg.getColumn().split("\\.").length - 1] : "all");
-      selectParts.add(fn + "(" + target + ") AS `" + alias + "`");
+              : fn + "_" + shortName(agg.getColumn()).replace("*", "all");
+      selectParts.add(template.replace("{c}", target) + " AS `" + alias + "`");
     }
     if (selectParts.isEmpty()) selectParts.add("*");
 
     String base = plan.getTables().get(0);
-    StringBuilder sql = new StringBuilder("SELECT ").append(String.join(", ", selectParts));
-    sql.append("\nFROM ").append(qident(base));
+    String baseAlias = tableAliases.get(normalizeTableRef(base));
+    StringBuilder sql =
+        new StringBuilder("SELECT ")
+            .append(String.join(", ", selectParts))
+            .append("\nFROM ")
+            .append(hiveTableRef(base, baseAlias));
 
     java.util.Set<String> joined = new java.util.HashSet<>();
     joined.add(normalizeTableRef(base));
@@ -197,30 +285,118 @@ public final class SqlUtils {
       sql.append("\n")
           .append(jt)
           .append(" ")
-          .append(qident(target))
+          .append(hiveTableRef(target, tableAliases.get(normalizeTableRef(target))))
           .append(" ON ")
-          .append(qident(join.getLeftTable()))
-          .append(".`")
-          .append(join.getLeftColumn())
-          .append("` = ")
-          .append(qident(join.getRightTable()))
-          .append(".`")
-          .append(join.getRightColumn())
-          .append("`");
+          .append(hiveColRef(join.getLeftTable() + "." + join.getLeftColumn(), tableAliases))
+          .append(" = ")
+          .append(hiveColRef(join.getRightTable() + "." + join.getRightColumn(), tableAliases));
     }
 
     List<String> conditions = new ArrayList<>();
     for (PlanFilter f : plan.getFilters()) {
-      conditions.add(colRef(f.getColumn()) + " " + f.getOperator() + " " + literal(f.getValue()));
+      conditions.add(renderFilter(f, tableAliases));
     }
-    if (!conditions.isEmpty()) {
-      sql.append("\nWHERE ").append(String.join("\n  AND ", conditions));
-    }
+    if (!conditions.isEmpty()) sql.append("\nWHERE ").append(String.join("\n  AND ", conditions));
+
     if (!plan.getGroupBy().isEmpty()) {
-      sql.append("\nGROUP BY ").append(String.join(", ", plan.getGroupBy().stream().map(SqlUtils::colRef).toList()));
+      sql.append("\nGROUP BY ")
+          .append(String.join(", ", plan.getGroupBy().stream().map(c -> hiveColRef(c, tableAliases)).toList()));
+    }
+    if (plan.getOrderBy() != null && !plan.getOrderBy().isEmpty()) {
+      List<String> orderParts = new ArrayList<>();
+      for (Map<String, Object> o : plan.getOrderBy()) {
+        Object col = o.get("column");
+        if (col == null) continue;
+        String direction = String.valueOf(o.getOrDefault("direction", "desc"));
+        String orderExpr = hiveColRef(String.valueOf(col), tableAliases);
+        for (PlanAggregation agg : plan.getAggregations()) {
+          if (agg.getAlias() != null && agg.getAlias().equalsIgnoreCase(String.valueOf(col))) {
+            orderExpr = "`" + agg.getAlias() + "`";
+            break;
+          }
+        }
+        orderParts.add(orderExpr + ("desc".equalsIgnoreCase(direction) ? " DESC" : " ASC"));
+      }
+      if (!orderParts.isEmpty()) sql.append("\nORDER BY ").append(String.join(", ", orderParts));
     }
     if (plan.getLimit() != null) sql.append("\nLIMIT ").append(plan.getLimit());
-    return sql.toString();
+    return normalizeHiveIdentifiers(sql.toString());
+  }
+
+  private static java.util.Map<String, String> aliasMap(List<String> tables) {
+    java.util.Map<String, String> out = new java.util.LinkedHashMap<>();
+    java.util.Set<String> used = new java.util.HashSet<>();
+    for (String table : tables) {
+      String key = normalizeTableRef(table);
+      String[] parts = key.split("\\.");
+      String tableName = parts.length > 1 ? parts[1] : key;
+      String[] tokens = tableName.split("_");
+      String base =
+          tokens.length > 0 && !tokens[0].isBlank()
+              ? tokens[0].substring(0, Math.min(2, tokens[0].length()))
+              : tableName.substring(0, Math.min(2, tableName.length()));
+      String candidate = base.toLowerCase(Locale.ROOT);
+      int n = 1;
+      while (used.contains(candidate)) candidate = base.toLowerCase(Locale.ROOT) + n++;
+      used.add(candidate);
+      out.put(key, candidate);
+    }
+    return out;
+  }
+
+  private static String hiveTableRef(String qualified, String alias) {
+    return qident(qualified) + (alias != null && !alias.isBlank() ? " " + alias : "");
+  }
+
+  private static String hiveColRef(String qualified, java.util.Map<String, String> aliases) {
+    if (qualified == null || qualified.isBlank()) return "`*`";
+    if (!qualified.contains(".")) return "`" + qualified + "`";
+    String[] parts = qualified.split("\\.");
+    if (parts.length >= 3) {
+      String qual = parts[0] + "." + parts[1];
+      String alias = aliases.get(normalizeTableRef(qual));
+      if (alias != null) return alias + ".`" + parts[parts.length - 1] + "`";
+    }
+    if (parts.length == 2) {
+      String alias = aliases.get(normalizeTableRef(qualified.substring(0, qualified.lastIndexOf('.'))));
+      if (alias != null) return alias + ".`" + parts[1] + "`";
+    }
+    return qident(qualified);
+  }
+
+  private static String renderFilter(PlanFilter f, java.util.Map<String, String> aliases) {
+    String column = hiveColRef(f.getColumn(), aliases);
+    String op = f.getOperator() != null ? f.getOperator().toLowerCase(Locale.ROOT) : "=";
+    Object value = f.getValue();
+    if (value instanceof String s && RELATIVE_HIVE.containsKey(s)) {
+      return column + " >= " + RELATIVE_HIVE.get(s);
+    }
+    if ("is_null".equals(op) || "is_not_null".equals(op)) {
+      return column + " IS " + ("is_not_null".equals(op) ? "NOT NULL" : "NULL");
+    }
+    if (("in".equals(op) || "not_in".equals(op)) && value instanceof List<?> list) {
+      String rendered = list.stream().map(SqlUtils::literal).reduce((a, b) -> a + ", " + b).orElse("");
+      return column + ("not_in".equals(op) ? " NOT IN (" : " IN (") + rendered + ")";
+    }
+    if ("between".equals(op) && value instanceof List<?> list && list.size() == 2) {
+      return column + " BETWEEN " + literal(list.get(0)) + " AND " + literal(list.get(1));
+    }
+    if ("like".equals(op)) return column + " LIKE " + literal(value);
+    String sqlOp =
+        switch (op) {
+          case "!=", "<>" -> "<>";
+          case ">" -> ">";
+          case ">=" -> ">=";
+          case "<" -> "<";
+          case "<=" -> "<=";
+          default -> "=";
+        };
+    return column + " " + sqlOp + " " + literal(value);
+  }
+
+  private static String shortName(String qualified) {
+    if (qualified == null) return "col";
+    return qualified.contains(".") ? qualified.substring(qualified.lastIndexOf('.') + 1) : qualified;
   }
 
   private static String qident(String qualified) {

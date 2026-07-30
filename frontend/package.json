@@ -37,6 +37,7 @@
     "marked": "^18.0.5",
     "ngx-echarts": "^20.0.2",
     "rxjs": "~7.8.0",
+    "sql-formatter": "^15.8.2",
     "tslib": "^2.3.0",
     "zone.js": "~0.15.0"
   },

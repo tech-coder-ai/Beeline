@@ -154,7 +154,7 @@ public class AdminController {
 
   @PostMapping("/enrich")
   public Map<String, Object> enrich(@RequestBody EnrichRequest request) {
-    Map<String, Object> result = enrichment.enrich(request.tableIds());
+    Map<String, Object> result = enrichment.enrich(request.tableIds(), request.batchSize());
     audit.audit("default", "admin.enrich_trigger", null, null, result, "info");
     return result;
   }
