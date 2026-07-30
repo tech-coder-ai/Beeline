@@ -14,15 +14,19 @@ import com.datalens.model.repository.CatalogTableRepository;
 import com.datalens.model.repository.ExecutionHistoryRepository;
 import com.datalens.pipeline.stages.PipelineStages;
 import com.datalens.schema.response.DataLensResponseDto;
+import com.datalens.schema.response.ChartSpecDto;
 import com.datalens.schema.response.ConfidenceBreakdownDto;
 import com.datalens.schema.response.CostEstimateDto;
 import com.datalens.schema.response.ExecutionStatsDto;
+import com.datalens.schema.response.KpiCardDto;
 import com.datalens.schema.response.SqlExplanationDto;
+import com.datalens.schema.response.TableSpecDto;
 import com.datalens.service.AuditService;
 import com.datalens.service.ExplainService;
 import com.datalens.service.QueryLibraryService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -141,7 +145,14 @@ public class Orchestrator {
     response.setSummary(String.valueOf(narrative.getOrDefault("summary", "")));
     response.setConfidence(confidenceBreakdown(ctx));
     response.setVisualization(String.valueOf(viz.get("visualization")));
-    response.setTable((com.datalens.schema.response.TableSpecDto) viz.get("table"));
+    response.setCards(castList(viz.get("cards"), KpiCardDto.class));
+    response.setCharts(castList(viz.get("charts"), ChartSpecDto.class));
+    if (viz.get("table") instanceof TableSpecDto table) {
+      response.setTable(table);
+    }
+    response.setInsights(stringList(narrative.get("insights")));
+    response.setRecommendations(stringList(narrative.get("recommendations")));
+    response.setFollowUpQuestions(stringList(narrative.get("follow_up_questions")));
     response.setSql(ctx.getOptimizedSql());
     response.setSqlExplanation(sqlExplanation);
     if (ctx.getCost() != null && !ctx.getCost().isEmpty()) {
@@ -155,8 +166,30 @@ public class Orchestrator {
     stats.setCacheHit(ctx.isCacheHit());
     stats.setReusedFromLibrary(ctx.getLibraryMatch() != null);
     response.setStats(stats);
-    if (ctx.getPlan() != null) response.setTablesUsed(ctx.getPlan().getTables());
-    response.setWarnings(ctx.getWarnings());
+    if (ctx.getPlan() != null) {
+      response.setTablesUsed(ctx.getPlan().getTables());
+      response.setFiltersUsed(
+          ctx.getPlan().getFilters().stream()
+              .map(f -> f.getColumn() + " " + f.getOperator() + " " + f.getValue())
+              .toList());
+      response.setMetricsUsed(
+          ctx.getPlan().getAggregations().stream()
+              .map(
+                  a ->
+                      a.getAlias() != null && !a.getAlias().isBlank()
+                          ? a.getAlias()
+                          : a.getFunction() + "(" + a.getColumn() + ")")
+              .toList());
+      Map<String, Object> meta = new HashMap<>();
+      if (ctx.getPlan().getRationale() != null) meta.put("rationale", ctx.getPlan().getRationale());
+      if (ctx.getRefinedPrompt() != null) meta.put("refined_prompt", ctx.getRefinedPrompt());
+      if (!ctx.getRefinementNotes().isEmpty()) meta.put("refinement_notes", ctx.getRefinementNotes());
+      if (ctx.getLibraryMatch() != null) meta.put("library_match", ctx.getLibraryMatch().getQuestion());
+      response.setMetadata(meta);
+    }
+    List<String> allWarnings = new ArrayList<>(ctx.getWarnings());
+    allWarnings.addAll(ctx.getValidationWarnings());
+    response.setWarnings(allWarnings);
     return response;
   }
 
@@ -352,5 +385,20 @@ public class Orchestrator {
         tableRepo.findById(t.getId()).ifPresent(row -> row.setUsageCount(row.getUsageCount() + 1));
       }
     }
+  }
+
+  private static List<String> stringList(Object value) {
+    if (!(value instanceof List<?> list)) return List.of();
+    return list.stream().map(String::valueOf).toList();
+  }
+
+  @SuppressWarnings("unchecked")
+  private <T> List<T> castList(Object value, Class<T> type) {
+    if (!(value instanceof List<?> list)) return List.of();
+    List<T> out = new ArrayList<>();
+    for (Object item : list) {
+      if (type.isInstance(item)) out.add((T) item);
+    }
+    return out;
   }
 }

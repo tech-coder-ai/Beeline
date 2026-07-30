@@ -28,13 +28,9 @@ import com.datalens.pipeline.PipelineContext;
 import com.datalens.pipeline.ResolvedTableModel;
 import com.datalens.pipeline.SqlUtils;
 import com.datalens.pipeline.SqlValidator;
-import com.datalens.schema.response.ChartSeriesDto;
-import com.datalens.schema.response.ChartSpecDto;
+import com.datalens.pipeline.VisualizationPlanner;
 import com.datalens.schema.response.ClarificationOptionDto;
 import com.datalens.schema.response.ClarificationRequestDto;
-import com.datalens.schema.response.KpiCardDto;
-import com.datalens.schema.response.TableColumnDto;
-import com.datalens.schema.response.TableSpecDto;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -67,6 +63,7 @@ public class PipelineStages {
   private final GlossaryTermRepository glossary;
   private final BusinessMetricRepository metrics;
   private final QueryLibraryEntryRepository library;
+  private final VisualizationPlanner visualizationPlanner;
   private final JaroWinklerSimilarity similarity = new JaroWinklerSimilarity();
 
   public PipelineStages(
@@ -81,7 +78,8 @@ public class PipelineStages {
       CatalogDatabaseRepository databases,
       GlossaryTermRepository glossary,
       BusinessMetricRepository metrics,
-      QueryLibraryEntryRepository library) {
+      QueryLibraryEntryRepository library,
+      VisualizationPlanner visualizationPlanner) {
     this.settings = settings;
     this.llm = llm;
     this.mapper = mapper;
@@ -94,6 +92,7 @@ public class PipelineStages {
     this.glossary = glossary;
     this.metrics = metrics;
     this.library = library;
+    this.visualizationPlanner = visualizationPlanner;
   }
 
   public void refine(PipelineContext ctx) {
@@ -312,28 +311,7 @@ public class PipelineStages {
   }
 
   public Map<String, Object> visualize(PipelineContext ctx) {
-    Map<String, Object> out = new HashMap<>();
-    out.put("visualization", ctx.getRowCount() == 1 ? "kpi" : "grid");
-    out.put("cards", List.<KpiCardDto>of());
-    out.put("charts", List.<ChartSpecDto>of());
-    TableSpecDto table = new TableSpecDto();
-    for (String col : ctx.getResultColumns()) {
-      TableColumnDto c = new TableColumnDto();
-      c.setField(col);
-      c.setHeader(col);
-      table.getColumns().add(c);
-    }
-    for (List<Object> row : ctx.getResultRows()) {
-      Map<String, Object> map = new HashMap<>();
-      for (int i = 0; i < ctx.getResultColumns().size(); i++) {
-        map.put(ctx.getResultColumns().get(i), i < row.size() ? row.get(i) : null);
-      }
-      table.getRows().add(map);
-    }
-    table.setTotalRows(ctx.getRowCount());
-    table.setTruncated(ctx.isTruncated());
-    out.put("table", table);
-    return out;
+    return visualizationPlanner.run(ctx).toMap();
   }
 
   public ClarificationRequestDto clarification(PipelineContext ctx) {
