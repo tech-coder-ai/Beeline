@@ -235,23 +235,51 @@ public class AdminController {
   }
 
   private Map<String, Object> syncRunMap(SyncRun r) {
-    return Map.of(
-        "id", r.getId(), "connector_id", r.getConnectorId(), "mode", r.getMode(), "status", r.getStatus(),
-        "tables_synced", r.getTablesSynced(), "columns_synced", r.getColumnsSynced(), "error", r.getError(),
-        "created_at", r.getCreatedAt(), "finished_at", r.getFinishedAt());
+    return nullableMap(
+        "id", r.getId(),
+        "connector_id", r.getConnectorId(),
+        "mode", r.getMode(),
+        "status", r.getStatus(),
+        "tables_synced", r.getTablesSynced(),
+        "columns_synced", r.getColumnsSynced(),
+        "error", r.getError(),
+        "created_at", r.getCreatedAt(),
+        "finished_at", r.getFinishedAt());
   }
 
   private Map<String, Object> auditMap(AuditLog l) {
-    return Map.of(
-        "id", l.getId(), "user_id", l.getUserId(), "action", l.getAction(), "entity_type", l.getEntityType(),
-        "entity_id", l.getEntityId(), "detail", l.getDetail(), "severity", l.getSeverity(), "created_at", l.getCreatedAt());
+    return nullableMap(
+        "id", l.getId(),
+        "user_id", l.getUserId(),
+        "action", l.getAction(),
+        "entity_type", l.getEntityType(),
+        "entity_id", l.getEntityId(),
+        "detail", l.getDetail(),
+        "severity", l.getSeverity(),
+        "created_at", l.getCreatedAt());
   }
 
   private Map<String, Object> executionMap(ExecutionHistory e) {
-    return Map.of(
-        "id", e.getId(), "prompt", e.getPrompt(), "status", e.getStatus(), "optimized_sql", e.getOptimizedSql(),
-        "row_count", e.getRowCount(), "execution_time_ms", e.getExecutionTimeMs(), "confidence", e.getConfidence(),
-        "warnings", e.getWarnings(), "error", e.getError(), "llm_model", e.getLlmModel(), "created_at", e.getCreatedAt());
+    return nullableMap(
+        "id", e.getId(),
+        "prompt", e.getPrompt(),
+        "status", e.getStatus(),
+        "optimized_sql", e.getOptimizedSql(),
+        "row_count", e.getRowCount(),
+        "execution_time_ms", e.getExecutionTimeMs(),
+        "confidence", e.getConfidence(),
+        "warnings", e.getWarnings(),
+        "error", e.getError(),
+        "llm_model", e.getLlmModel(),
+        "created_at", e.getCreatedAt());
+  }
+
+  private static Map<String, Object> nullableMap(Object... keysAndValues) {
+    Map<String, Object> out = new LinkedHashMap<>();
+    for (int i = 0; i < keysAndValues.length; i += 2) {
+      out.put(String.valueOf(keysAndValues[i]), keysAndValues[i + 1]);
+    }
+    return out;
   }
 
   @SuppressWarnings("unchecked")
