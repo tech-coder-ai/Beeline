@@ -74,9 +74,10 @@ public class Orchestrator {
   public DataLensResponseDto run(PipelineContext ctx) {
     ExecutionHistory history = new ExecutionHistory();
     history.setSessionId(ctx.getSessionId());
-    history.setUserId(ctx.getUserId());
+    history.setUserId(ctx.getUserId() != null ? ctx.getUserId() : "default");
     history.setConnectorId(ctx.getConnectorId());
-    history.setPrompt(ctx.getPrompt());
+    history.setPrompt(ctx.getPrompt() != null ? ctx.getPrompt() : "");
+    history.setStatus("pending");
     historyRepo.save(history);
     ctx.setExecutionId(history.getId());
 
@@ -332,8 +333,13 @@ public class Orchestrator {
     history.setRowCount(ctx.getRowCount() > 0 ? ctx.getRowCount() : null);
     history.setExecutionTimeMs(ctx.getExecutionTimeMs() > 0 ? ctx.getExecutionTimeMs() : null);
     history.setCostEstimate(ctx.getCost());
-    history.setConfidence(ctx.getConfidence());
-    history.setWarnings(ctx.getWarnings());
+    history.setConfidence(
+        ctx.getConfidence() != null && !ctx.getConfidence().isEmpty()
+            ? new HashMap<>(ctx.getConfidence())
+            : null);
+    List<String> warnings = new ArrayList<>(ctx.getWarnings());
+    warnings.addAll(ctx.getValidationWarnings());
+    history.setWarnings(warnings);
     if (ctx.getPlan() != null) history.setTablesUsed(ctx.getPlan().getTables());
     if (ctx.getLibraryMatch() != null) history.setReusedQueryId(ctx.getLibraryMatch().getEntryId());
     if (!ctx.getLlmCalls().isEmpty()) {

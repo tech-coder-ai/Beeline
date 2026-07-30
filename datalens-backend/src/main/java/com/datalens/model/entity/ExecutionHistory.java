@@ -12,11 +12,12 @@ import lombok.Getter; import lombok.Setter;
 public class ExecutionHistory extends BaseEntity {
   @Column(name = "session_id")
   private String sessionId;
-  @Column(name = "user_id")
-  private String userId;
+  @Column(name = "user_id", nullable = false)
+  private String userId = "default";
   @Column(name = "connector_id")
   private String connectorId;
-  private String prompt;
+  @Column(nullable = false)
+  private String prompt = "";
   @Column(name = "refined_prompt")
   private String refinedPrompt;
   @Convert(converter = JsonAttributeConverter.class)
@@ -29,7 +30,8 @@ public class ExecutionHistory extends BaseEntity {
   private String generatedSql;
   @Column(name = "optimized_sql")
   private String optimizedSql;
-  private String status;
+  @Column(nullable = false)
+  private String status = "pending";
   @Column(name = "row_count")
   private Integer rowCount;
   @Column(name = "execution_time_ms")

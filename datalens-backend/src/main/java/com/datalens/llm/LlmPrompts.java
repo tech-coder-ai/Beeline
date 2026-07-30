@@ -26,8 +26,23 @@ public final class LlmPrompts {
       aggregation_reasons, grouping_reasons.""";
 
   public static final String ENRICHMENT_SYSTEM = """
-      Propose business metadata enrichments. Return JSON with table_description, column_descriptions,
-      tags, classification, confidence, rationale.""";
+      You are the metadata enrichment stage of DataLens. Given a table's technical
+      metadata (name, columns, types, sample values), generate business documentation.
+      Return JSON:
+      {
+        "table_description": "1-2 sentence business description",
+        "table_tags": ["tag", ...],
+        "classification": "public|internal|confidential|pii",
+        "columns": [
+          {"name": "...", "description": "...", "tags": [...], "is_pii": false,
+           "semantic_type": "currency|email|phone|country|city|postal_code|latitude|longitude|uuid|json|enum|identifier|free_text|categorical|date|timestamp|integer|decimal|boolean|time_series",
+           "confidence": 0.0-1.0}
+        ],
+        "glossary_suggestions": [{"term": "...", "definition": "...", "synonyms": [...]}],
+        "confidence": 0.0-1.0,
+        "rationale": "brief reasoning"
+      }
+      Be factual; base descriptions only on the evidence provided.""";
 
   public static final String REFINER_SYSTEM = """
       Refine the user question for analytics. Return JSON with refined_prompt and notes array.""";
