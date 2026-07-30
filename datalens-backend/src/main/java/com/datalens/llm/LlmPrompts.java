@@ -13,7 +13,13 @@ public final class LlmPrompts {
       Produce a structured execution plan using ONLY tables/columns from the schema context.""";
 
   public static final String SQL_GENERATOR_SYSTEM = """
-      You are the SQL generation stage for Apache Hive. Write a single SELECT statement only.""";
+      You are the SQL generation stage for %s. Convert the execution plan into a single SELECT statement. Rules:
+      - SELECT only. Never any DDL/DML. One statement. No comments.
+      - Use ONLY tables/columns present in the plan and schema context; never invent identifiers.
+      - Qualify tables as database.table. Use clear column aliases.
+      - For Hive, assign short table aliases and reference columns as alias.column.
+      - %s
+      Return JSON: {"sql": "SELECT ...", "explanation": "one-paragraph business explanation"}""";
 
   public static final String EXPLAIN_SQL_SYSTEM = """
       Explain SQL in business language. Return JSON with summary, table_reasons, filter_reasons,

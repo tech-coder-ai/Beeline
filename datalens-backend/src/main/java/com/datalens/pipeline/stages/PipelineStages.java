@@ -5,11 +5,10 @@ import com.datalens.connectors.AnalyticsConnector;
 import com.datalens.connectors.ConnectorRegistry;
 import com.datalens.connectors.QueryResult;
 import com.datalens.core.cache.ResultCache;
-import com.datalens.core.exception.ConnectorError;
 import com.datalens.core.exception.LLMUnavailable;
+import com.datalens.core.exception.ValidationFailed;
 import com.datalens.llm.LlmPrompts;
 import com.datalens.llm.LlmProviderRegistry;
-import com.datalens.llm.LlmResult;
 import com.datalens.model.entity.BusinessMetric;
 import com.datalens.model.entity.CatalogDatabase;
 import com.datalens.model.entity.CatalogTable;
@@ -142,18 +141,44 @@ public class PipelineStages {
   }
 
   public void generateSql(PipelineContext ctx, AnalyticsConnector connector) throws Exception {
-    String prompt =
-        connector.dialect().dialectHints()
-            + "\nSchema:\n"
+    ExecutionPlanModel plan = ctx.getPlan();
+    if (plan == null || plan.getTables().isEmpty()) {
+      throw new ValidationFailed(
+          "I couldn't map your question to any known tables. Try mentioning the dataset explicitly.");
+    }
+    String dialectName = connector.dialect().sqlglotDialect();
+    String system =
+        String.format(
+            LlmPrompts.SQL_GENERATOR_SYSTEM,
+            dialectName.toUpperCase(Locale.ROOT),
+            connector.dialect().dialectHints());
+    String user =
+        "Execution plan:\n"
+            + mapper.writeValueAsString(plan)
+            + "\n\nSchema (only these identifiers exist):\n"
             + buildSchemaContext(ctx)
-            + "\nPlan:\n"
-            + mapper.writeValueAsString(ctx.getPlan())
-            + "\nQuestion:\n"
+            + "\n\nQuestion:\n"
             + ctx.effectivePrompt();
-    LlmResult result = llm.getActive().complete(LlmPrompts.SQL_GENERATOR_SYSTEM, prompt);
-    ctx.recordLlm("sql_generator", result);
-    ctx.setSql(result.getText().strip());
-    ctx.getConfidence().put("sql", Math.max(ctx.getConfidence().getOrDefault("sql", 0.0), 0.6));
+    try {
+      Map<String, Object> parsed = llm.completeJson(system, user);
+      String sql = SqlUtils.extractSqlFromLlm(parsed, null);
+      if (!sql.isBlank()) {
+        ctx.setSql(SqlUtils.sanitizeSql(sql, dialectName));
+        Object explanation = parsed.get("explanation");
+        if (explanation != null && (plan.getRationale() == null || plan.getRationale().isBlank())) {
+          plan.setRationale(String.valueOf(explanation));
+        }
+        ctx.getConfidence().put("sql", Math.max(ctx.getConfidence().getOrDefault("sql", 0.0), 0.6));
+        return;
+      }
+      ctx.getWarnings().add("LLM returned empty SQL; using deterministic builder.");
+    } catch (LLMUnavailable e) {
+      throw e;
+    } catch (Exception e) {
+      ctx.getWarnings().add("LLM SQL generation failed; using deterministic builder: " + e.getMessage());
+    }
+    ctx.setSql(SqlUtils.buildDeterministic(plan));
+    ctx.getConfidence().put("sql", Math.max(ctx.getConfidence().getOrDefault("sql", 0.0), 0.5));
   }
 
   public String optimize(String sql, String dialect, PipelineContext ctx) {

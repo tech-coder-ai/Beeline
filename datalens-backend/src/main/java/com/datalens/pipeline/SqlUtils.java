@@ -1,5 +1,13 @@
 package com.datalens.pipeline;
 
+import com.datalens.core.exception.ValidationFailed;
+import com.datalens.pipeline.ExecutionPlanModel.PlanAggregation;
+import com.datalens.pipeline.ExecutionPlanModel.PlanFilter;
+import com.datalens.pipeline.ExecutionPlanModel.PlanJoin;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
@@ -11,6 +19,8 @@ public final class SqlUtils {
   private static final Pattern TRIPLE = Pattern.compile("`([^`]+)`\\.`([^`]+)`\\.`([^`]+)`");
   private static final Pattern FROM_JOIN =
       Pattern.compile("(?i)(\\b(?:FROM|JOIN)\\s+)`([^`]+)`\\.`([^`]+)`(\\s|$)");
+  private static final Pattern SQL_FENCE =
+      Pattern.compile("```(?:sql)?\\s*(.+?)\\s*```", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
 
   private SqlUtils() {}
 
@@ -113,5 +123,119 @@ public final class SqlUtils {
     } catch (Exception ignored) {
     }
     return sql;
+  }
+
+  /** Normalize table refs from JSqlParser/sqlglot for catalog lookup (db.table). */
+  public static String normalizeTableRef(String ref) {
+    if (ref == null) return "";
+    String t = ref.replace("`", "").replace("\"", "").trim().toLowerCase(Locale.ROOT);
+    String[] parts = t.split("\\.");
+    if (parts.length >= 3) {
+      return parts[parts.length - 2] + "." + parts[parts.length - 1];
+    }
+    return t;
+  }
+
+  /** Extract SQL from LLM JSON map or markdown/sql prose. */
+  @SuppressWarnings("unchecked")
+  public static String extractSqlFromLlm(Map<String, Object> parsed, String rawText) {
+    if (parsed != null && parsed.get("sql") != null) {
+      String sql = String.valueOf(parsed.get("sql")).strip();
+      if (!sql.isBlank()) return sql;
+    }
+    if (rawText == null) return "";
+    String text = rawText.strip();
+    Matcher fence = SQL_FENCE.matcher(text);
+    if (fence.find()) return fence.group(1).strip();
+    if (text.regionMatches(true, 0, "SELECT", 0, 6)) {
+      int semi = text.indexOf(';');
+      return semi >= 0 ? text.substring(0, semi).strip() : text;
+    }
+    return "";
+  }
+
+  public static String buildDeterministic(ExecutionPlanModel plan) {
+    if (plan == null || plan.getTables().isEmpty()) {
+      throw new ValidationFailed(
+          "I couldn't map your question to any known tables. Try mentioning the dataset explicitly.");
+    }
+    List<String> selectParts = new ArrayList<>();
+    for (String col : plan.getColumns()) {
+      selectParts.add(colRef(col) + " AS `" + col.split("\\.")[col.split("\\.").length - 1] + "`");
+    }
+    for (PlanAggregation agg : plan.getAggregations()) {
+      String fn = agg.getFunction() != null ? agg.getFunction().toUpperCase(Locale.ROOT) : "SUM";
+      String target = "*".equals(agg.getColumn()) ? "*" : colRef(agg.getColumn());
+      String alias =
+          agg.getAlias() != null && !agg.getAlias().isBlank()
+              ? agg.getAlias()
+              : fn + "_" + (agg.getColumn() != null ? agg.getColumn().split("\\.")[agg.getColumn().split("\\.").length - 1] : "all");
+      selectParts.add(fn + "(" + target + ") AS `" + alias + "`");
+    }
+    if (selectParts.isEmpty()) selectParts.add("*");
+
+    String base = plan.getTables().get(0);
+    StringBuilder sql = new StringBuilder("SELECT ").append(String.join(", ", selectParts));
+    sql.append("\nFROM ").append(qident(base));
+
+    java.util.Set<String> joined = new java.util.HashSet<>();
+    joined.add(normalizeTableRef(base));
+    for (PlanJoin join : plan.getJoins()) {
+      String target =
+          joined.contains(normalizeTableRef(join.getRightTable()))
+              ? join.getLeftTable()
+              : join.getRightTable();
+      if (joined.contains(normalizeTableRef(target))) continue;
+      joined.add(normalizeTableRef(target));
+      String jt =
+          switch (join.getJoinType() != null ? join.getJoinType().toLowerCase(Locale.ROOT) : "inner") {
+            case "left" -> "LEFT JOIN";
+            case "right" -> "RIGHT JOIN";
+            case "full" -> "FULL OUTER JOIN";
+            default -> "JOIN";
+          };
+      sql.append("\n")
+          .append(jt)
+          .append(" ")
+          .append(qident(target))
+          .append(" ON ")
+          .append(qident(join.getLeftTable()))
+          .append(".`")
+          .append(join.getLeftColumn())
+          .append("` = ")
+          .append(qident(join.getRightTable()))
+          .append(".`")
+          .append(join.getRightColumn())
+          .append("`");
+    }
+
+    List<String> conditions = new ArrayList<>();
+    for (PlanFilter f : plan.getFilters()) {
+      conditions.add(colRef(f.getColumn()) + " " + f.getOperator() + " " + literal(f.getValue()));
+    }
+    if (!conditions.isEmpty()) {
+      sql.append("\nWHERE ").append(String.join("\n  AND ", conditions));
+    }
+    if (!plan.getGroupBy().isEmpty()) {
+      sql.append("\nGROUP BY ").append(String.join(", ", plan.getGroupBy().stream().map(SqlUtils::colRef).toList()));
+    }
+    if (plan.getLimit() != null) sql.append("\nLIMIT ").append(plan.getLimit());
+    return sql.toString();
+  }
+
+  private static String qident(String qualified) {
+    return String.join(".", java.util.Arrays.stream(qualified.split("\\.")).map(p -> "`" + p + "`").toList());
+  }
+
+  private static String colRef(String qualified) {
+    if (qualified == null) return "`*`";
+    return qualified.contains(".") ? qident(qualified) : "`" + qualified + "`";
+  }
+
+  private static String literal(Object value) {
+    if (value == null) return "NULL";
+    if (value instanceof Number) return String.valueOf(value);
+    if (value instanceof Boolean b) return b ? "TRUE" : "FALSE";
+    return "'" + String.valueOf(value).replace("'", "''") + "'";
   }
 }

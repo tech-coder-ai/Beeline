@@ -76,8 +76,9 @@ public class SqlValidator {
       List<String> tables = finder.getTableList(statement);
       Set<String> unknown = new HashSet<>();
       for (String t : tables) {
-        String key = t.toLowerCase(Locale.ROOT);
-        if (key.contains(".") && !knownTables.contains(key)) unknown.add(t);
+        String key = SqlUtils.normalizeTableRef(t);
+        if (!key.contains(".")) continue;
+        if (!knownTables.contains(key)) unknown.add(t);
       }
       if (!unknown.isEmpty()) {
         throw new GuardRailViolation(
