@@ -275,12 +275,17 @@ public class Orchestrator {
   }
 
   private DataLensResponseDto metadataAnswer(PipelineContext ctx) {
+    List<ResolvedTableModel> shown = stages.metadataTablesForResponse(ctx);
     DataLensResponseDto r = new DataLensResponseDto();
     r.setKind("answer");
-    r.setSummary("Here is what I found in the catalog.");
+    r.setSummary(stages.buildMetadataSummary(ctx));
     r.setVisualization("text");
     r.setConfidence(confidenceBreakdown(ctx));
-    r.setTablesUsed(ctx.getResolvedTables().stream().map(ResolvedTableModel::qualifiedName).toList());
+    r.setTablesUsed(shown.stream().map(ResolvedTableModel::qualifiedName).toList());
+    if (!shown.isEmpty()) {
+      r.getFollowUpQuestions()
+          .add("Show me sample data from " + shown.get(0).qualifiedName());
+    }
     r.setWarnings(ctx.getWarnings());
     return r;
   }

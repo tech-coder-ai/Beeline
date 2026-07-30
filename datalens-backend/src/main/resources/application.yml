@@ -42,6 +42,8 @@ management:
         include: health,info
 
 logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} | %-7level | %logger{36} | %msg%n"
   level:
     com.datalens: INFO
     org.hibernate.SQL: WARN

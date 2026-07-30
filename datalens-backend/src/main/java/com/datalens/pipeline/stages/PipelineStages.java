@@ -10,11 +10,13 @@ import com.datalens.core.exception.ValidationFailed;
 import com.datalens.llm.LlmPrompts;
 import com.datalens.llm.LlmProviderRegistry;
 import com.datalens.model.entity.BusinessMetric;
+import com.datalens.model.entity.CatalogColumn;
 import com.datalens.model.entity.CatalogDatabase;
 import com.datalens.model.entity.CatalogTable;
 import com.datalens.model.entity.GlossaryTerm;
 import com.datalens.model.entity.QueryLibraryEntry;
 import com.datalens.model.repository.BusinessMetricRepository;
+import com.datalens.model.repository.CatalogColumnRepository;
 import com.datalens.model.repository.CatalogDatabaseRepository;
 import com.datalens.model.repository.CatalogTableRepository;
 import com.datalens.model.repository.GlossaryTermRepository;
@@ -50,6 +52,9 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class PipelineStages {
+  private static final int MAX_TABLES = 6;
+  private static final int MAX_COLUMNS_PER_TABLE = 40;
+
   private final DataLensSettings settings;
   private final LlmProviderRegistry llm;
   private final ObjectMapper mapper;
@@ -57,6 +62,7 @@ public class PipelineStages {
   private final ResultCache cache;
   private final SqlValidator validator;
   private final CatalogTableRepository tables;
+  private final CatalogColumnRepository columns;
   private final CatalogDatabaseRepository databases;
   private final GlossaryTermRepository glossary;
   private final BusinessMetricRepository metrics;
@@ -71,6 +77,7 @@ public class PipelineStages {
       ResultCache cache,
       SqlValidator validator,
       CatalogTableRepository tables,
+      CatalogColumnRepository columns,
       CatalogDatabaseRepository databases,
       GlossaryTermRepository glossary,
       BusinessMetricRepository metrics,
@@ -82,6 +89,7 @@ public class PipelineStages {
     this.cache = cache;
     this.validator = validator;
     this.tables = tables;
+    this.columns = columns;
     this.databases = databases;
     this.glossary = glossary;
     this.metrics = metrics;
@@ -126,6 +134,7 @@ public class PipelineStages {
     resolveGlossary(ctx, search, qTokens);
     resolveMetrics(ctx, search, qTokens);
     resolveTables(ctx, search, qTokens);
+    applyClarificationSelection(ctx);
     searchLibrary(ctx, ctx.effectivePrompt());
     double meta =
         ctx.getResolvedTables().stream().mapToDouble(ResolvedTableModel::getScore).max().orElse(0.0);
@@ -133,16 +142,49 @@ public class PipelineStages {
   }
 
   public void plan(PipelineContext ctx) throws Exception {
-    String schema = buildSchemaContext(ctx);
-    Map<String, Object> parsed =
-        llm.completeJson(LlmPrompts.PLANNER_SYSTEM, schema + "\n\nQuestion:\n" + ctx.effectivePrompt());
-    ctx.setPlan(mapper.convertValue(parsed, ExecutionPlanModel.class));
-    if (ctx.getPlan() != null) ctx.getConfidence().put("sql", ctx.getPlan().getConfidence());
+    if (ctx.getResolvedTables().isEmpty()) {
+      ExecutionPlanModel empty = new ExecutionPlanModel();
+      empty.setRationale("No matching tables found in the catalog.");
+      empty.setConfidence(0.0);
+      ctx.setPlan(empty);
+      return;
+    }
+
+    Map<String, Object> parsed;
+    try {
+      parsed = llm.completeJson(LlmPrompts.PLANNER_SYSTEM, buildPlannerUserBlock(ctx));
+    } catch (LLMUnavailable e) {
+      throw e;
+    } catch (Exception e) {
+      ctx.getWarnings().add("Planner unavailable: " + e.getMessage());
+      parsed = Map.of();
+    }
+
+    ExecutionPlanModel plan =
+        parsed.isEmpty() ? new ExecutionPlanModel() : mapper.convertValue(parsed, ExecutionPlanModel.class);
+    if (plan == null) plan = new ExecutionPlanModel();
+    if (plan.getRationale() == null || plan.getRationale().isBlank()) {
+      plan.setRationale(parsed.isEmpty() ? "Planner produced no output." : "");
+    }
+
+    Set<String> removed = validatePlanReferences(plan, ctx);
+    if (!removed.isEmpty()) {
+      ctx.getWarnings()
+          .add(
+              "Removed unknown identifiers proposed by the model: "
+                  + String.join(", ", removed.stream().sorted().toList()));
+      plan.setConfidence(Math.max(plan.getConfidence() - 0.2 * removed.size(), 0.1));
+    }
+    seedPlanTablesFromResolved(plan, ctx);
+    ctx.setPlan(plan);
+    ctx.getConfidence().put("sql", plan.getConfidence());
   }
 
   public void generateSql(PipelineContext ctx, AnalyticsConnector connector) throws Exception {
     ExecutionPlanModel plan = ctx.getPlan();
-    if (plan == null || plan.getTables().isEmpty()) {
+    if (plan == null) plan = new ExecutionPlanModel();
+    seedPlanTablesFromResolved(plan, ctx);
+    if (plan.getTables().isEmpty()) {
       throw new ValidationFailed(
           "I couldn't map your question to any known tables. Try mentioning the dataset explicitly.");
     }
@@ -305,6 +347,18 @@ public class PipelineStages {
         opt.setDescription(t.getDescription());
         req.getOptions().add(opt);
       }
+    } else {
+      Map<String, String> dbNames = new HashMap<>();
+      for (CatalogDatabase db : databases.findAll()) dbNames.put(db.getId(), db.getName());
+      for (CatalogTable table :
+          tables.findByIsActiveTrueOrderByUsageCountDescNameAsc().stream().limit(5).toList()) {
+        String dbName = dbNames.getOrDefault(table.getDatabaseId(), "");
+        ClarificationOptionDto opt = new ClarificationOptionDto();
+        opt.setLabel(dbName + "." + table.getName());
+        opt.setValue(dbName + "." + table.getName());
+        opt.setDescription(table.getDescription());
+        req.getOptions().add(opt);
+      }
     }
     return req;
   }
@@ -331,6 +385,65 @@ public class PipelineStages {
 
   public boolean catalogHasTables() {
     return tables.findAll().stream().anyMatch(t -> Boolean.TRUE.equals(t.getIsActive()));
+  }
+
+  public String buildMetadataSummary(PipelineContext ctx) {
+    List<ResolvedTableModel> toShow =
+        isListAllTablesQuestion(ctx.effectivePrompt()) ? loadAllCatalogTables() : ctx.getResolvedTables();
+    if (toShow.isEmpty()) {
+      return "I couldn't find matching metadata in the catalog.";
+    }
+    List<String> lines = new ArrayList<>();
+    int limit = isListAllTablesQuestion(ctx.effectivePrompt()) ? toShow.size() : Math.min(toShow.size(), 5);
+    for (ResolvedTableModel table : toShow.stream().limit(limit).toList()) {
+      String cols =
+          table.getColumns().stream()
+              .limit(12)
+              .map(c -> String.valueOf(c.get("name")))
+              .reduce((a, b) -> a + ", " + b)
+              .orElse("");
+      StringBuilder line = new StringBuilder("**").append(table.qualifiedName()).append("**");
+      if (table.getDescription() != null && !table.getDescription().isBlank()) {
+        line.append(" — ").append(table.getDescription());
+      }
+      if (table.getRowCount() != null) {
+        line.append(" (~").append(String.format("%,d", table.getRowCount())).append(" rows)");
+      }
+      if (!cols.isBlank()) line.append("\nColumns: ").append(cols);
+      lines.add(line.toString());
+    }
+    return "Here is what I found in the catalog:\n\n" + String.join("\n\n", lines);
+  }
+
+  public List<ResolvedTableModel> metadataTablesForResponse(PipelineContext ctx) {
+    return isListAllTablesQuestion(ctx.effectivePrompt()) ? loadAllCatalogTables() : ctx.getResolvedTables();
+  }
+
+  private List<ResolvedTableModel> loadAllCatalogTables() {
+    Map<String, String> dbNames = new HashMap<>();
+    for (CatalogDatabase db : databases.findAll()) dbNames.put(db.getId(), db.getName());
+    List<ResolvedTableModel> out = new ArrayList<>();
+    for (CatalogTable table : tables.findByIsActiveTrueOrderByUsageCountDescNameAsc()) {
+      out.add(toResolvedTable(table, dbNames.getOrDefault(table.getDatabaseId(), ""), 1.0));
+    }
+    out.sort(
+        Comparator.comparing(ResolvedTableModel::getDatabase)
+            .thenComparing(ResolvedTableModel::getName, String.CASE_INSENSITIVE_ORDER));
+    return out;
+  }
+
+  private static boolean isListAllTablesQuestion(String prompt) {
+    if (prompt == null || prompt.isBlank()) return false;
+    String p = prompt.toLowerCase(Locale.ROOT);
+    boolean mentionsTables = p.contains("table") || p.contains("dataset") || p.contains("catalog");
+    boolean listIntent =
+        p.contains("all")
+            || p.contains("list")
+            || p.contains("show")
+            || p.contains("what")
+            || p.contains("available")
+            || p.contains("which");
+    return mentionsTables && listIntent;
   }
 
   private void resolveGlossary(PipelineContext ctx, String question, Set<String> qTokens) {
@@ -367,32 +480,234 @@ public class PipelineStages {
   }
 
   private void resolveTables(PipelineContext ctx, String search, Set<String> qTokens) {
-    List<ResolvedTableModel> resolved = new ArrayList<>();
+    List<Map.Entry<Double, CatalogTable>> scored = new ArrayList<>();
+    Map<String, String> dbNames = new HashMap<>();
+    for (CatalogDatabase db : databases.findAll()) dbNames.put(db.getId(), db.getName());
+
     for (CatalogTable table : tables.findByIsActiveTrueOrderByUsageCountDescNameAsc()) {
-      String dbName =
-          databases.findById(table.getDatabaseId()).map(CatalogDatabase::getName).orElse("");
+      String dbName = dbNames.getOrDefault(table.getDatabaseId(), "");
+      List<CatalogColumn> tableColumns = columns.findByTableIdOrderByPositionAsc(table.getId());
+      String columnText =
+          tableColumns.stream()
+              .map(c -> c.getName() + " " + (c.getDescription() != null ? c.getDescription() : ""))
+              .reduce((a, b) -> a + " " + b)
+              .orElse("");
       String candidate =
           table.getName()
               + " "
               + (table.getDescription() != null ? table.getDescription() : "")
               + " "
+              + (table.getTechnicalComment() != null ? table.getTechnicalComment() : "")
+              + " "
+              + tagsText(table.getTags())
+              + " "
+              + columnText
+              + " "
               + dbName;
       double s = score(search, qTokens, candidate);
-      if (s < 0.2) continue;
-      ResolvedTableModel rt = new ResolvedTableModel();
-      rt.setId(table.getId());
-      rt.setDatabase(dbName);
-      rt.setName(table.getName());
-      rt.setDescription(table.getDescription());
-      rt.setRowCount(table.getRowCount());
-      if (table.getPartitionColumns() instanceof List<?> parts) {
-        rt.setPartitionColumns(parts.stream().map(String::valueOf).toList());
-      }
-      rt.setScore(s);
-      resolved.add(rt);
-      if (resolved.size() >= 6) break;
+      s += Math.min(table.getUsageCount() != null ? table.getUsageCount() : 0, 50) * 0.002;
+      if (s > 0.15) scored.add(Map.entry(Math.min(s, 1.0), table));
+    }
+
+    scored.sort(Comparator.comparingDouble((Map.Entry<Double, CatalogTable> e) -> e.getKey()).reversed());
+    List<ResolvedTableModel> resolved = new ArrayList<>();
+    for (var entry : scored.stream().limit(MAX_TABLES).toList()) {
+      CatalogTable table = entry.getValue();
+      resolved.add(toResolvedTable(table, dbNames.getOrDefault(table.getDatabaseId(), ""), entry.getKey()));
     }
     ctx.setResolvedTables(resolved);
+  }
+
+  private void applyClarificationSelection(PipelineContext ctx) {
+    String answer = ctx.getClarificationAnswer();
+    if (answer == null || answer.isBlank()) return;
+    String key = SqlUtils.normalizeTableRef(answer.strip());
+    if (!key.contains(".")) return;
+    String[] parts = key.split("\\.", 2);
+    for (CatalogDatabase db : databases.findAll()) {
+      if (!db.getName().equalsIgnoreCase(parts[0])) continue;
+      CatalogTable table =
+          tables.findByDatabaseIdAndName(db.getId(), parts[1])
+              .orElseGet(
+                  () ->
+                      tables.findByDatabaseIdAndIsActiveTrue(db.getId()).stream()
+                          .filter(t -> t.getName().equalsIgnoreCase(parts[1]))
+                          .findFirst()
+                          .orElse(null));
+      if (table != null && !Boolean.FALSE.equals(table.getIsActive())) {
+        ResolvedTableModel selected = toResolvedTable(table, db.getName(), 1.0);
+        List<ResolvedTableModel> next = new ArrayList<>();
+        next.add(selected);
+        for (ResolvedTableModel existing : ctx.getResolvedTables()) {
+          if (!existing.qualifiedName().equalsIgnoreCase(key)) next.add(existing);
+        }
+        ctx.setResolvedTables(next.stream().limit(MAX_TABLES).toList());
+      }
+      return;
+    }
+  }
+
+  private ResolvedTableModel toResolvedTable(CatalogTable table, String dbName, double score) {
+    ResolvedTableModel rt = new ResolvedTableModel();
+    rt.setId(table.getId());
+    rt.setDatabase(dbName);
+    rt.setName(table.getName());
+    rt.setDescription(table.getDescription() != null ? table.getDescription() : table.getTechnicalComment());
+    rt.setRowCount(table.getRowCount());
+    if (table.getPartitionColumns() instanceof List<?> parts) {
+      rt.setPartitionColumns(parts.stream().map(String::valueOf).toList());
+    }
+    rt.setScore(score);
+    List<Map<String, Object>> colMaps = new ArrayList<>();
+    for (CatalogColumn col :
+        columns.findByTableIdOrderByPositionAsc(table.getId()).stream().limit(MAX_COLUMNS_PER_TABLE).toList()) {
+      Map<String, Object> colMap = new HashMap<>();
+      colMap.put("name", col.getName());
+      colMap.put("data_type", col.getDataType());
+      colMap.put(
+          "description",
+          col.getDescription() != null ? col.getDescription() : col.getTechnicalComment());
+      colMap.put("is_partition", Boolean.TRUE.equals(col.getIsPartition()));
+      if (col.getSampleValues() instanceof List<?> samples) {
+        colMap.put("sample_values", samples.stream().limit(5).map(String::valueOf).toList());
+      }
+      colMaps.add(colMap);
+    }
+    rt.setColumns(colMaps);
+    return rt;
+  }
+
+  private void seedPlanTablesFromResolved(ExecutionPlanModel plan, PipelineContext ctx) {
+    if (!plan.getTables().isEmpty() || ctx.getResolvedTables().isEmpty()) return;
+    plan.setTables(
+        ctx.getResolvedTables().stream().map(ResolvedTableModel::qualifiedName).limit(3).toList());
+    if (plan.getRationale() == null || plan.getRationale().isBlank()) {
+      plan.setRationale("Using top catalog table matches.");
+    }
+    plan.setConfidence(Math.max(plan.getConfidence(), 0.35));
+  }
+
+  private String buildPlannerUserBlock(PipelineContext ctx) {
+    StringBuilder sb = new StringBuilder();
+    if (ctx.getPreviousPlan() != null && ctx.getIntent() != null && ctx.getIntent().isFollowUp()) {
+      sb.append("This is a FOLLOW-UP. Previous execution plan (modify it per the new message, keep everything else):\n");
+      try {
+        sb.append(mapper.writeValueAsString(ctx.getPreviousPlan())).append("\n\n");
+      } catch (Exception ignored) {
+      }
+    }
+    sb.append("Question: ").append(ctx.effectivePrompt()).append("\n\n");
+    if (ctx.getIntent() != null) {
+      try {
+        sb.append("Intent analysis: ").append(mapper.writeValueAsString(ctx.getIntent())).append("\n\n");
+      } catch (Exception ignored) {
+      }
+    }
+    if (!ctx.getGlossaryContext().isEmpty()) {
+      sb.append("Business glossary context: ");
+      try {
+        sb.append(mapper.writeValueAsString(ctx.getGlossaryContext())).append("\n\n");
+      } catch (Exception ignored) {
+      }
+    }
+    if (!ctx.getMetricContext().isEmpty()) {
+      sb.append("Defined business metrics: ");
+      try {
+        sb.append(mapper.writeValueAsString(ctx.getMetricContext())).append("\n\n");
+      } catch (Exception ignored) {
+      }
+    }
+    sb.append("Available schema:\n").append(buildSchemaContext(ctx));
+    return sb.toString();
+  }
+
+  private Set<String> validatePlanReferences(ExecutionPlanModel plan, PipelineContext ctx) {
+    Set<String> knownTables =
+        ctx.getResolvedTables().stream()
+            .map(t -> t.qualifiedName().toLowerCase(Locale.ROOT))
+            .collect(java.util.stream.Collectors.toSet());
+    Set<String> knownColumns = new HashSet<>();
+    for (ResolvedTableModel table : ctx.getResolvedTables()) {
+      for (Map<String, Object> col : table.getColumns()) {
+        knownColumns.add((table.qualifiedName() + "." + col.get("name")).toLowerCase(Locale.ROOT));
+      }
+    }
+
+    Set<String> removed = new HashSet<>();
+    plan.setTables(
+        plan.getTables().stream()
+            .filter(
+                t -> {
+                  boolean ok = knownTables.contains(t.toLowerCase(Locale.ROOT));
+                  if (!ok) removed.add(t);
+                  return ok;
+                })
+            .toList());
+    plan.setColumns(
+        plan.getColumns().stream()
+            .filter(
+                c -> {
+                  if (columnOk(c, knownColumns)) return true;
+                  removed.add(c);
+                  return false;
+                })
+            .toList());
+    plan.setGroupBy(
+        plan.getGroupBy().stream()
+            .filter(
+                c -> {
+                  if (columnOk(c, knownColumns)) return true;
+                  removed.add(c);
+                  return false;
+                })
+            .toList());
+    plan.setFilters(
+        plan.getFilters().stream()
+            .filter(
+                f -> {
+                  if (columnOk(f.getColumn(), knownColumns)) return true;
+                  removed.add(f.getColumn());
+                  return false;
+                })
+            .toList());
+    plan.setAggregations(
+        plan.getAggregations().stream()
+            .filter(
+                a -> {
+                  if ("*".equals(a.getColumn()) || columnOk(a.getColumn(), knownColumns)) return true;
+                  removed.add(a.getColumn());
+                  return false;
+                })
+            .toList());
+    plan.setJoins(
+        plan.getJoins().stream()
+            .filter(
+                j -> {
+                  boolean ok =
+                      knownTables.contains(j.getLeftTable().toLowerCase(Locale.ROOT))
+                          && knownTables.contains(j.getRightTable().toLowerCase(Locale.ROOT))
+                          && columnOk(j.getLeftTable() + "." + j.getLeftColumn(), knownColumns)
+                          && columnOk(j.getRightTable() + "." + j.getRightColumn(), knownColumns);
+                  if (!ok) removed.add(j.getLeftTable() + "<->" + j.getRightTable());
+                  return ok;
+                })
+            .toList());
+    removed.remove(null);
+    return removed;
+  }
+
+  private static boolean columnOk(String qualified, Set<String> knownColumns) {
+    if (qualified == null) return false;
+    String q = qualified.toLowerCase(Locale.ROOT);
+    if (knownColumns.contains(q)) return true;
+    return !q.contains(".");
+  }
+
+  private static String tagsText(Object tags) {
+    if (tags instanceof List<?> list) {
+      return list.stream().map(String::valueOf).reduce((a, b) -> a + " " + b).orElse("");
+    }
+    return tags != null ? String.valueOf(tags) : "";
   }
 
   private void searchLibrary(PipelineContext ctx, String question) {
@@ -422,8 +737,19 @@ public class PipelineStages {
   private String buildSchemaContext(PipelineContext ctx) {
     StringBuilder sb = new StringBuilder();
     for (ResolvedTableModel t : ctx.getResolvedTables()) {
-      sb.append("TABLE ").append(t.qualifiedName()).append("\n");
-      if (t.getDescription() != null) sb.append("  desc: ").append(t.getDescription()).append("\n");
+      sb.append("TABLE ").append(t.qualifiedName());
+      if (t.getRowCount() != null) sb.append(", ~").append(t.getRowCount()).append(" rows");
+      if (t.getDescription() != null) sb.append(" - ").append(t.getDescription());
+      sb.append("\n");
+      for (Map<String, Object> col : t.getColumns()) {
+        sb.append("  - ").append(col.get("name")).append(" (").append(col.get("data_type")).append(")");
+        if (Boolean.TRUE.equals(col.get("is_partition"))) sb.append(" [PARTITION]");
+        if (col.get("description") != null && !String.valueOf(col.get("description")).isBlank()) {
+          sb.append(": ").append(col.get("description"));
+        }
+        sb.append("\n");
+      }
+      sb.append("\n");
     }
     return sb.toString();
   }
