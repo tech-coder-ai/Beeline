@@ -202,12 +202,16 @@ public class AdminController {
   public Map<String, Object> usage() {
     long total = executions.count();
     Map<String, Long> byStatus = new LinkedHashMap<>();
-    for (Object[] row : executions.countByStatus()) byStatus.put(String.valueOf(row[0]), (Long) row[1]);
+    for (Object[] row : executions.countByStatus()) {
+      long count = row[1] instanceof Number n ? n.longValue() : 0L;
+      byStatus.put(String.valueOf(row[0]), count);
+    }
     Double avg = executions.avgExecutionMs();
-    return Map.of(
-        "total_queries", total,
-        "by_status", byStatus,
-        "avg_execution_ms", avg != null ? Math.round(avg * 10) / 10.0 : null);
+    Map<String, Object> out = new LinkedHashMap<>();
+    out.put("total_queries", total);
+    out.put("by_status", byStatus);
+    out.put("avg_execution_ms", avg != null ? Math.round(avg * 10) / 10.0 : null);
+    return out;
   }
 
   @DeleteMapping("/logs/executions")
