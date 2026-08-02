@@ -14,10 +14,10 @@ public class SyncRun extends BaseEntity {
   private String connectorId;
   private String mode;
   private String status;
-  @Column(name = "tables_synced")
-  private Integer tablesSynced;
-  @Column(name = "columns_synced")
-  private Integer columnsSynced;
+  @Column(name = "tables_synced", nullable = false)
+  private Integer tablesSynced = 0;
+  @Column(name = "columns_synced", nullable = false)
+  private Integer columnsSynced = 0;
   private String error;
   @Column(name = "finished_at")
   private Instant finishedAt;

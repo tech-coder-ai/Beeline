@@ -54,7 +54,7 @@ final class HiveDescribeParser {
                   .name(col0)
                   .dataType(col1)
                   .comment(col2.isBlank() ? null : col2)
-                  .isPartition(true)
+                  .partition(true)
                   .position(position++)
                   .build());
         }

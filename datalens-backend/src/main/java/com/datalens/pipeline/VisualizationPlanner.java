@@ -116,25 +116,44 @@ public class VisualizationPlanner {
       return new VisualizationResult("kpi", cards, charts, null);
     }
 
-    if (!temporal.isEmpty() && !numeric.isEmpty() && rows.size() > 1) {
+    // Decide whether this result should be charted at all. Detail listings (lookups, "show me the
+    // rows" questions, un-aggregated selects, wide results) belong in a table, not a graph.
+    String prompt = ctx.effectivePrompt();
+    boolean tableHint = prompt != null && PROMPT_TABLE_HINT.matcher(prompt).find();
+    boolean chartHint = prompt != null && PROMPT_CHART_HINT.matcher(prompt).find();
+    boolean tableIntent = intentTypes.stream().anyMatch(TABLE_PRIMARY_INTENTS::contains);
+    boolean chartIntent = intentTypes.stream().anyMatch(CHART_PRIMARY_INTENTS::contains);
+    boolean aggregatedResult =
+        ctx.getPlan() != null
+            && (!ctx.getPlan().getAggregations().isEmpty() || !ctx.getPlan().getGroupBy().isEmpty());
+    int maxChartColumns = ((Number) settings.get("visualization.max_chart_columns", 6)).intValue();
+    boolean chartableShape = columns.size() <= maxChartColumns;
+    boolean wantsChart =
+        chartHint || (chartableShape && !tableHint && !tableIntent && (chartIntent || aggregatedResult));
+
+    if (wantsChart && !temporal.isEmpty() && !numeric.isEmpty() && rows.size() > 1) {
       charts.add(timeChart(columns, rows, temporal.get(0), numeric, intentTypes));
-    } else if (!categorical.isEmpty() && !numeric.isEmpty() && rows.size() > 1) {
+    } else if (wantsChart && !categorical.isEmpty() && !numeric.isEmpty() && rows.size() > 1) {
       int cat = categorical.stream().min(Comparator.comparingInt(i -> profiles.get(i).distinct)).orElse(categorical.get(0));
       int maxPie = ((Number) settings.get("visualization.max_categories_pie", 8)).intValue();
       int maxBar = ((Number) settings.get("visualization.max_categories_bar", 30)).intValue();
+      // One row per category means grouped/aggregated data; repeated categories mean detail rows.
+      boolean oneRowPerCategory = profiles.get(cat).distinct == rows.size();
       boolean wantsShare =
           (intentTypes.contains("distribution") || intentTypes.contains("grouping")) && numeric.size() == 1;
       if (categorical.size() >= 2 && !numeric.isEmpty() && profiles.get(cat).distinct <= 20) {
         ChartSpecDto heat = heatmap(columns, rows, categorical.get(0), categorical.get(1), numeric.get(0));
         if (heat != null) charts.add(heat);
       }
-      if (charts.isEmpty() && wantsShare && profiles.get(cat).distinct <= maxPie) {
+      if (charts.isEmpty() && wantsShare && oneRowPerCategory && profiles.get(cat).distinct <= maxPie) {
         charts.add(pieChart(columns, rows, cat, numeric.get(0)));
       }
-      if (charts.isEmpty() && profiles.get(cat).distinct <= maxBar) {
+      if (charts.isEmpty() && oneRowPerCategory && profiles.get(cat).distinct <= maxBar) {
         charts.add(barChart(columns, rows, cat, numeric, intentTypes));
       }
-    } else if (numeric.size() >= 2 && rows.size() > 5
+    } else if (wantsChart
+        && numeric.size() >= 2
+        && rows.size() > 5
         && (intentTypes.contains("correlation") || categorical.isEmpty())) {
       int maxPts = ((Number) settings.get("visualization.max_points_scatter", 5000)).intValue();
       ChartSpecDto scatter = new ChartSpecDto();
@@ -153,7 +172,10 @@ public class VisualizationPlanner {
       charts.add(scatter);
     }
 
-    if (shouldIncludeTable(ctx, charts, columns, rows, intentTypes)) {
+    // Whenever a chart is shown, also attach the underlying rows as a table - even when the
+    // heuristic below wouldn't have included it standalone - so the UI can offer a "view as
+    // table" toggle instead of trapping the user in chart-only view.
+    if (shouldIncludeTable(ctx, charts, columns, rows, intentTypes) || !charts.isEmpty()) {
       table = tableSpec(ctx, profiles);
     }
 
@@ -384,11 +406,15 @@ public class VisualizationPlanner {
     return String.format(Locale.US, "%,.2f", v);
   }
 
+  private static final Pattern IDENTIFIER_NAME =
+      Pattern.compile("(?i)(^id$|_id$|^key$|_key$|^uuid$|_uuid$|^guid$|_guid$)");
+
   private static final class ColumnProfile {
     private final String name;
     private final boolean temporal;
     private final boolean numeric;
     private final boolean categorical;
+    private final boolean identifier;
     private final int distinct;
 
     ColumnProfile(String name, String declaredType, List<Object> values) {
@@ -402,8 +428,13 @@ public class VisualizationPlanner {
               || (DATE_NAME_HINT.matcher(name).find() && !numericLooking(nonNull))
               || nonNull.stream().limit(5).anyMatch(v -> v instanceof Temporal || v instanceof java.util.Date)
               || looksLikeDates(nonNull.stream().limit(10).toList());
-      this.numeric = !temporal && (NUMERIC_TYPES.contains(base) || numericSample);
-      this.categorical = !temporal && !numeric;
+      boolean rawNumeric = !temporal && (NUMERIC_TYPES.contains(base) || numericSample);
+      // Integer identifiers (customer_id, order_id, ...) are numeric by type but are never a
+      // measure to chart - excluding them keeps id values out of bar/line series entirely,
+      // rather than plotting them as a bogus metric alongside real measures like revenue.
+      this.identifier = rawNumeric && IDENTIFIER_NAME.matcher(name).find();
+      this.numeric = rawNumeric && !identifier;
+      this.categorical = !temporal && !rawNumeric;
       this.distinct = (int) nonNull.stream().map(String::valueOf).distinct().count();
     }
 
@@ -417,6 +448,10 @@ public class VisualizationPlanner {
 
     boolean isCategorical() {
       return categorical;
+    }
+
+    boolean isIdentifier() {
+      return identifier;
     }
 
     private static boolean numericLooking(List<Object> nonNull) {

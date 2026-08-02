@@ -38,6 +38,16 @@ public class HiveAnalyticsConnector implements AnalyticsConnector {
   }
 
   @Override
+  public String connectorId() {
+    return connectorId;
+  }
+
+  @Override
+  public Map<String, Object> config() {
+    return config;
+  }
+
+  @Override
   public SqlDialect dialect() {
     return dialect;
   }

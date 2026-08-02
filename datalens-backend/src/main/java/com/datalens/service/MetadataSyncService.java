@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -37,6 +38,10 @@ public class MetadataSyncService {
   private final CatalogColumnRepository columns;
   private final SyncRunRepository syncRuns;
   private final Object lock = new Object();
+  // Self-injected proxy: syncAsync() must call sync() through this, not `this.sync(...)`,
+  // or the @Transactional AOP proxy is bypassed (self-invocation) and every repository
+  // call inside sync() runs with no active transaction.
+  private final MetadataSyncService self;
 
   public MetadataSyncService(
       DataLensSettings settings,
@@ -44,19 +49,21 @@ public class MetadataSyncService {
       CatalogDatabaseRepository databases,
       CatalogTableRepository tables,
       CatalogColumnRepository columns,
-      SyncRunRepository syncRuns) {
+      SyncRunRepository syncRuns,
+      @Lazy MetadataSyncService self) {
     this.settings = settings;
     this.connectors = connectors;
     this.databases = databases;
     this.tables = tables;
     this.columns = columns;
     this.syncRuns = syncRuns;
+    this.self = self;
   }
 
   @Async
   public void syncAsync(String connectorId, String mode) {
     try {
-      sync(connectorId, mode);
+      self.sync(connectorId, mode);
     } catch (Exception e) {
       log.error("metadata sync failed", e);
     }
@@ -69,6 +76,7 @@ public class MetadataSyncService {
       SyncRun run = new SyncRun();
       run.setConnectorId(connector.connectorId());
       run.setMode(mode);
+      run.setStatus("running");
       syncRuns.save(run);
       try {
         Map<String, Integer> stats = syncCatalog(connector, mode);
@@ -145,7 +153,7 @@ public class MetadataSyncService {
   @Scheduled(fixedDelayString = "${datalens.metadata-sync-interval-ms:3600000}", initialDelay = 30000)
   public void scheduledSync() {
     if (!Boolean.TRUE.equals(settings.get("metadata_sync.enabled", true))) return;
-    syncAsync(null, "incremental");
+    self.syncAsync(null, "incremental");
   }
 
   /** Re-harvest row count and size for one catalog table from the source connector. */
@@ -161,7 +169,7 @@ public class MetadataSyncService {
     HarvestedTable harvested =
         connector.metadataProvider().describeTable(database.getName(), table.getName());
 
-    Long previousRowCount = table.getRowCount();
+    Integer previousRowCount = table.getRowCount();
     table.setRowCount(harvested.getRowCount());
     table.setSizeBytes(harvested.getSizeBytes());
     table.setStorageFormat(harvested.getStorageFormat());

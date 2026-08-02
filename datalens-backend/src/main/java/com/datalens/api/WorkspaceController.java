@@ -250,7 +250,10 @@ public class WorkspaceController {
     f.setCorrectedSql(in.correctedSql());
     feedback.save(f);
     if (in.executionId() != null) library.applyFeedback(in.executionId(), "up".equals(in.rating()));
-    audit.audit("default", "feedback.submit", null, null, Map.of("rating", in.rating(), "category", in.category()), "info");
+    Map<String, Object> feedbackMeta = new java.util.LinkedHashMap<>();
+    feedbackMeta.put("rating", in.rating());
+    feedbackMeta.put("category", in.category());
+    audit.audit("default", "feedback.submit", null, null, feedbackMeta, "info");
     return Map.of("id", f.getId());
   }
 

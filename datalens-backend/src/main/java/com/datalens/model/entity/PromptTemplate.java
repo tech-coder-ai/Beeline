@@ -11,9 +11,10 @@ import lombok.Getter; import lombok.Setter;
 @Getter @Setter
 public class PromptTemplate extends BaseEntity {
   private String name;
-  private Integer version;
+  @Column(nullable = false)
+  private Integer version = 1;
   private String template;
-  @Column(name = "is_active")
-  private Boolean isActive;
+  @Column(name = "is_active", nullable = false)
+  private Boolean isActive = true;
   private String notes;
 }

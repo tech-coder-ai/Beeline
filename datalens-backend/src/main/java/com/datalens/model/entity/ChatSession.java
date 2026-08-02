@@ -13,12 +13,12 @@ public class ChatSession extends BaseEntity {
   private String title;
   @Column(name = "user_id")
   private String userId;
-  @Column(name = "is_pinned")
-  private Boolean isPinned;
-  @Column(name = "is_archived")
-  private Boolean isArchived;
-  @Column(name = "is_shared")
-  private Boolean isShared;
+  @Column(name = "is_pinned", nullable = false)
+  private Boolean isPinned = false;
+  @Column(name = "is_archived", nullable = false)
+  private Boolean isArchived = false;
+  @Column(name = "is_shared", nullable = false)
+  private Boolean isShared = false;
   @Column(name = "share_token")
   private String shareToken;
   @Column(name = "context_summary")

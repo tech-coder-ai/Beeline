@@ -14,8 +14,8 @@ public class Dashboard extends BaseEntity {
   private String userId;
   private String name;
   private String description;
-  @Column(name = "is_shared")
-  private Boolean isShared;
+  @Column(name = "is_shared", nullable = false)
+  private Boolean isShared = false;
   @Column(name = "share_token")
   private String shareToken;
   @Column(name = "refresh_interval_seconds")

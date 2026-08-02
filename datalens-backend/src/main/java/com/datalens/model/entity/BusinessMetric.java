@@ -17,8 +17,8 @@ public class BusinessMetric extends BaseEntity {
   private String tableQualifiedName;
   private String unit;
   private String aggregation;
-  @Column(name = "is_kpi")
-  private Boolean isKpi;
+  @Column(name = "is_kpi", nullable = false)
+  private Boolean isKpi = false;
   @Convert(converter = JsonAttributeConverter.class)
   @Column(name = "tags")
   private Object tags;

@@ -81,7 +81,11 @@ public class AdminController {
     definitions.forEach((id, cfg) -> {
       Map<String, Object> row = new LinkedHashMap<>();
       row.put("id", id);
-      if (cfg instanceof Map<?, ?> m) row.putAll(redact(m));
+      if (cfg instanceof Map<?, ?> m) {
+        @SuppressWarnings("unchecked")
+        Map<String, Object> typed = (Map<String, Object>) m;
+        row.putAll(redact(typed));
+      }
       list.add(row);
     });
     return Map.of(
@@ -142,9 +146,11 @@ public class AdminController {
 
   @PostMapping("/sync")
   public Map<String, Object> sync(@RequestBody SyncRequest request) {
-    audit.audit("default", "admin.sync_trigger", null, null, Map.of("mode", request.mode(), "connector_id", request.connectorId()), "info");
-    syncService.syncAsync(request.connectorId(), request.mode() != null ? request.mode() : "incremental");
-    return Map.of("started", true, "mode", request.mode());
+    String mode = request.mode() != null ? request.mode() : "incremental";
+    audit.audit(
+        "default", "admin.sync_trigger", null, null, nullableMap("mode", mode, "connector_id", request.connectorId()), "info");
+    syncService.syncAsync(request.connectorId(), mode);
+    return nullableMap("started", true, "mode", mode);
   }
 
   @GetMapping("/sync/runs")
@@ -173,8 +179,9 @@ public class AdminController {
     }
     node.put(path[path.length - 1], update.value());
     if (update.key().startsWith("connectors.")) connectors.closeAll();
-    audit.audit("default", "admin.config_change", null, null, Map.of("key", update.key(), "value", update.value()), "warning");
-    return Map.of("key", update.key(), "value", update.value());
+    audit.audit(
+        "default", "admin.config_change", null, null, nullableMap("key", update.key(), "value", update.value()), "warning");
+    return nullableMap("key", update.key(), "value", update.value());
   }
 
   @GetMapping("/feature-flags")

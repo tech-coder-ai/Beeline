@@ -91,7 +91,14 @@ export class ApiService {
     note?: string;
     row_count_refresh?: Record<string, unknown>;
   }> {
-    return this.http.post(`${API}/metadata/tables/${tableId}/enrich`, body);
+    return this.http.post<{
+      enriched: number;
+      proposals: number;
+      table_id: string;
+      row_count?: number | null;
+      note?: string;
+      row_count_refresh?: Record<string, unknown>;
+    }>(`${API}/metadata/tables/${tableId}/enrich`, body);
   }
 
   updateColumn(columnId: string, update: Record<string, unknown>): Observable<unknown> {

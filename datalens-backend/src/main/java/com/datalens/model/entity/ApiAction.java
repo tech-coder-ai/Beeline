@@ -21,6 +21,8 @@ public class ApiAction extends BaseEntity {
   private Object headers;
   @Column(name = "body_template")
   private String bodyTemplate;
-  private Boolean confirm;
-  private Boolean enabled;
+  @Column(nullable = false)
+  private Boolean confirm = false;
+  @Column(nullable = false)
+  private Boolean enabled = true;
 }

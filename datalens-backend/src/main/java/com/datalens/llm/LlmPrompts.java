@@ -5,24 +5,62 @@ public final class LlmPrompts {
 
   public static final String INTENT_SYSTEM = """
       You are the intent analysis stage of DataLens. Classify the user's analytical question.
+      Use the recent conversation (when provided) only to resolve pronouns and genuinely elliptical
+      follow-ups - messages that are incomplete without the prior turn, such as "now break that down
+      by region", "same period last year", "what about Europe?", or "and last quarter?". Set
+      is_follow_up=true ONLY for messages like these.
+      A new message that states its own complete subject and metric (e.g. "Show total sales by
+      region", "Top 20 customers with highest growth") is a STANDALONE question even if it mentions
+      the same table or topic as a previous turn - set is_follow_up=false for these, every time.
+      When in doubt, prefer is_follow_up=false: treating a standalone question as a follow-up causes
+      the planner to wrongly reuse an unrelated previous query.
       Return JSON with intent_types, subject, metrics, dimensions, filters, time_range, comparison,
       top_n, order, is_follow_up, needs_data, confidence, ambiguities.""";
 
   public static final String PLANNER_SYSTEM = """
       You are the query planning stage of DataLens. You NEVER write SQL.
-      Produce a structured execution plan using ONLY tables/columns from the schema context.""";
+      Produce a structured execution plan as JSON with keys: tables, columns, joins, filters,
+      aggregations, group_by, order_by, limit, rationale, confidence.
+
+      GROUNDING RULES (violations make the plan unusable):
+      - Use ONLY tables and columns copied verbatim from the "Available schema" block. Never invent,
+        rename, abbreviate, or guess an identifier. If unsure a column exists, leave it out.
+      - Reference columns as database.table.column exactly as they appear in the schema.
+      - Prefer the FEWEST tables that answer the question - one table unless a join is genuinely
+        required, and only join on columns listed in the schema.
+      - Select only the columns needed to answer the question (dimensions being grouped, metrics
+        being aggregated, columns the user asked to see). Never request every column.
+      - Use the conversation context to interpret follow-ups; when modifying a previous plan keep
+        everything not mentioned by the new message unchanged.
+      - If the schema cannot answer the question, return an empty tables list and explain why in
+        rationale with confidence 0.""";
 
   public static final String SQL_GENERATOR_SYSTEM = """
       You are the SQL generation stage for %s. Convert the execution plan into a single SELECT statement. Rules:
       - SELECT only. Never any DDL/DML. One statement. No comments. No CTE writes.
-      - Use ONLY tables/columns present in the plan and schema context; never invent identifiers.
+      - Use ONLY tables/columns present in the plan and schema context, copied verbatim; never invent identifiers.
+        If the plan/schema cannot answer the question, return {"sql": ""} instead of guessing.
+      - NEVER use SELECT * - project exactly the columns that answer the question, nothing more.
       - Qualify tables as database.table with short aliases (e.g. sales AS s); reference columns as alias.column.
       - Never use three-part refs like `db`.`table`.`col`.
+      - Quote identifiers with backticks ONLY (`alias`). Double quotes are reserved for string values;
+        never put an identifier or alias in double quotes.
       - Apply every filter, join, aggregation, grouping, ordering and limit from the plan.
-      - When GROUP BY is present, ORDER BY must use SELECT column aliases (not raw table.column refs).
+      - When GROUP BY is present, every non-aggregated SELECT column must appear in GROUP BY, and
+        ORDER BY must use SELECT column aliases (not raw table.column refs).
       - Backtick-quoted identifiers must always be paired; no stray trailing backticks.
       - %s
       Return JSON: {"sql": "SELECT ...", "explanation": "one-paragraph business explanation"}""";
+
+  public static final String SQL_REPAIR_SYSTEM = """
+      You are the SQL repair stage for %s. A generated query was rejected by validation.
+      Fix ONLY what the error message describes while keeping the query's intent identical. Rules:
+      - SELECT only, one statement, no comments.
+      - Use ONLY identifiers from the schema context, copied verbatim. If a referenced column does not
+        exist, replace it with the closest matching column from the schema or drop it.
+      - Quote identifiers with backticks only; never double quotes. No SELECT *.
+      - %s
+      Return JSON: {"sql": "SELECT ...", "explanation": "what was fixed"}""";
 
   public static final String EXPLAIN_SQL_SYSTEM = """
       Explain SQL in business language. Return JSON with summary, table_reasons, filter_reasons,
@@ -65,7 +103,10 @@ public final class LlmPrompts {
       expand glossary_suggestions from glossary_hints where appropriate, and do not contradict it.""";
 
   public static final String REFINER_SYSTEM = """
-      Refine the user question for analytics. Return JSON with refined_prompt and notes array.""";
+      Refine the user question for analytics. Use the recent conversation (when provided) to resolve
+      pronouns and implicit references ("those customers", "same period") into an explicit standalone
+      question, but never invent constraints the user did not state.
+      Return JSON with refined_prompt and notes array.""";
 
   public static final String INTERPRETER_SYSTEM = """
       Summarize query results for a business user. Return JSON with summary, insights,

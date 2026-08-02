@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
@@ -21,6 +22,9 @@ public final class SqlUtils {
       Pattern.compile("(?i)(\\b(?:FROM|JOIN)\\s+)`([^`]+)`\\.`([^`]+)`(\\s|$)");
   private static final Pattern SQL_FENCE =
       Pattern.compile("```(?:sql)?\\s*(.+?)\\s*```", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+  private static final Pattern ANY_QUOTED_IDENT = Pattern.compile("\"([A-Za-z_][A-Za-z0-9_ $]*)\"");
+  private static final Pattern SELECT_STAR =
+      Pattern.compile("(?is)^\\s*SELECT\\s+(?:(?:ALL|DISTINCT)\\s+)?(?:[A-Za-z_][A-Za-z0-9_]*\\.)?\\*");
   private static final Map<String, String> RELATIVE_HIVE =
       Map.of(
           "relative:last_7_days", "date_sub(current_date, 7)",
@@ -48,40 +52,126 @@ public final class SqlUtils {
 
   public static String sanitizeSql(String sql, String dialect) {
     if (sql == null) return "";
-    String text = sql.strip().replaceAll(";\\s*$", "").strip();
+    String text = sql.strip();
+    Matcher fence = SQL_FENCE.matcher(text);
+    if (fence.find()) text = fence.group(1).strip();
+    text = text.replaceAll(";\\s*$", "").strip();
     if (text.isBlank()) return text;
+    text = normalizeQuoteCharacters(text);
     text = stripTrailingStrayBackticks(text);
     if ("hive".equalsIgnoreCase(dialect)) {
+      text = doubleQuotedIdentifiersToBackticks(text);
       text = normalizeHiveIdentifiers(text);
       text = fixHiveGroupedOrderBy(text);
     }
     if (canParse(text)) return text;
     String repaired = text;
     while (repaired.endsWith("`") && !canParse(repaired)) repaired = repaired.substring(0, repaired.length() - 1).strip();
-    return canParse(repaired) ? repaired : text;
+    if (canParse(repaired)) return repaired;
+    // Last resort for Hive: convert every remaining double-quoted single token to backticks.
+    if ("hive".equalsIgnoreCase(dialect)) {
+      String allBackticks = ANY_QUOTED_IDENT.matcher(text).replaceAll(mr -> "`" + mr.group(1) + "`");
+      if (canParse(allBackticks)) return allBackticks;
+    }
+    return text;
   }
 
+  /** Replace typographic quotes the LLM sometimes emits with plain ASCII quotes. */
+  private static String normalizeQuoteCharacters(String sql) {
+    return sql.replace('\u201c', '"')
+        .replace('\u201d', '"')
+        .replace('\u2018', '\'')
+        .replace('\u2019', '\'')
+        .replace('\u00b4', '\'');
+  }
+
+  /**
+   * Hive quotes identifiers with backticks, not double quotes. Convert the unambiguous identifier
+   * positions - {@code AS "alias"}, {@code FROM/JOIN "db"."table"}, and dotted refs {@code "a"."b"} -
+   * while leaving double-quoted comparison values (string literals) untouched.
+   */
+  public static String doubleQuotedIdentifiersToBackticks(String sql) {
+    if (sql == null || sql.indexOf('"') < 0) return sql;
+    String out = sql;
+    // AS "alias"  ->  AS `alias`
+    out =
+        Pattern.compile("(?i)(\\bAS\\s+)\"([A-Za-z_][A-Za-z0-9_ $]*)\"")
+            .matcher(out)
+            .replaceAll(mr -> mr.group(1) + "`" + mr.group(2) + "`");
+    // FROM "db"."table" / JOIN "db"."table" / FROM "table"
+    out =
+        Pattern.compile("(?i)(\\b(?:FROM|JOIN)\\s+)\"([A-Za-z_][A-Za-z0-9_$]*)\"(\\.\"([A-Za-z_][A-Za-z0-9_$]*)\")?")
+            .matcher(out)
+            .replaceAll(
+                mr ->
+                    mr.group(4) != null
+                        ? mr.group(1) + "`" + mr.group(2) + "`.`" + mr.group(4) + "`"
+                        : mr.group(1) + "`" + mr.group(2) + "`");
+    // dotted references anywhere: "a"."b" or "a".b or a."b"
+    out =
+        Pattern.compile("\"([A-Za-z_][A-Za-z0-9_$]*)\"(?=\\.)")
+            .matcher(out)
+            .replaceAll(mr -> "`" + mr.group(1) + "`");
+    out =
+        Pattern.compile("(?<=\\.)\"([A-Za-z_][A-Za-z0-9_$]*)\"")
+            .matcher(out)
+            .replaceAll(mr -> "`" + mr.group(1) + "`");
+    // GROUP BY / ORDER BY "col"
+    out =
+        Pattern.compile("(?i)(\\b(?:GROUP\\s+BY|ORDER\\s+BY|ON)\\s+)\"([A-Za-z_][A-Za-z0-9_$]*)\"")
+            .matcher(out)
+            .replaceAll(mr -> mr.group(1) + "`" + mr.group(2) + "`");
+    return out;
+  }
+
+  private static final Pattern FROM_JOIN_WITH_ALIAS =
+      Pattern.compile(
+          "(?i)\\b(?:FROM|JOIN)\\s+`([^`]+)`\\.`([^`]+)`\\s+(?:AS\\s+)?`?([A-Za-z_][A-Za-z0-9_]*)`?");
+  private static final Set<String> SQL_KEYWORDS =
+      Set.of(
+          "WHERE", "JOIN", "ON", "GROUP", "ORDER", "LIMIT", "LEFT", "RIGHT", "INNER", "FULL",
+          "CROSS", "UNION", "HAVING", "AND", "OR", "LATERAL", "SORT", "CLUSTER", "DISTRIBUTE",
+          "AS", "SELECT", "SEMI", "OUTER");
+
+  /**
+   * Hive rejects {@code `db`.`table`.`col`} references. When the SQL contains them, ensure each
+   * table has an alias (reusing any alias already written) and rewrite three-part refs to
+   * {@code alias.`col`}. SQL without three-part refs is returned untouched.
+   */
   public static String normalizeHiveIdentifiers(String sql) {
+    if (!TRIPLE.matcher(sql).find()) return sql;
     java.util.Map<String, String> aliasMap = new java.util.LinkedHashMap<>();
     java.util.Set<String> used = new java.util.HashSet<>();
+
+    Matcher existing = FROM_JOIN_WITH_ALIAS.matcher(sql);
+    while (existing.find()) {
+      String alias = existing.group(3);
+      if (alias != null && !SQL_KEYWORDS.contains(alias.toUpperCase(Locale.ROOT))) {
+        aliasMap.put(existing.group(1).toLowerCase() + "|" + existing.group(2).toLowerCase(), alias);
+        used.add(alias.toLowerCase(Locale.ROOT));
+      }
+    }
+
+    Set<String> hadAlias = new java.util.HashSet<>(aliasMap.keySet());
     Matcher triple = TRIPLE.matcher(sql);
     while (triple.find()) aliasFor(aliasMap, used, triple.group(1), triple.group(2));
-    Matcher fj = FROM_JOIN.matcher(sql);
-    while (fj.find()) aliasFor(aliasMap, used, fj.group(2), fj.group(3));
-    if (aliasMap.isEmpty()) return sql;
+
     sql =
         FROM_JOIN.matcher(sql)
             .replaceAll(
                 mr -> {
+                  String key = mr.group(2).toLowerCase() + "|" + mr.group(3).toLowerCase();
+                  if (hadAlias.contains(key)) return Matcher.quoteReplacement(mr.group(0));
                   String alias = aliasFor(aliasMap, used, mr.group(2), mr.group(3));
-                  return mr.group(1) + "`" + mr.group(2) + "`.`" + mr.group(3) + "` " + alias + mr.group(4);
+                  return Matcher.quoteReplacement(
+                      mr.group(1) + "`" + mr.group(2) + "`.`" + mr.group(3) + "` " + alias + mr.group(4));
                 });
     sql =
         TRIPLE.matcher(sql)
             .replaceAll(
                 mr -> {
                   String alias = aliasFor(aliasMap, used, mr.group(1), mr.group(2));
-                  return "`" + alias + "`.`" + mr.group(3) + "`";
+                  return Matcher.quoteReplacement("`" + alias + "`.`" + mr.group(3) + "`");
                 });
     return sql;
   }
@@ -124,6 +214,11 @@ public final class SqlUtils {
     } catch (Exception e) {
       return false;
     }
+  }
+
+  /** True when the outer query projects * (or alias.*) instead of explicit columns. */
+  public static boolean isSelectStar(String sql) {
+    return sql != null && SELECT_STAR.matcher(sql).find();
   }
 
   public static String compactConnectorError(String message) {

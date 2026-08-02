@@ -102,10 +102,23 @@ public class PipelineStages {
     this.visualizationPlanner = visualizationPlanner;
   }
 
+  /** Recent session turns rendered for LLM prompts so follow-up questions keep their context. */
+  private static String conversationContext(PipelineContext ctx) {
+    if (ctx.getHistory() == null || ctx.getHistory().isEmpty()) return "";
+    StringBuilder sb = new StringBuilder("Recent conversation (oldest first):\n");
+    for (Map<String, String> turn : ctx.getHistory()) {
+      String content = turn.getOrDefault("content", "");
+      if (content.length() > 500) content = content.substring(0, 500) + "…";
+      sb.append(turn.getOrDefault("role", "user")).append(": ").append(content).append("\n");
+    }
+    return sb.append("\n").toString();
+  }
+
   public void refine(PipelineContext ctx) {
     try {
       Map<String, Object> parsed =
-          llm.completeJson(LlmPrompts.REFINER_SYSTEM, "Message:\n" + ctx.getPrompt());
+          llm.completeJson(
+              LlmPrompts.REFINER_SYSTEM, conversationContext(ctx) + "Message:\n" + ctx.getPrompt(), ctx, "refine");
       if (parsed.get("refined_prompt") != null) ctx.setRefinedPrompt(String.valueOf(parsed.get("refined_prompt")));
     } catch (Exception e) {
       ctx.getWarnings().add("Refiner unavailable: " + e.getMessage());
@@ -114,7 +127,8 @@ public class PipelineStages {
 
   public void intent(PipelineContext ctx) {
     try {
-      Map<String, Object> parsed = llm.completeJson(LlmPrompts.INTENT_SYSTEM, ctx.effectivePrompt());
+      Map<String, Object> parsed =
+          llm.completeJson(LlmPrompts.INTENT_SYSTEM, conversationContext(ctx) + ctx.effectivePrompt(), ctx, "intent");
       if (!parsed.isEmpty()) {
         ctx.setIntent(mapper.convertValue(parsed, IntentModel.class));
         ctx.getConfidence().put("business", ctx.getIntent().getConfidence());
@@ -158,7 +172,7 @@ public class PipelineStages {
 
     Map<String, Object> parsed;
     try {
-      parsed = llm.completeJson(LlmPrompts.PLANNER_SYSTEM, buildPlannerUserBlock(ctx));
+      parsed = llm.completeJson(LlmPrompts.PLANNER_SYSTEM, buildPlannerUserBlock(ctx), ctx, "plan");
     } catch (LLMUnavailable e) {
       throw e;
     } catch (Exception e) {
@@ -166,8 +180,13 @@ public class PipelineStages {
       parsed = Map.of();
     }
 
-    ExecutionPlanModel plan =
-        parsed.isEmpty() ? new ExecutionPlanModel() : mapper.convertValue(parsed, ExecutionPlanModel.class);
+    ExecutionPlanModel plan;
+    try {
+      plan = parsed.isEmpty() ? new ExecutionPlanModel() : mapper.convertValue(normalizePlanShape(parsed), ExecutionPlanModel.class);
+    } catch (Exception e) {
+      ctx.getWarnings().add("Planner returned malformed output; using catalog matches instead.");
+      plan = new ExecutionPlanModel();
+    }
     if (plan == null) plan = new ExecutionPlanModel();
     if (plan.getRationale() == null || plan.getRationale().isBlank()) {
       plan.setRationale(parsed.isEmpty() ? "Planner produced no output." : "");
@@ -201,17 +220,24 @@ public class PipelineStages {
             dialectName.toUpperCase(Locale.ROOT),
             connector.dialect().dialectHints());
     String user =
-        "Execution plan:\n"
+        conversationContext(ctx)
+            + "Execution plan:\n"
             + mapper.writeValueAsString(plan)
             + "\n\nSchema (only these identifiers exist):\n"
-            + buildSchemaContext(ctx)
+            + buildSchemaContext(ctx, plan.getTables())
             + "\n\nRelative date translations: "
             + mapper.writeValueAsString(SqlUtils.relativeDateTranslations())
             + "\n\nQuestion:\n"
             + ctx.effectivePrompt();
     try {
-      Map<String, Object> parsed = llm.completeJson(system, user);
+      Map<String, Object> parsed = llm.completeJson(system, user, ctx, "sql_generation");
       String sql = SqlUtils.extractSqlFromLlm(parsed, null);
+      boolean planHasProjection = !plan.getColumns().isEmpty() || !plan.getAggregations().isEmpty();
+      boolean rejectedStar = !sql.isBlank() && SqlUtils.isSelectStar(sql) && planHasProjection;
+      if (rejectedStar) {
+        ctx.getWarnings().add("Model produced SELECT *; regenerated with the plan's explicit columns.");
+        sql = "";
+      }
       if (!sql.isBlank()) {
         ctx.setSql(SqlUtils.sanitizeSql(sql, dialectName));
         Object explanation = parsed.get("explanation");
@@ -221,7 +247,7 @@ public class PipelineStages {
         ctx.getConfidence().put("sql", Math.max(ctx.getConfidence().getOrDefault("sql", 0.0), 0.6));
         return;
       }
-      ctx.getWarnings().add("LLM returned empty SQL; using deterministic builder.");
+      if (!rejectedStar) ctx.getWarnings().add("LLM returned empty SQL; using deterministic builder.");
     } catch (LLMUnavailable e) {
       throw e;
     } catch (Exception e) {
@@ -232,18 +258,61 @@ public class PipelineStages {
     ctx.getConfidence().put("sql", Math.max(ctx.getConfidence().getOrDefault("sql", 0.0), 0.5));
   }
 
-  /** Sanitize, validate guardrails, optimize, Hive EXPLAIN dry-run, and estimate cost. Retries with deterministic SQL once. */
+  /**
+   * Sanitize, validate guardrails, optimize, Hive EXPLAIN dry-run, and estimate cost. On rejection the
+   * pipeline first asks the LLM to repair the query using the exact error, then falls back to the
+   * deterministic plan-built SQL.
+   */
   public void prepareSql(PipelineContext ctx, AnalyticsConnector connector) throws Exception {
     String dialect = connector.dialect().sqlglotDialect();
     Set<String> known = knownTables();
     try {
       applySqlChecks(ctx, connector, dialect, known);
-    } catch (GuardRailViolation e) {
+      return;
+    } catch (GuardRailViolation | com.datalens.core.exception.ConnectorError e) {
       if (ctx.isSqlFromDeterministicBuilder() || ctx.getPlan() == null) throw e;
+      if (tryLlmRepair(ctx, connector, dialect, known, e.getMessage())) return;
       ctx.getWarnings().add("Regenerated SQL from the structured plan after Hive rejected the AI-generated query.");
       ctx.setSql(SqlUtils.buildDeterministic(ctx.getPlan()));
       ctx.setSqlFromDeterministicBuilder(true);
       applySqlChecks(ctx, connector, dialect, known);
+    }
+  }
+
+  /** One-shot LLM repair with the validation error as feedback. Returns true when the fixed SQL passes. */
+  private boolean tryLlmRepair(
+      PipelineContext ctx, AnalyticsConnector connector, String dialect, Set<String> known, String error) {
+    if (ctx.getSql() == null || ctx.getSql().isBlank()) return false;
+    try {
+      String system =
+          String.format(
+              LlmPrompts.SQL_REPAIR_SYSTEM,
+              dialect.toUpperCase(Locale.ROOT),
+              connector.dialect().dialectHints());
+      String user =
+          "Rejected SQL:\n"
+              + ctx.getSql()
+              + "\n\nValidation error:\n"
+              + SqlUtils.compactConnectorError(error)
+              + "\n\nSchema (only these identifiers exist):\n"
+              + buildSchemaContext(ctx, ctx.getPlan() != null ? ctx.getPlan().getTables() : List.of())
+              + "\nQuestion:\n"
+              + ctx.effectivePrompt();
+      Map<String, Object> parsed = llm.completeJson(system, user, ctx, "sql_repair");
+      String repaired = SqlUtils.extractSqlFromLlm(parsed, null);
+      if (repaired.isBlank() || SqlUtils.isSelectStar(repaired)) return false;
+      String previous = ctx.getSql();
+      ctx.setSql(SqlUtils.sanitizeSql(repaired, dialect));
+      try {
+        applySqlChecks(ctx, connector, dialect, known);
+        ctx.getWarnings().add("Repaired the generated SQL after validation feedback.");
+        return true;
+      } catch (Exception rejected) {
+        ctx.setSql(previous);
+        return false;
+      }
+    } catch (Exception e) {
+      return false;
     }
   }
 
@@ -335,7 +404,9 @@ public class PipelineStages {
                   + "\nColumns: "
                   + ctx.getResultColumns()
                   + "\nSample rows: "
-                  + ctx.getResultRows().stream().limit(5).toList());
+                  + ctx.getResultRows().stream().limit(5).toList(),
+              ctx,
+              "interpret");
       return parsed;
     } catch (Exception e) {
       return Map.of(
@@ -552,7 +623,8 @@ public class PipelineStages {
     List<ResolvedTableModel> resolved = new ArrayList<>();
     for (var entry : scored.stream().limit(MAX_TABLES).toList()) {
       CatalogTable table = entry.getValue();
-      resolved.add(toResolvedTable(table, dbNames.getOrDefault(table.getDatabaseId(), ""), entry.getKey()));
+      resolved.add(
+          toResolvedTable(table, dbNames.getOrDefault(table.getDatabaseId(), ""), entry.getKey(), qTokens));
     }
     ctx.setResolvedTables(resolved);
   }
@@ -587,6 +659,11 @@ public class PipelineStages {
   }
 
   private ResolvedTableModel toResolvedTable(CatalogTable table, String dbName, double score) {
+    return toResolvedTable(table, dbName, score, null);
+  }
+
+  private ResolvedTableModel toResolvedTable(
+      CatalogTable table, String dbName, double score, Set<String> qTokens) {
     ResolvedTableModel rt = new ResolvedTableModel();
     rt.setId(table.getId());
     rt.setDatabase(dbName);
@@ -599,7 +676,7 @@ public class PipelineStages {
     rt.setScore(score);
     List<Map<String, Object>> colMaps = new ArrayList<>();
     for (CatalogColumn col :
-        columns.findByTableIdOrderByPositionAsc(table.getId()).stream().limit(MAX_COLUMNS_PER_TABLE).toList()) {
+        selectRelevantColumns(columns.findByTableIdOrderByPositionAsc(table.getId()), qTokens)) {
       Map<String, Object> colMap = new HashMap<>();
       colMap.put("name", col.getName());
       colMap.put("data_type", col.getDataType());
@@ -616,6 +693,42 @@ public class PipelineStages {
     return rt;
   }
 
+  /**
+   * On wide tables the first-N-by-position window can drop exactly the columns the question needs.
+   * Rank columns by relevance to the question instead: question-token matches first, then partition
+   * and key-like columns, preserving schema order among the selected set.
+   */
+  private static List<CatalogColumn> selectRelevantColumns(List<CatalogColumn> all, Set<String> qTokens) {
+    if (all.size() <= MAX_COLUMNS_PER_TABLE) return all;
+    if (qTokens == null || qTokens.isEmpty()) return all.subList(0, MAX_COLUMNS_PER_TABLE);
+    Map<String, Double> scores = new HashMap<>();
+    for (CatalogColumn col : all) {
+      double s = 0;
+      String name = col.getName() != null ? col.getName().toLowerCase(Locale.ROOT) : "";
+      for (String token : name.split("_")) {
+        if (qTokens.contains(token)) s += 2;
+      }
+      if (qTokens.contains(name.replace("_", ""))) s += 2;
+      String desc = col.getDescription() != null ? col.getDescription().toLowerCase(Locale.ROOT) : "";
+      for (String token : qTokens) {
+        if (!desc.isEmpty() && desc.contains(token)) s += 1;
+      }
+      if (Boolean.TRUE.equals(col.getIsPartition())) s += 3;
+      if (name.equals("id") || name.endsWith("_id") || name.endsWith("_key") || name.endsWith("_date")
+          || name.equals("name") || name.endsWith("_name")) {
+        s += 0.5;
+      }
+      scores.put(col.getId(), s);
+    }
+    List<CatalogColumn> ranked = new ArrayList<>(all);
+    ranked.sort(
+        Comparator.comparingDouble((CatalogColumn c) -> -scores.getOrDefault(c.getId(), 0.0))
+            .thenComparingInt(c -> c.getPosition() != null ? c.getPosition() : Integer.MAX_VALUE));
+    Set<String> keep = new HashSet<>();
+    for (CatalogColumn c : ranked.subList(0, MAX_COLUMNS_PER_TABLE)) keep.add(c.getId());
+    return all.stream().filter(c -> keep.contains(c.getId())).toList();
+  }
+
   private void seedPlanTablesFromResolved(ExecutionPlanModel plan, PipelineContext ctx) {
     if (!plan.getTables().isEmpty() || ctx.getResolvedTables().isEmpty()) return;
     plan.setTables(
@@ -628,12 +741,21 @@ public class PipelineStages {
 
   private String buildPlannerUserBlock(PipelineContext ctx) {
     StringBuilder sb = new StringBuilder();
+    sb.append(conversationContext(ctx));
     if (ctx.getPreviousPlan() != null && ctx.getIntent() != null && ctx.getIntent().isFollowUp()) {
-      sb.append("This is a FOLLOW-UP. Previous execution plan (modify it per the new message, keep everything else):\n");
+      sb.append(
+          "Marked as a possible follow-up. Previous execution plan, shown ONLY for reference:\n");
       try {
         sb.append(mapper.writeValueAsString(ctx.getPreviousPlan())).append("\n\n");
       } catch (Exception ignored) {
       }
+      sb.append(
+          "Build the new plan primarily from the NEW question below. Only carry over a filter, "
+              + "column, or grouping from the previous plan if the new question does not specify its "
+              + "own and clearly depends on the earlier one (e.g. \"now break that down by region\", "
+              + "\"same period last year\"). If the new question states its own metric, columns, or "
+              + "grouping, use those instead - never keep the previous plan's aggregations or group_by "
+              + "just because a plan was shown above.\n\n");
     }
     sb.append("Question: ").append(ctx.effectivePrompt()).append("\n\n");
     if (ctx.getIntent() != null) {
@@ -656,8 +778,22 @@ public class PipelineStages {
       } catch (Exception ignored) {
       }
     }
-    sb.append("Available schema:\n").append(buildSchemaContext(ctx));
+    sb.append("Available schema:\n").append(buildSchemaContext(ctx, List.of()));
     return sb.toString();
+  }
+
+  private static final Set<String> PLAN_LIST_FIELDS =
+      Set.of("tables", "columns", "joins", "filters", "aggregations", "group_by", "order_by");
+
+  /** LLMs occasionally emit a single object for a plan field the schema declares as a list; tolerate it. */
+  @SuppressWarnings("unchecked")
+  private static Map<String, Object> normalizePlanShape(Map<String, Object> parsed) {
+    Map<String, Object> out = new HashMap<>(parsed);
+    for (String field : PLAN_LIST_FIELDS) {
+      Object value = out.get(field);
+      if (value instanceof Map) out.put(field, List.of(value));
+    }
+    return out;
   }
 
   private Set<String> validatePlanReferences(ExecutionPlanModel plan, PipelineContext ctx) {
@@ -669,6 +805,10 @@ public class PipelineStages {
     for (ResolvedTableModel table : ctx.getResolvedTables()) {
       for (Map<String, Object> col : table.getColumns()) {
         knownColumns.add((table.qualifiedName() + "." + col.get("name")).toLowerCase(Locale.ROOT));
+      }
+      // The resolved model may be pruned for prompt size; accept any real catalog column.
+      for (CatalogColumn col : columns.findByTableIdOrderByPositionAsc(table.getId())) {
+        knownColumns.add((table.qualifiedName() + "." + col.getName()).toLowerCase(Locale.ROOT));
       }
     }
 
@@ -723,7 +863,9 @@ public class PipelineStages {
             .filter(
                 j -> {
                   boolean ok =
-                      knownTables.contains(j.getLeftTable().toLowerCase(Locale.ROOT))
+                      j.getLeftTable() != null
+                          && j.getRightTable() != null
+                          && knownTables.contains(j.getLeftTable().toLowerCase(Locale.ROOT))
                           && knownTables.contains(j.getRightTable().toLowerCase(Locale.ROOT))
                           && columnOk(j.getLeftTable() + "." + j.getLeftColumn(), knownColumns)
                           && columnOk(j.getRightTable() + "." + j.getRightColumn(), knownColumns);
@@ -773,9 +915,20 @@ public class PipelineStages {
     }
   }
 
-  private String buildSchemaContext(PipelineContext ctx) {
+  /**
+   * Schema block for LLM prompts. When {@code onlyTables} is non-empty, restrict to those tables so
+   * the SQL generator sees just the plan's tables instead of every semantic-search candidate.
+   */
+  private String buildSchemaContext(PipelineContext ctx, List<String> onlyTables) {
+    Set<String> filter = new HashSet<>();
+    for (String t : onlyTables) filter.add(SqlUtils.normalizeTableRef(t));
+    List<ResolvedTableModel> tables =
+        ctx.getResolvedTables().stream()
+            .filter(t -> filter.isEmpty() || filter.contains(t.qualifiedName().toLowerCase(Locale.ROOT)))
+            .toList();
+    if (tables.isEmpty()) tables = ctx.getResolvedTables();
     StringBuilder sb = new StringBuilder();
-    for (ResolvedTableModel t : ctx.getResolvedTables()) {
+    for (ResolvedTableModel t : tables) {
       sb.append("TABLE ").append(t.qualifiedName());
       if (t.getRowCount() != null) sb.append(", ~").append(t.getRowCount()).append(" rows");
       if (t.getDescription() != null) sb.append(" - ").append(t.getDescription());

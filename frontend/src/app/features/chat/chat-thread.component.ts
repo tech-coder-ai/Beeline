@@ -1,4 +1,13 @@
-import { Component, ElementRef, afterRenderEffect, inject, signal, viewChild } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  OnDestroy,
+  afterRenderEffect,
+  effect,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -6,18 +15,29 @@ import { ChatStateService } from '../../core/chat-state.service';
 import { BeelineResponse, ClarificationOption } from '../../core/models';
 import { ResponseRendererComponent } from '../../shared/response-renderer.component';
 
+const PROCESSING_STAGES = [
+  'Understanding your question…',
+  'Searching the data catalog…',
+  'Planning the query…',
+  'Generating SQL…',
+  'Validating against Hive…',
+  'Executing and summarizing…',
+];
+
 @Component({
   selector: 'bl-chat-thread',
   imports: [FormsModule, MatIconModule, MatTooltipModule, ResponseRendererComponent],
   templateUrl: './chat-thread.component.html',
   styleUrl: './chat-thread.component.scss',
 })
-export class ChatThreadComponent {
+export class ChatThreadComponent implements OnDestroy {
   readonly state = inject(ChatStateService);
   readonly scrollEl = viewChild<ElementRef<HTMLDivElement>>('scroll');
   readonly editInputEl = viewChild<ElementRef<HTMLTextAreaElement>>('editInput');
   readonly editingMessageId = signal<string | null>(null);
+  readonly processingStage = signal(PROCESSING_STAGES[0]);
   editText = '';
+  private stageTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
     afterRenderEffect(() => {
@@ -25,6 +45,34 @@ export class ChatThreadComponent {
       this.state.sending();
       this.scrollToBottom();
     });
+    effect(() => {
+      if (this.state.sending()) {
+        this.startStageCycle();
+      } else {
+        this.stopStageCycle();
+      }
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.stopStageCycle();
+  }
+
+  private startStageCycle(): void {
+    if (this.stageTimer) return;
+    let index = 0;
+    this.processingStage.set(PROCESSING_STAGES[0]);
+    this.stageTimer = setInterval(() => {
+      index = Math.min(index + 1, PROCESSING_STAGES.length - 1);
+      this.processingStage.set(PROCESSING_STAGES[index]);
+    }, 2500);
+  }
+
+  private stopStageCycle(): void {
+    if (this.stageTimer) {
+      clearInterval(this.stageTimer);
+      this.stageTimer = null;
+    }
   }
 
   private scrollToBottom(): void {

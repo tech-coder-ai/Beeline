@@ -15,6 +15,7 @@
     <div class="search-row">
       <mat-icon>search</mat-icon>
       <input class="search-input" placeholder="Search tables..." [ngModel]="search()" (ngModelChange)="onSearch($event)" />
+      @if (loading()) { <span class="spinner" aria-label="Loading"></span> }
     </div>
 
     <div class="table-grid">
@@ -37,7 +38,12 @@
           </div>
         </div>
       } @empty {
-        <p class="muted">No tables found. Trigger a metadata sync from Admin.</p>
+        @if (!loading()) {
+          <div class="empty-state">
+            <mat-icon>search_off</mat-icon>
+            <p>No tables found. Trigger a metadata sync from Admin, or adjust your search.</p>
+          </div>
+        }
       }
     </div>
   </div>
@@ -49,30 +55,60 @@
         <div>
           <h2>{{ table.database_name }}.{{ table.name }}</h2>
           <span class="chip neutral">{{ table.table_type }}</span>
+          @if (table.classification) { <span class="chip">{{ table.classification }}</span> }
         </div>
         <button class="icon-btn" (click)="closeDrawer()"><mat-icon>close</mat-icon></button>
       </div>
 
       <div class="drawer-section">
         <div class="section-label">
-          Description
-          @if (!editingDescription()) {
-            <button class="icon-btn" (click)="editingDescription.set(true)"><mat-icon>edit</mat-icon></button>
+          Business metadata
+          @if (!editingTable()) {
+            <button class="icon-btn" matTooltip="Edit table metadata" (click)="startTableEdit()"><mat-icon>edit</mat-icon></button>
           }
         </div>
-        @if (editingDescription()) {
+        @if (editingTable()) {
+          <label class="field-label muted">Description</label>
           <textarea class="text-input desc-input" rows="3" [(ngModel)]="descriptionDraft"></textarea>
+          <div class="field-grid">
+            <div>
+              <label class="field-label muted">Owner</label>
+              <input class="text-input" placeholder="team or person" [(ngModel)]="ownerDraft" />
+            </div>
+            <div>
+              <label class="field-label muted">Steward</label>
+              <input class="text-input" placeholder="data steward" [(ngModel)]="stewardDraft" />
+            </div>
+            <div>
+              <label class="field-label muted">Classification</label>
+              <select class="text-input" [(ngModel)]="classificationDraft">
+                @for (c of classifications; track c) {
+                  <option [value]="c">{{ c || '—' }}</option>
+                }
+              </select>
+            </div>
+          </div>
+          <label class="field-label muted">Tags (comma separated)</label>
+          <input class="text-input" placeholder="finance, daily, core" [(ngModel)]="tagsDraft" />
           <div class="drawer-actions">
-            <button class="primary-btn" (click)="saveDescription()">Save</button>
-            <button class="ghost-btn" (click)="editingDescription.set(false)">Cancel</button>
+            <button class="primary-btn" [disabled]="savingTable()" (click)="saveTable()">
+              @if (savingTable()) { Saving… } @else { Save }
+            </button>
+            <button class="ghost-btn" (click)="cancelTableEdit()">Cancel</button>
           </div>
         } @else {
           <p>{{ table.description || 'No description yet.' }}</p>
+          @if (table.tags?.length) {
+            <div class="pill-list">
+              @for (tag of table.tags; track tag) { <span class="chip neutral">{{ tag }}</span> }
+            </div>
+          }
         }
       </div>
 
       <div class="drawer-section stats-row">
         <div class="stat"><span class="muted">Owner</span><strong>{{ table.owner || '-' }}</strong></div>
+        <div class="stat"><span class="muted">Steward</span><strong>{{ table.steward || '-' }}</strong></div>
         <div class="stat"><span class="muted">Rows</span><strong>{{ table.row_count ? (table.row_count | number) : '-' }}</strong></div>
         <div class="stat"><span class="muted">Size</span><strong>{{ formatBytes(table.size_bytes) }}</strong></div>
         <div class="stat"><span class="muted">Format</span><strong>{{ table.storage_format || '-' }}</strong></div>
@@ -81,9 +117,6 @@
       <div class="drawer-section enrich-section">
         <div class="section-label">AI enrichment</div>
         <p class="enrich-help muted">Provide optional business context, then generate column descriptions and glossary suggestions for approval.</p>
-
-        <label class="field-label muted">Tags</label>
-        <input class="text-input" placeholder="finance, daily, core" [(ngModel)]="tagsDraft" />
 
         <label class="field-label muted">Glossary hints</label>
         @for (hint of glossaryHints; track $index) {
@@ -106,22 +139,13 @@
 
         <div class="drawer-actions">
           <button class="primary-btn" type="button" [disabled]="enriching()" (click)="enrichSelectedTable()">
-            @if (enriching()) { Enriching... } @else { AI Enrich table }
+            @if (enriching()) { <span class="spinner light"></span> Enriching… } @else { AI Enrich table }
           </button>
         </div>
         @if (enrichMessage()) {
           <p class="enrich-result">{{ enrichMessage() }}</p>
         }
       </div>
-
-      @if (table.tags?.length) {
-        <div class="drawer-section">
-          <div class="section-label">Tags</div>
-          <div class="pill-list">
-            @for (tag of table.tags; track tag) { <span class="chip neutral">{{ tag }}</span> }
-          </div>
-        </div>
-      }
 
       @if (table.partition_columns?.length) {
         <div class="drawer-section">
@@ -136,19 +160,56 @@
         <div class="section-label">Columns ({{ table.columns?.length || 0 }})</div>
         <table class="bl-table">
           <thead>
-            <tr><th>Name</th><th>Type</th><th>Description</th><th>Flags</th></tr>
+            <tr><th>Name</th><th>Type</th><th>Description</th><th>Flags</th><th class="actions-col"></th></tr>
           </thead>
           <tbody>
             @for (col of table.columns; track col.id) {
-              <tr>
-                <td>{{ col.name }}</td>
-                <td class="mono">{{ col.data_type }}</td>
-                <td class="muted">{{ col.description || '-' }}</td>
-                <td>
-                  @if (col.is_partition) { <span class="chip neutral">partition</span> }
-                  @if (col.is_pii) { <span class="chip bad">PII</span> }
-                </td>
-              </tr>
+              @if (editingColumnId() === col.id) {
+                <tr class="editing-row">
+                  <td colspan="5">
+                    <div class="column-edit">
+                      <div class="column-edit-heading">
+                        <span class="mono">{{ col.name }}</span>
+                        <span class="mono muted">{{ col.data_type }}</span>
+                      </div>
+                      <textarea class="text-input" rows="2" placeholder="Business description" [(ngModel)]="columnDraft.description"></textarea>
+                      <div class="column-edit-row">
+                        <input class="text-input" placeholder="tags, comma, separated" [(ngModel)]="columnDraft.tags" />
+                        <select class="text-input" [(ngModel)]="columnDraft.classification">
+                          @for (c of classifications; track c) {
+                            <option [value]="c">{{ c || 'classification —' }}</option>
+                          }
+                        </select>
+                        <label class="checkbox-row compact">
+                          <input type="checkbox" [(ngModel)]="columnDraft.is_pii" /> PII
+                        </label>
+                      </div>
+                      <div class="drawer-actions">
+                        <button class="primary-btn small-btn" [disabled]="savingColumn()" (click)="saveColumn(col)">
+                          @if (savingColumn()) { Saving… } @else { Save }
+                        </button>
+                        <button class="ghost-btn small-btn" (click)="cancelColumnEdit()">Cancel</button>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              } @else {
+                <tr>
+                  <td>{{ col.name }}</td>
+                  <td class="mono">{{ col.data_type }}</td>
+                  <td class="muted">{{ col.description || '-' }}</td>
+                  <td>
+                    @if (col.is_partition) { <span class="chip neutral">partition</span> }
+                    @if (col.is_pii) { <span class="chip bad">PII</span> }
+                    @if (col.classification) { <span class="chip neutral">{{ col.classification }}</span> }
+                  </td>
+                  <td class="actions-col">
+                    <button class="icon-btn" matTooltip="Edit column metadata" (click)="startColumnEdit(col)">
+                      <mat-icon>edit</mat-icon>
+                    </button>
+                  </td>
+                </tr>
+              }
             }
           </tbody>
         </table>

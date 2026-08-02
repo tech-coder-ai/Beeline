@@ -12,7 +12,7 @@ import org.yaml.snakeyaml.Yaml;
 
 @Component
 public class DataLensSettings {
-  private static final Pattern ENV = Pattern.compile("\$\{([A-Za-z_][A-Za-z0-9_]*)\}");
+  private static final Pattern ENV = Pattern.compile("\\$\\{([A-Za-z_][A-Za-z0-9_]*)\\}");
   private static final Pattern OVERRIDE = Pattern.compile("^DATALENS__(.+)$");
 
   private final DataLensProperties properties;
@@ -24,7 +24,7 @@ public class DataLensSettings {
     Yaml yaml = new Yaml();
     @SuppressWarnings("unchecked")
     Map<String, Object> loaded = yaml.load(Files.readString(path));
-    this.raw = expandEnv(loaded == null ? new LinkedHashMap<>() : loaded);
+    this.raw = (Map<String, Object>) expandEnv(loaded == null ? new LinkedHashMap<>() : loaded);
     applyEnvOverrides(this.raw);
   }
 
@@ -43,7 +43,7 @@ public class DataLensSettings {
   }
 
   public Object get(String dotPath) {
-    String[] parts = dotPath.split("\.");
+    String[] parts = dotPath.split("\\.");
     Object node = raw;
     for (String p : parts) {
       if (!(node instanceof Map<?, ?> m) || !m.containsKey(p)) return null;
@@ -85,7 +85,9 @@ public class DataLensSettings {
       return out;
     }
     if (value instanceof Iterable<?> it) {
-      return it.stream().map(DataLensSettings::expandEnv).toList();
+      java.util.List<Object> out = new java.util.ArrayList<>();
+      for (Object item : it) out.add(expandEnv(item));
+      return out;
     }
     return value;
   }

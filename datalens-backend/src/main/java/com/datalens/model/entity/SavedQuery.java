@@ -21,10 +21,10 @@ public class SavedQuery extends BaseEntity {
   @Convert(converter = JsonAttributeConverter.class)
   @Column(name = "tags")
   private Object tags;
-  @Column(name = "is_bookmarked")
-  private Boolean isBookmarked;
+  @Column(name = "is_bookmarked", nullable = false)
+  private Boolean isBookmarked = false;
   @Column(name = "last_run_at")
   private Instant lastRunAt;
-  @Column(name = "run_count")
-  private Integer runCount;
+  @Column(name = "run_count", nullable = false)
+  private Integer runCount = 0;
 }

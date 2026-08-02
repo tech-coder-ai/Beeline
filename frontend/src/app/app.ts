@@ -4,10 +4,11 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { FeatureFlagService } from './core/feature-flags.service';
 import { ThemeService } from './core/theme.service';
+import { ToastStackComponent } from './shared/toast-stack.component';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, MatIconModule, MatTooltipModule],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, MatIconModule, MatTooltipModule, ToastStackComponent],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })

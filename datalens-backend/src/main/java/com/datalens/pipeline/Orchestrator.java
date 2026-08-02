@@ -32,11 +32,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class Orchestrator {
+  private static final Logger log = LoggerFactory.getLogger(Orchestrator.class);
   private final DataLensSettings settings;
   private final ConnectorRegistry connectors;
   private final PipelineStages stages;
@@ -115,7 +118,12 @@ public class Orchestrator {
     } catch (Exception e) {
       history.setStatus("failed");
       history.setError(e.getMessage());
-      response = errorResponse(ctx, "error", e.getMessage());
+      log.error("Unhandled pipeline failure for prompt: {}", ctx.getPrompt(), e);
+      response =
+          errorResponse(
+              ctx,
+              "error",
+              "Something went wrong while processing your question. Please try rephrasing it or try again.");
     }
     recordHistory(ctx, history, response);
     historyRepo.save(history);
@@ -130,6 +138,11 @@ public class Orchestrator {
     stages.execute(ctx, connector);
     history.setStatus("executed");
     history.setExecutedAt(Instant.now());
+    // Set directly here (not just in Orchestrator.run()'s recordHistory) because the
+    // preview -> execute flow (ChatService.executePreview) calls this method straight
+    // through, bypassing recordHistory entirely.
+    history.setRowCount(ctx.getRowCount() > 0 ? ctx.getRowCount() : null);
+    history.setExecutionTimeMs(ctx.getExecutionTimeMs() > 0 ? ctx.getExecutionTimeMs() : null);
     Map<String, Object> narrative = stages.interpret(ctx);
     Map<String, Object> viz = stages.visualize(ctx);
     SqlExplanationDto sqlExplanation = explain.explain(ctx.getOptimizedSql(), connector.dialect().sqlglotDialect(), ctx.effectivePrompt());

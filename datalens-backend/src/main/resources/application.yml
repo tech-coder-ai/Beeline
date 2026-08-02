@@ -4,11 +4,14 @@ server:
 spring:
   application:
     name: datalens-backend
-  autoconfigure:
-    exclude: org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
   datasource:
-    url: jdbc:sqlite:file:../backend/beeline_meta.db?mode=rwc
+    # busy_timeout makes a connection wait (rather than fail immediately with SQLITE_BUSY) when
+    # another connection briefly holds the file lock; maximum-pool-size:1 matches SQLite's single-
+    # writer model so the app doesn't hand itself multiple connections that contend for that lock.
+    url: jdbc:sqlite:file:../backend/beeline_meta.db?mode=rwc&busy_timeout=30000
     driver-class-name: org.sqlite.JDBC
+    hikari:
+      maximum-pool-size: 1
   jpa:
     hibernate:
       ddl-auto: none

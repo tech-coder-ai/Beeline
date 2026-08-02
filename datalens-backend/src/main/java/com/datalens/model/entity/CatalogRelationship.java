@@ -22,6 +22,6 @@ public class CatalogRelationship extends BaseEntity {
   private String relationshipType;
   private String source;
   private Double confidence;
-  @Column(name = "is_approved")
-  private Boolean isApproved;
+  @Column(name = "is_approved", nullable = false)
+  private Boolean isApproved = false;
 }

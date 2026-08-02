@@ -43,6 +43,7 @@ export class AdminConnectorsComponent implements OnInit {
   readonly testing = signal<string | null>(null);
   readonly syncRuns = signal<SyncRun[]>([]);
   readonly syncing = signal(false);
+  readonly syncNotice = signal<string | null>(null);
   readonly enriching = signal(false);
   readonly enrichNotice = signal<string | null>(null);
   enrichmentBatchSize = 10;
@@ -245,24 +246,39 @@ export class AdminConnectorsComponent implements OnInit {
   }
 
   triggerSync(mode: 'full' | 'incremental', connectorId?: string): void {
+    if (this.syncing()) return;
     this.syncing.set(true);
     this.syncConnectorId.set(connectorId ?? null);
+    this.syncNotice.set(`${mode === 'full' ? 'Full' : 'Incremental'} sync started — this runs in the background.`);
     this.api.triggerSync(mode, connectorId).subscribe({
       next: () => {
         this.syncing.set(false);
         this.syncConnectorId.set(null);
-        setTimeout(() => this.loadRuns(), 1500);
+        // The sync itself runs async on the server; poll briefly so the runs table
+        // reflects completion instead of only refreshing once at a guessed delay.
+        this.pollSyncRuns();
       },
       error: () => {
         this.syncing.set(false);
         this.syncConnectorId.set(null);
+        this.syncNotice.set(null);
       },
     });
   }
 
+  private pollSyncRuns(attempt = 0): void {
+    this.loadRuns();
+    if (attempt >= 8) {
+      this.syncNotice.set(null);
+      return;
+    }
+    setTimeout(() => this.pollSyncRuns(attempt + 1), 2000);
+  }
+
   triggerEnrichment(): void {
+    if (this.enriching()) return;
     this.enriching.set(true);
-    this.enrichNotice.set(null);
+    this.enrichNotice.set('AI enrichment started — this can take a while for large batches.');
     const batchSize = Math.max(0, Math.trunc(Number(this.enrichmentBatchSize) || 0));
     this.enrichmentBatchSize = batchSize;
     this.api.triggerEnrichment([], batchSize).subscribe({
@@ -275,7 +291,10 @@ export class AdminConnectorsComponent implements OnInit {
           `Enriched ${count} table${count === 1 ? '' : 's'} (batch ${usedBatch === 0 ? 'all' : usedBatch}), ${proposals} proposal${proposals === 1 ? '' : 's'} queued for approval.`,
         );
       },
-      error: () => this.enriching.set(false),
+      error: (err) => {
+        this.enriching.set(false);
+        this.enrichNotice.set(err?.error?.message ?? 'AI enrichment failed. Check LLM configuration and try again.');
+      },
     });
   }
 }

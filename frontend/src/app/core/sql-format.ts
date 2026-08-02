@@ -24,4 +24,3 @@ export function formatSql(sql: string): string {
     }
   }
 }
-}

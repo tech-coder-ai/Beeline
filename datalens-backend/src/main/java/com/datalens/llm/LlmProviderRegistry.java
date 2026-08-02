@@ -10,6 +10,7 @@ import java.util.Map;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
 
 @Component
 public class LlmProviderRegistry {
@@ -56,9 +57,21 @@ public class LlmProviderRegistry {
   }
 
   public Map<String, Object> completeJson(String systemPrompt, String userMessage) throws Exception {
+    return completeJson(systemPrompt, userMessage, null, null);
+  }
+
+  /**
+   * Same as {@link #completeJson(String, String)}, but records provider/model/token usage onto
+   * {@code ctx} so it survives into the execution history's llm_provider/llm_model/token_usage
+   * columns. Pass a short {@code purpose} label (e.g. "intent", "plan", "sql_generation").
+   */
+  public Map<String, Object> completeJson(
+      String systemPrompt, String userMessage, com.datalens.pipeline.PipelineContext ctx, String purpose)
+      throws Exception {
     LlmProvider llm = getActive();
     LlmResult result =
         llm.complete(systemPrompt + "\n\nRespond with valid JSON only. No prose, no markdown fences.", userMessage);
+    if (ctx != null) ctx.recordLlm(purpose, result);
     return llmJson.parseLoosely(result.getText());
   }
 
@@ -118,9 +131,32 @@ public class LlmProviderRegistry {
                 usage.path("completion_tokens").isMissingNode() ? null : usage.path("completion_tokens").asInt())
             .build();
       } catch (Exception e) {
-        throw new LLMUnavailable("OpenAI-compatible endpoint unavailable: " + e.getMessage());
+        throw new LLMUnavailable("OpenAI-compatible endpoint unavailable: " + compactHttpError(e));
       }
     }
+  }
+
+  /**
+   * HTTP client exceptions embed the full response body with newlines rendered as literal
+   * "&lt;EOL&gt;" markers, which is unreadable once surfaced to the chat UI. Prefer the
+   * provider's own {@code error.message} field when the body is JSON.
+   */
+  private static String compactHttpError(Exception e) {
+    if (e instanceof RestClientResponseException httpError) {
+      String body = httpError.getResponseBodyAsString();
+      if (body != null && !body.isBlank()) {
+        try {
+          JsonNode node = new ObjectMapper().readTree(body);
+          JsonNode message = node.path("error").path("message");
+          if (!message.isMissingNode() && !message.asText("").isBlank()) {
+            return httpError.getStatusCode().value() + " " + httpError.getStatusText() + ": " + message.asText();
+          }
+        } catch (Exception ignored) {
+        }
+      }
+      return httpError.getStatusCode().value() + " " + httpError.getStatusText();
+    }
+    return e.getMessage();
   }
 
   static class StellarLlmProvider implements LlmProvider {
@@ -167,7 +203,7 @@ public class LlmProviderRegistry {
         }
         return LlmResult.builder().text(text).model("stellar").provider(providerId()).build();
       } catch (Exception e) {
-        throw new LLMUnavailable("Stellar endpoint unavailable: " + e.getMessage());
+        throw new LLMUnavailable("Stellar endpoint unavailable: " + compactHttpError(e));
       }
     }
   }
