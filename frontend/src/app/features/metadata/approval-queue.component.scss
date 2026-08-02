@@ -1,14 +1,26 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
 .approval-page {
   display: flex;
   flex-direction: column;
+  height: 100%;
+  min-height: 0;
   gap: 12px;
 }
 
+// Bulk-action buttons live here; keep this row out of the scrollable list below
+// so "Approve all"/"Reject all" stay visible without scrolling to find them.
 .filter-row {
   display: flex;
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
+  flex-shrink: 0;
 
   .ghost-btn {
     padding: 6px 12px;
@@ -23,12 +35,19 @@
   align-items: center;
   gap: 8px;
   font-size: 12.5px;
+  flex-shrink: 0;
 }
 
+// The list scrolls internally (own scrollbar) so the filter/bulk-action row above
+// never scrolls out of view, however many pending items there are.
 .approval-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  padding-right: 4px;
 }
 
 .approval-card {

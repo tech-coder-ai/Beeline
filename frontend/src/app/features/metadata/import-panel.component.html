@@ -23,28 +23,32 @@
         <div class="stat"><span class="muted">Unmatched</span><strong>{{ p.unmatched.length }}</strong></div>
       </div>
 
-      @if (p.changes.length) {
-        <table class="bl-table">
-          <thead><tr><th>Entity</th><th>Field</th><th>Current</th><th>Proposed</th></tr></thead>
-          <tbody>
-            @for (c of p.changes; track $index) {
-              <tr>
-                <td>{{ c.label || c.entity || '-' }}</td>
-                <td>{{ c.field }}</td>
-                <td class="muted">{{ c.current || '-' }}</td>
-                <td>{{ c.proposed || c.value || '-' }}</td>
-              </tr>
-            }
-          </tbody>
-        </table>
-      }
+      @if (p.changes.length || p.unmatched.length) {
+        <div class="preview-scroll">
+          @if (p.changes.length) {
+            <table class="bl-table">
+              <thead><tr><th>Entity</th><th>Field</th><th>Current</th><th>Proposed</th></tr></thead>
+              <tbody>
+                @for (c of p.changes; track $index) {
+                  <tr>
+                    <td>{{ c.label || c.entity || '-' }}</td>
+                    <td>{{ c.field }}</td>
+                    <td class="muted">{{ c.current || '-' }}</td>
+                    <td>{{ c.proposed || c.value || '-' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
 
-      @if (p.unmatched.length) {
-        <div class="unmatched">
-          <div class="section-label">Unmatched rows</div>
-          <ul>
-            @for (u of p.unmatched; track u.row) { <li>Row {{ u.row }}: {{ u.reason }}</li> }
-          </ul>
+          @if (p.unmatched.length) {
+            <div class="unmatched">
+              <div class="section-label">Unmatched rows</div>
+              <ul>
+                @for (u of p.unmatched; track u.row) { <li>Row {{ u.row }}: {{ u.reason }}</li> }
+              </ul>
+            </div>
+          }
         </div>
       }
 
