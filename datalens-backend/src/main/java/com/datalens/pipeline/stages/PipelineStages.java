@@ -935,14 +935,27 @@ public class PipelineStages {
     return tags != null ? String.valueOf(tags) : "";
   }
 
+  // Common scaffolding words that make unrelated questions LOOK similar to JaroWinkler (a
+  // character/prefix metric) once the refiner has rephrased them into similar templated forms,
+  // e.g. "What is the total number of rows in the X table?" vs "What are the Y trends for each
+  // region?" score ~0.83 similarity despite sharing no real content. Excluded from the overlap
+  // check below so reuse requires the questions to actually share a subject, not just a shape.
+  private static final Set<String> LIBRARY_MATCH_STOPWORDS =
+      Set.of(
+          "what", "which", "who", "how", "when", "where", "why", "does", "did", "do", "is", "are",
+          "was", "were", "the", "a", "an", "this", "that", "these", "those", "for", "and", "or",
+          "of", "to", "in", "on", "at", "by", "with", "from", "over", "each", "any", "all", "show",
+          "me", "please", "can", "you", "there", "have", "has", "table", "tables", "data");
+
   private void searchLibrary(PipelineContext ctx, String question) {
     String norm = normalizeQuestion(question);
+    Set<String> contentTokens = contentTokens(norm);
     List<QueryLibraryEntry> entries = library.findByIsActiveTrue();
     QueryLibraryEntry best = null;
     double bestScore = 0;
     for (QueryLibraryEntry e : entries) {
       double s = similarity.apply(norm, e.getNormalizedQuestion());
-      if (s > bestScore) {
+      if (s > bestScore && sharesContent(contentTokens, contentTokens(e.getNormalizedQuestion()))) {
         bestScore = s;
         best = e;
       }
@@ -957,6 +970,32 @@ public class PipelineStages {
       if (best.getTablesUsed() instanceof List<?> t) match.setTablesUsed(t.stream().map(String::valueOf).toList());
       ctx.setLibraryMatch(match);
     }
+  }
+
+  private static Set<String> contentTokens(String normalizedQuestion) {
+    Set<String> out = new HashSet<>();
+    for (String t : normalizedQuestion.replaceAll("[^a-z0-9]+", " ").split("\\s+")) {
+      if (t.length() > 2 && !LIBRARY_MATCH_STOPWORDS.contains(t)) out.add(t);
+    }
+    return out;
+  }
+
+  /**
+   * Requires an actual shared subject, not just shared sentence scaffolding, before reuse. A
+   * single shared word isn't enough on its own - in a sales-schema catalog nearly every question
+   * mentions "sales", so "rows in fact_sales" and "sales trends by region" share that one token
+   * despite being unrelated. Jaccard overlap over the full content-word sets catches that: 0.125
+   * for the unrelated pair above vs 0.67 for a genuine near-duplicate ("...growth" vs "...growth
+   * before 2025") and 1.0 for an exact repeat.
+   */
+  private static boolean sharesContent(Set<String> a, Set<String> b) {
+    if (a.isEmpty() || b.isEmpty()) return true;
+    Set<String> inter = new HashSet<>(a);
+    inter.retainAll(b);
+    if (inter.isEmpty()) return false;
+    Set<String> union = new HashSet<>(a);
+    union.addAll(b);
+    return (double) inter.size() / union.size() >= 0.3;
   }
 
   /**

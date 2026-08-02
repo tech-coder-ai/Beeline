@@ -99,12 +99,9 @@
       <bl-result-data-view
         [table]="r.table ?? null"
         [charts]="r.charts"
-        [showSaveQuery]="flags.savedQueries()"
-        [showPinToDashboard]="flags.dashboards()"
-        [showExplainQuery]="flags.explainSql()"
-        (saveQuery)="saveQuery.emit()"
-        (pinToDashboard)="pinToDashboard.emit()"
-        (explainQuery)="toggleExplain()"
+        [showSaveQuery]="false"
+        [showPinToDashboard]="false"
+        [showExplainQuery]="false"
         (regenerate)="refineQuestion.emit()"
       />
     }
@@ -161,6 +158,16 @@
         }
       </div>
       <div class="footer-right">
+        @if (flags.savedQueries()) {
+          <button class="icon-btn" matTooltip="Save query" (click)="saveQuery.emit()">
+            <mat-icon>bookmark_add</mat-icon>
+          </button>
+        }
+        @if (flags.dashboards()) {
+          <button class="icon-btn" matTooltip="Pin to dashboard" (click)="pinToDashboard.emit()">
+            <mat-icon>push_pin</mat-icon>
+          </button>
+        }
         @if (flags.feedback()) {
           <button class="icon-btn" [class.active]="feedbackGiven === 'up'" matTooltip="Good answer" (click)="vote('up')">
             <mat-icon>thumb_up</mat-icon>
