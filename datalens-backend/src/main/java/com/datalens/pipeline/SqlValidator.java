@@ -193,7 +193,7 @@ public class SqlValidator {
       for (SelectItem<?> item : plain.getSelectItems()) {
         if (item.getExpression() != null) item.getExpression().accept(collector);
         if (item.getAlias() != null && item.getAlias().getName() != null) {
-          collector.outputAliases.add(item.getAlias().getName().toLowerCase(Locale.ROOT));
+          collector.outputAliases.add(item.getAlias().getName().replace("`", "").toLowerCase(Locale.ROOT));
         }
       }
     }
@@ -256,7 +256,7 @@ public class SqlValidator {
     if (plain.getSelectItems() != null) {
       for (SelectItem<?> item : plain.getSelectItems()) {
         if (item.getAlias() != null && item.getAlias().getName() != null) {
-          outputAliases.add(item.getAlias().getName().toLowerCase(Locale.ROOT));
+          outputAliases.add(item.getAlias().getName().replace("`", "").toLowerCase(Locale.ROOT));
         }
       }
     }

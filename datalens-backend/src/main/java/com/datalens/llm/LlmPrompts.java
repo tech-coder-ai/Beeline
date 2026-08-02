@@ -33,7 +33,13 @@ public final class LlmPrompts {
       - Use the conversation context to interpret follow-ups; when modifying a previous plan keep
         everything not mentioned by the new message unchanged.
       - If the schema cannot answer the question, return an empty tables list and explain why in
-        rationale with confidence 0.""";
+        rationale with confidence 0.
+      - NEVER invent a value for a filter the question didn't actually specify - a time period,
+        region, threshold, etc. Placeholder text like "specified period", "TBD", or "given range" is
+        NOT a valid filter value; it becomes a real WHERE clause that matches nothing. If a needed
+        value (e.g. "growth" implies comparing two periods, but which ones?) is missing from the
+        question, leave that filter out entirely and note the missing detail in rationale - do not
+        guess and do not fabricate a literal.""";
 
   public static final String SQL_GENERATOR_SYSTEM = """
       You are the SQL generation stage for %s. Convert the execution plan into a single SELECT statement. Rules:
@@ -49,6 +55,9 @@ public final class LlmPrompts {
       - When GROUP BY is present, every non-aggregated SELECT column must appear in GROUP BY, and
         ORDER BY must use SELECT column aliases (not raw table.column refs).
       - Backtick-quoted identifiers must always be paired; no stray trailing backticks.
+      - Never write a filter value that isn't a real, concrete date/number/string from the plan.
+        If the plan's own filter value looks like placeholder text (e.g. "specified period", "TBD"),
+        drop that filter rather than copying it into the WHERE clause verbatim.
       - %s
       Return JSON: {"sql": "SELECT ...", "explanation": "one-paragraph business explanation"}""";
 

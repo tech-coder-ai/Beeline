@@ -4,7 +4,7 @@ import { Observable } from 'rxjs';
 import {
   ApprovalItem,
   AuditLogEntry,
-  BeelineResponse,
+  DataLensResponse,
   CatalogDatabase,
   CatalogTable,
   ChatMessage,
@@ -53,6 +53,12 @@ export class ApiService {
 
   deleteSession(sessionId: string): Observable<unknown> {
     return this.http.delete(`${API}/chat/sessions/${sessionId}`);
+  }
+
+  clearAllSessions(): Observable<{ sessions: number; messages: number }> {
+    return this.http.delete<{ sessions: number; messages: number }>(`${API}/chat/sessions`, {
+      params: { confirm: 'true' },
+    });
   }
 
   // ------------------------------------------------------------- metadata

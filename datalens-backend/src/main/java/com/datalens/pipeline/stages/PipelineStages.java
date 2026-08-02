@@ -200,9 +200,53 @@ public class PipelineStages {
                   + String.join(", ", removed.stream().sorted().toList()));
       plan.setConfidence(Math.max(plan.getConfidence() - 0.2 * removed.size(), 0.1));
     }
+    stripPlaceholderFilters(plan, ctx);
     seedPlanTablesFromResolved(plan, ctx);
     ctx.setPlan(plan);
     ctx.getConfidence().put("sql", plan.getConfidence());
+  }
+
+  private static final Pattern DATE_COLUMN_HINT =
+      Pattern.compile("(?i)(date|_at$|_dt$|period|_time$|timestamp)");
+  private static final Pattern DATE_LIKE_VALUE = Pattern.compile("^\\d{4}(-\\d{1,2}(-\\d{1,2})?)?$");
+
+  /**
+   * Catches a real failure mode where the model can't ground a required value (most often a time
+   * period the question never stated) and, instead of omitting the filter or flagging it, invents
+   * a placeholder literal like "specified period" or "TBD". Left alone that string becomes a real
+   * WHERE clause that matches nothing, so the query silently "succeeds" with zero rows. When found,
+   * the filter is dropped and ctx is flagged so the orchestrator asks the user for the value instead
+   * of previewing/executing a query it already knows is incomplete.
+   */
+  private void stripPlaceholderFilters(ExecutionPlanModel plan, PipelineContext ctx) {
+    if (plan.getFilters().isEmpty()) return;
+    List<ExecutionPlanModel.PlanFilter> kept = new ArrayList<>();
+    List<String> flagged = new ArrayList<>();
+    for (ExecutionPlanModel.PlanFilter f : plan.getFilters()) {
+      if (isPlaceholderDateFilter(f)) {
+        String col = f.getColumn().contains(".") ? f.getColumn().substring(f.getColumn().lastIndexOf('.') + 1) : f.getColumn();
+        flagged.add(col);
+      } else {
+        kept.add(f);
+      }
+    }
+    if (flagged.isEmpty()) return;
+    plan.setFilters(kept);
+    plan.setConfidence(Math.min(plan.getConfidence(), 0.2));
+    ctx.setClarificationQuestion(
+        "I need a specific date or date range for "
+            + String.join(", ", flagged)
+            + " to run this query - which period should I use?");
+  }
+
+  private static boolean isPlaceholderDateFilter(ExecutionPlanModel.PlanFilter f) {
+    if (f.getColumn() == null || f.getValue() == null) return false;
+    if ("is_null".equals(f.getOperator()) || "is_not_null".equals(f.getOperator())) return false;
+    String col = f.getColumn().contains(".") ? f.getColumn().substring(f.getColumn().lastIndexOf('.') + 1) : f.getColumn();
+    if (!DATE_COLUMN_HINT.matcher(col).find()) return false;
+    if (!(f.getValue() instanceof String value)) return false;
+    if (value.startsWith("relative:")) return false;
+    return !DATE_LIKE_VALUE.matcher(value.trim()).matches();
   }
 
   public void generateSql(PipelineContext ctx, AnalyticsConnector connector) throws Exception {

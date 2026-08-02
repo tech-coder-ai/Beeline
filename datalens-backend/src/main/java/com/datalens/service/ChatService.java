@@ -98,6 +98,20 @@ public class ChatService {
     sessions.delete(getSession(sessionId));
   }
 
+  /** Wipes all chat history for the (single, "default") user - sessions and their messages. */
+  @Transactional
+  public Map<String, Integer> clearAllSessions() {
+    List<ChatSession> all = sessions.findByUserIdOrderByIsPinnedDescUpdatedAtDesc("default");
+    int sessionCount = all.size();
+    int messageCount = 0;
+    for (ChatSession s : all) {
+      messageCount += (int) messages.countBySessionId(s.getId());
+      messages.deleteAll(messages.findBySessionIdOrderByCreatedAtAsc(s.getId()));
+    }
+    sessions.deleteAll(all);
+    return Map.of("sessions", sessionCount, "messages", messageCount);
+  }
+
   @Transactional
   public ChatTurnOut handleTurn(ChatRequest request) {
     if (request.executePreviewId() != null && !request.executePreviewId().isBlank()) {

@@ -4,7 +4,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { ApiService } from '../../core/api.service';
 import { ConnectorService } from '../../core/connector.service';
 import { buildWidgetSnapshot, widgetTitleFor, widgetTypeFor } from '../../core/dashboard-utils';
-import { BeelineResponse, Dashboard } from '../../core/models';
+import { DataLensResponse, Dashboard } from '../../core/models';
 
 @Component({
   selector: 'bl-pin-dashboard-dialog',
@@ -138,7 +138,7 @@ import { BeelineResponse, Dashboard } from '../../core/models';
   `],
 })
 export class PinDashboardDialogComponent implements OnInit {
-  readonly response = input.required<BeelineResponse>();
+  readonly response = input.required<DataLensResponse>();
   readonly closed = output<void>();
   readonly pinned = output<{ dashboardId: string; dashboardName: string }>();
 

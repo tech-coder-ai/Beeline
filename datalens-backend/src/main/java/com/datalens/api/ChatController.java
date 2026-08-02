@@ -1,5 +1,6 @@
 package com.datalens.api;
 
+import com.datalens.core.exception.ValidationFailed;
 import com.datalens.schema.api.*;
 import com.datalens.service.ChatService;
 import java.util.List;
@@ -28,5 +29,9 @@ public class ChatController {
   }
   @DeleteMapping("/sessions/{sessionId}") public Map<String,String> delete(@PathVariable String sessionId) {
     chat.deleteSession(sessionId); return Map.of("deleted", sessionId);
+  }
+  @DeleteMapping("/sessions") public Map<String, Integer> clearAll(@RequestParam(defaultValue = "false") boolean confirm) {
+    if (!confirm) throw new ValidationFailed("Pass confirm=true to clear all chat history");
+    return chat.clearAllSessions();
   }
 }

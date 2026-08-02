@@ -1,4 +1,4 @@
-/** TypeScript mirrors of the backend contracts (BeelineResponse & friends). */
+/** TypeScript mirrors of the backend contracts (DataLensResponse & friends). */
 
 export type VisualizationType =
   | 'text' | 'grid' | 'kpi' | 'line' | 'area' | 'bar' | 'pie' | 'donut'
@@ -102,7 +102,7 @@ export interface ResponseAction {
   confirm: boolean;
 }
 
-export interface BeelineResponse {
+export interface DataLensResponse {
   kind: ResponseKind;
   execution_id?: string | null;
   summary: string;
@@ -144,7 +144,7 @@ export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant' | 'clarification';
   content?: string | null;
-  response_payload?: BeelineResponse | null;
+  response_payload?: DataLensResponse | null;
   execution_id?: string | null;
   created_at: string;
 }
@@ -152,7 +152,7 @@ export interface ChatMessage {
 export interface ChatTurn {
   session_id: string;
   message_id: string;
-  response: BeelineResponse;
+  response: DataLensResponse;
 }
 
 export interface CatalogDatabase {

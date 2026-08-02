@@ -41,6 +41,12 @@ public class PipelineContext {
   private List<Map<String, Object>> llmCalls = new ArrayList<>();
   private String executionId;
   private boolean sqlFromDeterministicBuilder;
+  /**
+   * Set when the planner detects a required value it cannot ground (e.g. a time period the
+   * question never stated) and had to strip a filter rather than fabricate one. When non-null the
+   * orchestrator asks the user instead of previewing/executing a query it knows is incomplete.
+   */
+  private String clarificationQuestion;
 
   public String effectivePrompt() {
     return refinedPrompt != null && !refinedPrompt.isBlank() ? refinedPrompt : prompt;

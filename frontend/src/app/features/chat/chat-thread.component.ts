@@ -12,8 +12,9 @@ import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { ChatStateService } from '../../core/chat-state.service';
-import { BeelineResponse, ClarificationOption } from '../../core/models';
+import { DataLensResponse, ClarificationOption } from '../../core/models';
 import { ResponseRendererComponent } from '../../shared/response-renderer.component';
+import { LogoMarkComponent } from '../../shared/logo-mark.component';
 
 const PROCESSING_STAGES = [
   'Understanding your question…',
@@ -26,7 +27,7 @@ const PROCESSING_STAGES = [
 
 @Component({
   selector: 'bl-chat-thread',
-  imports: [FormsModule, MatIconModule, MatTooltipModule, ResponseRendererComponent],
+  imports: [FormsModule, MatIconModule, MatTooltipModule, ResponseRendererComponent, LogoMarkComponent],
   templateUrl: './chat-thread.component.html',
   styleUrl: './chat-thread.component.scss',
 })
@@ -105,11 +106,11 @@ export class ChatThreadComponent implements OnDestroy {
     this.state.refineQuestion(messageId);
   }
 
-  onSaveQuery(response: BeelineResponse): void {
+  onSaveQuery(response: DataLensResponse): void {
     this.state.saveQuery(response);
   }
 
-  onPinToDashboard(response: BeelineResponse): void {
+  onPinToDashboard(response: DataLensResponse): void {
     this.state.pinToDashboard(response);
   }
 

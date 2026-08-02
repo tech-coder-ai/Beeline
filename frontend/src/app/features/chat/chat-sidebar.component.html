@@ -58,4 +58,10 @@
       <div class="empty-state muted">No conversations yet.</div>
     }
   </div>
+
+  @if (state.sessions().length) {
+    <button class="clear-all-btn" matTooltip="Delete all conversations" (click)="clearAll()">
+      <mat-icon>delete_sweep</mat-icon> Clear all chats
+    </button>
+  }
 </div>

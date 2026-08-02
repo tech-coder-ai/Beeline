@@ -74,11 +74,11 @@
             </label>
             <label class="wide">
               <span>Keytab path on backend host</span>
-              <input class="text-input" [(ngModel)]="form.keytab_path" placeholder="/etc/security/keytabs/beeline.keytab" />
+              <input class="text-input" [(ngModel)]="form.keytab_path" placeholder="/etc/security/keytabs/datalens.keytab" />
             </label>
             <label class="wide">
               <span>Credential cache (KRB5CCNAME)</span>
-              <input class="text-input" [(ngModel)]="form.krb5_ccache" placeholder="/tmp/krb5cc_beeline" />
+              <input class="text-input" [(ngModel)]="form.krb5_ccache" placeholder="/tmp/krb5cc_datalens" />
             </label>
           }
         </div>
@@ -145,7 +145,7 @@
   <div class="section">
     <div class="section-title">Metadata synchronization</div>
     <p class="section-help muted">
-      Sync harvests databases, tables, columns, and statistics from Hive into Beeline's catalog.
+      Sync harvests databases, tables, columns, and statistics from Hive into the DataLens catalog.
       <strong>Incremental sync</strong> refreshes tables that changed since the last run.
       <strong>Full sync</strong> re-harvests everything (use after schema changes).
       <strong>Run AI enrichment</strong> proposes business descriptions, tags, and glossary terms

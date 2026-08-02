@@ -6,7 +6,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { ApiService } from '../core/api.service';
 import { ConnectorService } from '../core/connector.service';
 import { FeatureFlagService } from '../core/feature-flags.service';
-import { BeelineResponse, ClarificationOption, SqlExplanation } from '../core/models';
+import { DataLensResponse, ClarificationOption, SqlExplanation } from '../core/models';
 import { ConfidenceBadgeComponent } from './confidence-badge.component';
 import { KpiCardsComponent } from './kpi-cards.component';
 import { ResultDataViewComponent } from './result-data-view.component';
@@ -14,7 +14,7 @@ import { SqlPanelComponent } from './sql-panel.component';
 
 /**
  * Adaptive Response Renderer.
- * Reads the BeelineResponse.visualization field and composes the layout:
+ * Reads the DataLensResponse.visualization field and composes the layout:
  * KPIs -> charts -> grid -> insights -> recommendations -> follow-ups.
  * Angular decides how to render; the backend never sends HTML/markdown tables.
  */
@@ -28,7 +28,7 @@ import { SqlPanelComponent } from './sql-panel.component';
   styleUrl: './response-renderer.component.scss',
 })
 export class ResponseRendererComponent {
-  readonly response = input.required<BeelineResponse>();
+  readonly response = input.required<DataLensResponse>();
   readonly compact = input(false);
 
   readonly clarify = output<ClarificationOption | string>();

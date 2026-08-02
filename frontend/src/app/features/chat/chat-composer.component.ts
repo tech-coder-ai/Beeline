@@ -50,7 +50,7 @@ const SUGGESTIONS = [
         #input
         class="composer-input"
         rows="1"
-        placeholder="Ask Beeline about your data..."
+        placeholder="Ask DataLens about your data..."
         [(ngModel)]="text"
         (keydown.enter)="onEnter($event)"
         (input)="autoGrow(input)"

@@ -161,7 +161,7 @@ export class AdminConnectorsComponent implements OnInit {
   authHelp(): string {
     switch (this.form.auth) {
       case 'KERBEROS':
-        return 'Kerberos uses tickets from keytab/kinit on the Beeline backend host. Set krb5.conf (or krb5.ini on Windows), service name, and principal; optionally point at a keytab or credential cache file.';
+        return 'Kerberos uses tickets from keytab/kinit on the DataLens backend host. Set krb5.conf (or krb5.ini on Windows), service name, and principal; optionally point at a keytab or credential cache file.';
       case 'LDAP':
         return 'LDAP requires a username and password for HiveServer2.';
       case 'NOSASL':

@@ -164,11 +164,11 @@ export class DataGridComponent {
         })
         .join(','),
     );
-    this.download([header, ...lines].join('\n'), 'beeline-result.csv', 'text/csv');
+    this.download([header, ...lines].join('\n'), 'datalens-result.csv', 'text/csv');
   }
 
   exportJson(): void {
-    this.download(JSON.stringify(this.table().rows, null, 2), 'beeline-result.json', 'application/json');
+    this.download(JSON.stringify(this.table().rows, null, 2), 'datalens-result.json', 'application/json');
   }
 
   copy(): void {

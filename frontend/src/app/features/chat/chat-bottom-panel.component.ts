@@ -1,7 +1,7 @@
 import { DecimalPipe } from '@angular/common';
 import { Component, computed, input, signal } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
-import { BeelineResponse } from '../../core/models';
+import { DataLensResponse } from '../../core/models';
 import { SqlPanelComponent } from '../../shared/sql-panel.component';
 
 type Tab = 'sql' | 'warnings' | 'cost';
@@ -14,7 +14,7 @@ type Tab = 'sql' | 'warnings' | 'cost';
   styleUrl: './chat-bottom-panel.component.scss',
 })
 export class ChatBottomPanelComponent {
-  readonly response = input<BeelineResponse | null>(null);
+  readonly response = input<DataLensResponse | null>(null);
   readonly expanded = signal(false);
   readonly activeTab = signal<Tab>('sql');
 

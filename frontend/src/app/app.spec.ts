@@ -18,11 +18,11 @@ describe('App', () => {
     expect(app).toBeTruthy();
   });
 
-  it('should render the Beeline nav rail', () => {
+  it('should render the DataLens nav rail', () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('.brand-mark')?.textContent).toContain('🐝');
+    expect(compiled.querySelector('.brand-mark')?.textContent).toContain('🔍');
     expect(compiled.querySelectorAll('.rail-item').length).toBeGreaterThan(0);
   });
 });

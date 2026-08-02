@@ -262,6 +262,19 @@ public class Orchestrator {
       ctx.getConfidence().put("sql", ctx.getLibraryMatch().getSimilarity());
     } else {
       stages.plan(ctx);
+      if (ctx.getClarificationQuestion() != null) {
+        history.setStatus("clarification");
+        DataLensResponseDto r = new DataLensResponseDto();
+        r.setKind("clarification");
+        r.setSummary(ctx.getClarificationQuestion());
+        ClarificationRequestDto clar = new ClarificationRequestDto();
+        clar.setQuestion(ctx.getClarificationQuestion());
+        r.setClarification(clar);
+        r.setConfidence(confidenceBreakdown(ctx));
+        r.setTablesUsed(ctx.getResolvedTables().stream().map(ResolvedTableModel::qualifiedName).toList());
+        r.setWarnings(ctx.getWarnings());
+        return r;
+      }
       stages.generateSql(ctx, connector);
     }
 

@@ -34,4 +34,12 @@ export class ChatSidebarComponent {
     }
     this.renamingId.set(null);
   }
+
+  clearAll(): void {
+    if (!this.state.sessions().length) return;
+    const confirmed = window.confirm(
+      `Delete all ${this.state.sessions().length} conversation(s)? This cannot be undone.`,
+    );
+    if (confirmed) this.state.clearAllChats();
+  }
 }

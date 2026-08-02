@@ -1,7 +1,7 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { ApiService } from './api.service';
 import { ConnectorService } from './connector.service';
-import { BeelineResponse, ChatMessage, ChatSession } from './models';
+import { DataLensResponse, ChatMessage, ChatSession } from './models';
 
 /** Signal-based chat store: sessions, active thread, pipeline call state. */
 @Injectable({ providedIn: 'root' })
@@ -17,10 +17,10 @@ export class ChatStateService {
   readonly error = signal<string | null>(null);
   readonly composerDraft = signal('');
   readonly actionNotice = signal<string | null>(null);
-  readonly pinDialogResponse = signal<BeelineResponse | null>(null);
+  readonly pinDialogResponse = signal<DataLensResponse | null>(null);
 
   /** Response currently inspected in the right/bottom panels. */
-  readonly focusedResponse = signal<BeelineResponse | null>(null);
+  readonly focusedResponse = signal<DataLensResponse | null>(null);
 
   readonly activeSession = computed(
     () => this.sessions().find((s) => s.id === this.activeSessionId()) ?? null,
@@ -44,7 +44,7 @@ export class ChatStateService {
       next: (messages) => {
         this.messages.set(messages);
         const last = [...messages].reverse().find((m) => m.response_payload);
-        this.focusedResponse.set((last?.response_payload as BeelineResponse) ?? null);
+        this.focusedResponse.set((last?.response_payload as DataLensResponse) ?? null);
       },
       error: () => this.error.set('Failed to load messages'),
     });
@@ -57,7 +57,7 @@ export class ChatStateService {
   inspectMessage(messageId: string): void {
     const message = this.messages().find((m) => m.id === messageId);
     if (message?.response_payload) {
-      this.focusedResponse.set(message.response_payload as BeelineResponse);
+      this.focusedResponse.set(message.response_payload as DataLensResponse);
     }
   }
 
@@ -84,7 +84,7 @@ export class ChatStateService {
     this.send(trimmed);
   }
 
-  saveQuery(response: BeelineResponse): void {
+  saveQuery(response: DataLensResponse): void {
     if (!response.sql) {
       this.actionNotice.set('No SQL available to save.');
       return;
@@ -103,7 +103,7 @@ export class ChatStateService {
     });
   }
 
-  pinToDashboard(response: BeelineResponse): void {
+  pinToDashboard(response: DataLensResponse): void {
     if (!response.table?.rows?.length && !response.charts?.length && !response.cards?.length) {
       this.actionNotice.set('No result data to pin — run the query first.');
       return;
@@ -182,7 +182,7 @@ export class ChatStateService {
                 follow_up_questions: [], tables_used: [], filters_used: [],
                 metrics_used: [], warnings: [], actions: [], metadata: {},
                 error: detail,
-              } as BeelineResponse,
+              } as DataLensResponse,
               created_at: new Date().toISOString(),
             },
           ]);
@@ -217,6 +217,17 @@ export class ChatStateService {
     this.api.deleteSession(session.id).subscribe(() => {
       if (this.activeSessionId() === session.id) this.newChat();
       this.loadSessions();
+    });
+  }
+
+  clearAllChats(): void {
+    this.api.clearAllSessions().subscribe({
+      next: () => {
+        this.newChat();
+        this.loadSessions();
+        this.actionNotice.set('Cleared all chat history');
+      },
+      error: () => this.actionNotice.set('Failed to clear chat history'),
     });
   }
 }

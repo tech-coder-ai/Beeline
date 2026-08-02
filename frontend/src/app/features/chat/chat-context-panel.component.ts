@@ -1,6 +1,6 @@
 import { Component, computed, input } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
-import { BeelineResponse } from '../../core/models';
+import { DataLensResponse } from '../../core/models';
 
 /** Right sidebar: tables used, metadata, suggestions, execution stats. */
 @Component({
@@ -10,7 +10,7 @@ import { BeelineResponse } from '../../core/models';
   styleUrl: './chat-context-panel.component.scss',
 })
 export class ChatContextPanelComponent {
-  readonly response = input<BeelineResponse | null>(null);
+  readonly response = input<DataLensResponse | null>(null);
 
   readonly hasContent = computed(() => {
     const r = this.response();

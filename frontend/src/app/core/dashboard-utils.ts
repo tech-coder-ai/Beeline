@@ -1,7 +1,7 @@
-import { BeelineResponse, SqlResult } from './models';
+import { DataLensResponse, SqlResult } from './models';
 
 /** Build a dashboard widget snapshot from a chat response. */
-export function buildWidgetSnapshot(response: BeelineResponse): SqlResult {
+export function buildWidgetSnapshot(response: DataLensResponse): SqlResult {
   const table = response.table ?? null;
   return {
     columns: table?.columns.map((c) => c.field) ?? [],
@@ -17,7 +17,7 @@ export function buildWidgetSnapshot(response: BeelineResponse): SqlResult {
   };
 }
 
-export function widgetTypeFor(response: BeelineResponse): string {
+export function widgetTypeFor(response: DataLensResponse): string {
   if (response.charts?.length && response.table?.rows?.length) return 'chart';
   if (response.table?.rows?.length) return 'table';
   if (response.charts?.length) return 'chart';
@@ -25,7 +25,7 @@ export function widgetTypeFor(response: BeelineResponse): string {
   return 'table';
 }
 
-export function widgetTitleFor(response: BeelineResponse): string {
+export function widgetTitleFor(response: DataLensResponse): string {
   const refined = response.metadata?.['refined_prompt'];
   if (typeof refined === 'string' && refined.trim()) return refined.trim().slice(0, 80);
   if (response.summary) return response.summary.slice(0, 80);
