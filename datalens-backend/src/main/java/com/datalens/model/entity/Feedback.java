@@ -14,13 +14,14 @@ public class Feedback extends BaseEntity {
   private String executionId;
   @Column(name = "message_id")
   private String messageId;
-  @Column(name = "user_id")
-  private String userId;
+  @Column(name = "user_id", nullable = false)
+  private String userId = "default";
   private String rating;
   private String category;
   private String comment;
   @Column(name = "corrected_sql")
   private String correctedSql;
-  private String status;
+  @Column(nullable = false)
+  private String status = "open";
   private Double learning;
 }

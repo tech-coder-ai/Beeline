@@ -10,8 +10,8 @@ import lombok.Getter; import lombok.Setter;
 @Table(name = "saved_queries")
 @Getter @Setter
 public class SavedQuery extends BaseEntity {
-  @Column(name = "user_id")
-  private String userId;
+  @Column(name = "user_id", nullable = false)
+  private String userId = "default";
   private String name;
   private String description;
   private String sql;

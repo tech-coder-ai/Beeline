@@ -10,8 +10,8 @@ import lombok.Getter; import lombok.Setter;
 @Table(name = "dashboards")
 @Getter @Setter
 public class Dashboard extends BaseEntity {
-  @Column(name = "user_id")
-  private String userId;
+  @Column(name = "user_id", nullable = false)
+  private String userId = "default";
   private String name;
   private String description;
   @Column(name = "is_shared", nullable = false)

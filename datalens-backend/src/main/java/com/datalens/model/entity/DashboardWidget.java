@@ -13,10 +13,12 @@ public class DashboardWidget extends BaseEntity {
   @Column(name = "dashboard_id")
   private String dashboardId;
   private String title;
-  @Column(name = "widget_type")
+  @Column(name = "widget_type", nullable = false)
   private String widgetType;
-  private Integer position;
-  private String size;
+  @Column(nullable = false)
+  private Integer position = 0;
+  @Column(nullable = false)
+  private String size = "half";
   private String sql;
   @Column(name = "connector_id")
   private String connectorId;

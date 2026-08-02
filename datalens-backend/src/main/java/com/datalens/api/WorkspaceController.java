@@ -144,12 +144,15 @@ public class WorkspaceController {
   @PostMapping("/queries")
   public SavedQueryOut saveQuery(@RequestBody SavedQueryIn in) {
     SavedQuery q = new SavedQuery();
+    q.setUserId("default");
     q.setName(in.name());
     q.setDescription(in.description());
     q.setSql(in.sql());
     q.setConnectorId(in.connectorId());
     q.setPrompt(in.prompt());
-    q.setTags(in.tags());
+    q.setTags(in.tags() != null ? in.tags() : java.util.List.of());
+    q.setIsBookmarked(false);
+    q.setRunCount(0);
     return toQueryOut(queries.save(q));
   }
 
@@ -185,9 +188,11 @@ public class WorkspaceController {
   @PostMapping("/dashboards")
   public DashboardOut createDashboard(@RequestBody DashboardIn in) {
     Dashboard d = new Dashboard();
+    d.setUserId("default");
     d.setName(in.name());
     d.setDescription(in.description());
     d.setRefreshIntervalSeconds(in.refreshIntervalSeconds());
+    d.setIsShared(false);
     d = dashboards.save(d);
     return new DashboardOut(
         d.getId(), d.getName(), d.getDescription(), d.getRefreshIntervalSeconds(), false, null, d.getCreatedAt(), d.getUpdatedAt(), List.of());
@@ -242,12 +247,14 @@ public class WorkspaceController {
   @PostMapping("/feedback")
   public Map<String, String> feedback(@RequestBody FeedbackIn in) {
     Feedback f = new Feedback();
+    f.setUserId("default");
     f.setExecutionId(in.executionId());
     f.setMessageId(in.messageId());
     f.setRating(in.rating());
     f.setCategory(in.category());
     f.setComment(in.comment());
     f.setCorrectedSql(in.correctedSql());
+    f.setStatus("open");
     feedback.save(f);
     if (in.executionId() != null) library.applyFeedback(in.executionId(), "up".equals(in.rating()));
     Map<String, Object> feedbackMeta = new java.util.LinkedHashMap<>();
