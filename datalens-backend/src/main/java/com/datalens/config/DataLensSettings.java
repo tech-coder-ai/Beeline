@@ -13,7 +13,8 @@ import org.yaml.snakeyaml.Yaml;
 @Component
 public class DataLensSettings {
   private static final Pattern ENV = Pattern.compile("\\$\\{([A-Za-z_][A-Za-z0-9_]*)\\}");
-  private static final Pattern OVERRIDE = Pattern.compile("^DATALENS__(.+)$");
+  private static final Pattern DATALENS_OVERRIDE = Pattern.compile("^DATALENS__(.+)$");
+  private static final Pattern BEELINE_OVERRIDE = Pattern.compile("^BEELINE__(.+)$");
 
   private final DataLensProperties properties;
   private final Map<String, Object> raw;
@@ -95,15 +96,26 @@ public class DataLensSettings {
   @SuppressWarnings("unchecked")
   private static void applyEnvOverrides(Map<String, Object> root) {
     for (Map.Entry<String, String> e : System.getenv().entrySet()) {
-      Matcher m = OVERRIDE.matcher(e.getKey());
-      if (!m.matches()) continue;
-      String[] parts = m.group(1).toLowerCase().split("__");
+      String[] parts = overridePath(e.getKey());
+      if (parts == null) continue;
       Map<String, Object> node = root;
       for (int i = 0; i < parts.length - 1; i++) {
         node = (Map<String, Object>) node.computeIfAbsent(parts[i], k -> new LinkedHashMap<>());
       }
       node.put(parts[parts.length - 1], coerce(e.getValue()));
     }
+  }
+
+  private static String[] overridePath(String envKey) {
+    Matcher datalens = DATALENS_OVERRIDE.matcher(envKey);
+    if (datalens.matches()) {
+      return datalens.group(1).toLowerCase().split("__");
+    }
+    Matcher beeline = BEELINE_OVERRIDE.matcher(envKey);
+    if (beeline.matches()) {
+      return beeline.group(1).toLowerCase().split("__");
+    }
+    return null;
   }
 
   private static Object coerce(String raw) {

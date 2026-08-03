@@ -585,40 +585,20 @@ COMMIT;
 
 
 -- =============================================================================
--- SECTION 7 — Application connection examples
+-- SECTION 7 — Application connection (single config file)
 -- =============================================================================
 --
--- Spring Boot (datalens-backend/src/main/resources/application.yml):
---
---   spring:
---     datasource:
---       url: jdbc:oracle:thin:@//hostname:1521/ORCLPDB1
---       username: beeline_meta
---       password: ChangeMeOnInstall
---       driver-class-name: oracle.jdbc.OracleDriver
---       hikari:
---         maximum-pool-size: 10
---     jpa:
---       hibernate:
---         ddl-auto: none
---       properties:
---         hibernate:
---           dialect: org.hibernate.dialect.OracleDialect
---           jdbc:
---             time_zone: UTC
---
--- Add the Oracle JDBC driver to pom.xml:
---   <dependency>
---     <groupId>com.oracle.database.jdbc</groupId>
---     <artifactId>ojdbc11</artifactId>
---     <scope>runtime</scope>
---   </dependency>
---
--- Python FastAPI (backend/config/settings.yaml):
+-- Edit backend/config/settings.yaml — both Spring Boot and Python read metadata_repository:
 --
 --   metadata_repository:
 --     url: oracle+oracledb://beeline_meta:ChangeMeOnInstall@hostname:1521/?service_name=ORCLPDB1
+--     pool_size: 10
+--     max_overflow: 20
 --
--- Install driver: pip install oracledb
+-- Or override at runtime:
+--   BEELINE__METADATA_REPOSITORY__URL=oracle+oracledb://...
+--
+-- Spring Boot auto-converts the URL to JDBC; restart datalens-backend after changing config.
+-- Python: pip install oracledb (listed in backend/pyproject.toml).
 --
 -- =============================================================================

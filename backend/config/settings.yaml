@@ -16,10 +16,15 @@ app:
 # ------------------------------------------------------------
 # Application metadata repository (NOT the analytics source).
 # Switch engines by changing url only: sqlite / postgresql / oracle
+# Spring Boot and Python both read this block (see MetadataRepositoryConfig).
+# Optional env override: BEELINE__METADATA_REPOSITORY__URL=...
 # ------------------------------------------------------------
 metadata_repository:
   url: sqlite+aiosqlite:///./beeline_meta.db
   # url: postgresql+asyncpg://beeline:beeline@localhost:5432/beeline
+  # url: oracle+oracledb://beeline_meta:ChangeMeOnInstall@localhost:1521/?service_name=ORCLPDB1
+  # username: beeline_meta
+  # password: ChangeMeOnInstall
   echo: false
   pool_size: 10
   max_overflow: 20
