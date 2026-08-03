@@ -10,18 +10,28 @@ import lombok.Getter; import lombok.Setter;
 @Table(name = "catalog_relationships")
 @Getter @Setter
 public class CatalogRelationship extends BaseEntity {
-  @Column(name = "from_table_id")
+  @Column(name = "from_table_id", nullable = false)
   private String fromTableId;
-  @Column(name = "from_column")
+  @Column(name = "from_column", nullable = false)
   private String fromColumn;
-  @Column(name = "to_table_id")
+  @Column(name = "to_table_id", nullable = false)
   private String toTableId;
-  @Column(name = "to_column")
+  @Column(name = "to_column", nullable = false)
   private String toColumn;
-  @Column(name = "relationship_type")
-  private String relationshipType;
-  private String source;
+  @Convert(converter = JsonAttributeConverter.class)
+  @Column(name = "from_columns")
+  private Object fromColumns;
+  @Convert(converter = JsonAttributeConverter.class)
+  @Column(name = "to_columns")
+  private Object toColumns;
+  @Column(name = "relationship_type", nullable = false)
+  private String relationshipType = "many_to_one";
+  @Column(name = "join_type", nullable = false)
+  private String joinType = "inner";
+  private String description;
+  @Column(nullable = false)
+  private String source = "manual";
   private Double confidence;
   @Column(name = "is_approved", nullable = false)
-  private Boolean isApproved = false;
+  private Boolean isApproved = true;
 }

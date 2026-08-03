@@ -11,17 +11,26 @@ import com.datalens.core.exception.ValidationFailed;
 import com.datalens.llm.LlmPrompts;
 import com.datalens.llm.LlmProviderRegistry;
 import com.datalens.model.entity.BusinessMetric;
+import com.datalens.model.entity.BusinessTerm;
 import com.datalens.model.entity.CatalogColumn;
 import com.datalens.model.entity.CatalogDatabase;
 import com.datalens.model.entity.CatalogTable;
 import com.datalens.model.entity.GlossaryTerm;
 import com.datalens.model.entity.QueryLibraryEntry;
+import com.datalens.model.entity.Synonym;
 import com.datalens.model.repository.BusinessMetricRepository;
+import com.datalens.model.repository.BusinessTermRepository;
 import com.datalens.model.repository.CatalogColumnRepository;
 import com.datalens.model.repository.CatalogDatabaseRepository;
+import com.datalens.model.repository.CatalogRelationshipRepository;
 import com.datalens.model.repository.CatalogTableRepository;
 import com.datalens.model.repository.GlossaryTermRepository;
 import com.datalens.model.repository.QueryLibraryEntryRepository;
+import com.datalens.model.entity.Abbreviation;
+import com.datalens.model.repository.AbbreviationRepository;
+import com.datalens.model.repository.SynonymRepository;
+import com.datalens.model.entity.CatalogRelationship;
+import com.datalens.service.CatalogRelationshipService;
 import com.datalens.pipeline.ExecutionPlanModel;
 import com.datalens.pipeline.IntentModel;
 import com.datalens.pipeline.LibraryMatchModel;
@@ -66,8 +75,13 @@ public class PipelineStages {
   private final CatalogColumnRepository columns;
   private final CatalogDatabaseRepository databases;
   private final GlossaryTermRepository glossary;
+  private final SynonymRepository synonymRepo;
+  private final AbbreviationRepository abbreviationRepo;
+  private final BusinessTermRepository businessTerms;
   private final BusinessMetricRepository metrics;
   private final QueryLibraryEntryRepository library;
+  private final CatalogRelationshipRepository relationships;
+  private final CatalogRelationshipService relationshipService;
   private final VisualizationPlanner visualizationPlanner;
   private final JaroWinklerSimilarity similarity = new JaroWinklerSimilarity();
 
@@ -83,8 +97,13 @@ public class PipelineStages {
       CatalogColumnRepository columns,
       CatalogDatabaseRepository databases,
       GlossaryTermRepository glossary,
+      SynonymRepository synonymRepo,
+      AbbreviationRepository abbreviationRepo,
+      BusinessTermRepository businessTerms,
       BusinessMetricRepository metrics,
       QueryLibraryEntryRepository library,
+      CatalogRelationshipRepository relationships,
+      CatalogRelationshipService relationshipService,
       VisualizationPlanner visualizationPlanner) {
     this.settings = settings;
     this.llm = llm;
@@ -97,8 +116,13 @@ public class PipelineStages {
     this.columns = columns;
     this.databases = databases;
     this.glossary = glossary;
+    this.synonymRepo = synonymRepo;
+    this.abbreviationRepo = abbreviationRepo;
+    this.businessTerms = businessTerms;
     this.metrics = metrics;
     this.library = library;
+    this.relationships = relationships;
+    this.relationshipService = relationshipService;
     this.visualizationPlanner = visualizationPlanner;
   }
 
@@ -116,10 +140,35 @@ public class PipelineStages {
 
   public void refine(PipelineContext ctx) {
     try {
+      StringBuilder hints = new StringBuilder();
+      for (Synonym syn : synonymRepo.findAll()) {
+        glossary
+            .findById(syn.getTermId())
+            .filter(t -> "approved".equals(t.getStatus()))
+            .ifPresent(
+                t ->
+                    hints.append(syn.getSynonym())
+                        .append(" => ")
+                        .append(t.getTerm())
+                        .append("\n"));
+        if (hints.length() > 8000) break;
+      }
+      for (Abbreviation abbr : abbreviationRepo.findByStatusOrderByAbbreviationAsc("approved")) {
+        hints.append(abbr.getAbbreviation()).append(" => ").append(abbr.getCanonical()).append("\n");
+        if (hints.length() > 10000) break;
+      }
+      String hintBlock =
+          hints.isEmpty()
+              ? ""
+              : "Synonym and abbreviation mappings:\n" + hints + "\n";
       Map<String, Object> parsed =
           llm.completeJson(
-              LlmPrompts.REFINER_SYSTEM, conversationContext(ctx) + "Message:\n" + ctx.getPrompt(), ctx, "refine");
+              LlmPrompts.REFINER_SYSTEM,
+              conversationContext(ctx) + hintBlock + "Message:\n" + ctx.getPrompt(),
+              ctx,
+              "refine");
       if (parsed.get("refined_prompt") != null) ctx.setRefinedPrompt(String.valueOf(parsed.get("refined_prompt")));
+      else if (parsed.get("refined") != null) ctx.setRefinedPrompt(String.valueOf(parsed.get("refined")));
     } catch (Exception e) {
       ctx.getWarnings().add("Refiner unavailable: " + e.getMessage());
     }
@@ -152,6 +201,7 @@ public class PipelineStages {
     }
     Set<String> qTokens = tokens(search);
     resolveGlossary(ctx, search, qTokens);
+    resolveBusinessTerms(ctx, search, qTokens);
     resolveMetrics(ctx, search, qTokens);
     resolveTables(ctx, search, qTokens);
     applyClarificationSelection(ctx);
@@ -616,6 +666,38 @@ public class PipelineStages {
     }
   }
 
+  private void resolveBusinessTerms(PipelineContext ctx, String question, Set<String> qTokens) {
+    List<BusinessTerm> terms = businessTerms.findByStatusOrderByTermAsc("approved");
+    List<Map.Entry<Double, BusinessTerm>> scored = new ArrayList<>();
+    for (BusinessTerm term : terms) {
+      String candidate =
+          term.getTerm()
+              + " "
+              + term.getEntity()
+              + " "
+              + term.getColumnName()
+              + " "
+              + term.getValue();
+      double s = score(question, qTokens, candidate);
+      if (s > 0.2) scored.add(Map.entry(s, term));
+    }
+    scored.sort(Comparator.comparingDouble((Map.Entry<Double, BusinessTerm> e) -> e.getKey()).reversed());
+    for (var e : scored.stream().limit(12).toList()) {
+      BusinessTerm t = e.getValue();
+      ctx.getBusinessTermContext()
+          .add(
+              Map.of(
+                  "term",
+                  t.getTerm(),
+                  "entity",
+                  t.getEntity(),
+                  "column_name",
+                  t.getColumnName(),
+                  "value",
+                  t.getValue()));
+    }
+  }
+
   private void resolveMetrics(PipelineContext ctx, String search, Set<String> qTokens) {
     for (BusinessMetric m : metrics.findAll()) {
       if (!"approved".equals(m.getStatus())) continue;
@@ -815,6 +897,13 @@ public class PipelineStages {
       } catch (Exception ignored) {
       }
     }
+    if (!ctx.getBusinessTermContext().isEmpty()) {
+      sb.append("Business term bindings (term -> entity.column = value): ");
+      try {
+        sb.append(mapper.writeValueAsString(ctx.getBusinessTermContext())).append("\n\n");
+      } catch (Exception ignored) {
+      }
+    }
     if (!ctx.getMetricContext().isEmpty()) {
       sb.append("Defined business metrics: ");
       try {
@@ -823,7 +912,20 @@ public class PipelineStages {
       }
     }
     sb.append("Available schema:\n").append(buildSchemaContext(ctx, List.of()));
+    String relContext = buildRelationshipContext(ctx);
+    sb.append("\n\nKnown relationships:\n").append(relContext.isBlank() ? "(none declared)" : relContext);
     return sb.toString();
+  }
+
+  private String buildRelationshipContext(PipelineContext ctx) {
+    if (ctx.getResolvedTables() == null || ctx.getResolvedTables().isEmpty()) return "";
+    Map<String, String> tableIds = new HashMap<>();
+    for (ResolvedTableModel t : ctx.getResolvedTables()) {
+      if (t.getId() != null) tableIds.put(t.getId(), t.qualifiedName());
+    }
+    if (tableIds.isEmpty()) return "";
+    List<CatalogRelationship> rows = relationships.findApprovedAmongTables(tableIds.keySet());
+    return relationshipService.formatForPlanner(tableIds, rows);
   }
 
   private static final Set<String> PLAN_LIST_FIELDS =

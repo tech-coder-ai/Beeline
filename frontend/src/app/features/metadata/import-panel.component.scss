@@ -2,22 +2,63 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  max-width: 900px;
+  width: 100%;
+  min-width: 0;
+}
+
+.upload-card,
+.preview-card {
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .upload-card {
   padding: 30px;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  text-align: center;
+  align-items: stretch;
+  gap: 12px;
 
-  .upload-icon { font-size: 40px; width: 40px; height: 40px; color: var(--bl-accent); }
-  p { margin: 0; font-size: 13px; max-width: 480px; color: var(--bl-text-muted); }
+  .upload-icon {
+    align-self: center;
+    font-size: 40px;
+    width: 40px;
+    height: 40px;
+    color: var(--bl-accent);
+  }
+
+  p {
+    margin: 0;
+    font-size: 13px;
+    color: var(--bl-text-muted);
+    text-align: center;
+  }
+
+  .type-label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+    font-size: 12.5px;
+
+    .text-input,
+    select {
+      width: 100%;
+    }
+  }
+
+  .hint {
+    font-size: 11.5px;
+    width: 100%;
+    word-break: break-word;
+    text-align: left;
+  }
+
+  .upload-btn {
+    align-self: flex-start;
+    cursor: pointer;
+  }
 }
-
-.upload-btn { cursor: pointer; }
 
 .preview-card {
   padding: 18px;
@@ -28,16 +69,26 @@
 
 .preview-summary {
   display: flex;
+  flex-wrap: wrap;
   gap: 24px;
+  width: 100%;
 
-  .stat { display: flex; flex-direction: column; gap: 2px; font-size: 12px;
-    strong { font-size: 18px; } }
+  .stat {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 12px;
+    min-width: 120px;
+
+    strong { font-size: 18px; }
+  }
 }
 
-.bl-table { font-size: 12px; }
+.bl-table {
+  font-size: 12px;
+  width: 100%;
+}
 
-// Scrolls internally with its own scrollbar so a long change/unmatched list never
-// pushes "Queue for approval"/"Cancel" below the fold - those stay right below it.
 .preview-scroll {
   max-height: 360px;
   overflow-y: auto;
@@ -45,23 +96,44 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
+  width: 100%;
+  min-width: 0;
 }
 
 .unmatched {
+  width: 100%;
+
   .section-label {
-    font-size: 11px; font-weight: 600; text-transform: uppercase;
-    color: var(--bl-warn); margin-bottom: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--bl-warn);
+    margin-bottom: 4px;
   }
-  ul { margin: 0; padding-left: 18px; font-size: 12px; color: var(--bl-text-muted); }
+
+  ul {
+    margin: 0;
+    padding-left: 18px;
+    font-size: 12px;
+    color: var(--bl-text-muted);
+  }
 }
 
-.preview-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.preview-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
 
 .banner.good-banner {
-  display: flex; align-items: center; gap: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 10px 14px;
   background: rgba(18, 145, 92, 0.1);
   color: var(--bl-good);
   border-radius: 10px;
   font-size: 13px;
+  width: 100%;
+  box-sizing: border-box;
 }

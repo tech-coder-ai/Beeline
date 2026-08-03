@@ -156,6 +156,131 @@
         </div>
       }
 
+      <div class="drawer-section relationships-section">
+        <div class="section-label">
+          Relationships
+          @if (!showRelForm()) {
+            <button class="icon-btn" matTooltip="Add relationship" (click)="startRelationshipForm()">
+              <mat-icon>add_link</mat-icon>
+            </button>
+          }
+        </div>
+        <p class="enrich-help muted">
+          Declare how this table joins to others. Approved relationships guide the AI planner when generating SQL.
+        </p>
+
+        @if (relationships().length) {
+          <div class="rel-list">
+            @for (rel of relationships(); track rel.id) {
+              <div class="rel-card">
+                <div class="rel-main">
+                  <span class="rel-line">{{ relationshipSummary(rel, table.id) }}</span>
+                  <span class="rel-meta muted">
+                    {{ rel.relationship_type }} · {{ rel.join_type }} join
+                    @if (rel.description) { · {{ rel.description }} }
+                  </span>
+                </div>
+                <button class="icon-btn" matTooltip="Delete relationship" (click)="deleteRelationship(rel)">
+                  <mat-icon>delete</mat-icon>
+                </button>
+              </div>
+            }
+          </div>
+        } @else if (!showRelForm()) {
+          <p class="muted small">No relationships declared for this table.</p>
+        }
+
+        @if (showRelForm()) {
+          <div class="rel-form">
+            <label class="field-label muted">Related table</label>
+            <select class="text-input" [ngModel]="relToTableId" (ngModelChange)="onRelToTableChange($event)">
+              <option value="">Select table…</option>
+              @for (t of relTableOptions(); track t.id) {
+                <option [value]="t.id">{{ t.database_name }}.{{ t.name }}</option>
+              }
+            </select>
+
+            <div class="rel-columns-grid">
+              <div>
+                <label class="field-label muted">From columns (this table)</label>
+                <div class="col-picks">
+                  @for (col of table.columns; track col.id) {
+                    <label class="checkbox-row compact">
+                      <input
+                        type="checkbox"
+                        [checked]="relFromColumns.includes(col.name)"
+                        (change)="toggleRelFromColumn(col.name, $any($event.target).checked)"
+                      />
+                      <span class="mono">{{ col.name }}</span>
+                    </label>
+                  }
+                </div>
+              </div>
+              <div>
+                <label class="field-label muted">To columns</label>
+                @if (targetTable(); as target) {
+                  <div class="col-picks">
+                    @for (col of target.columns; track col.id) {
+                      <label class="checkbox-row compact">
+                        <input
+                          type="checkbox"
+                          [checked]="relToColumns.includes(col.name)"
+                          (change)="toggleRelToColumn(col.name, $any($event.target).checked)"
+                        />
+                        <span class="mono">{{ col.name }}</span>
+                      </label>
+                    }
+                  </div>
+                } @else {
+                  <p class="muted small">Select a related table first.</p>
+                }
+              </div>
+            </div>
+
+            <div class="field-grid">
+              <div>
+                <label class="field-label muted">Cardinality</label>
+                <select class="text-input" [(ngModel)]="relType">
+                  @for (rt of relationshipTypes; track rt.value) {
+                    <option [value]="rt.value">{{ rt.label }}</option>
+                  }
+                </select>
+              </div>
+              <div>
+                <label class="field-label muted">Join type</label>
+                <select class="text-input" [(ngModel)]="relJoinType">
+                  @for (jt of joinTypes; track jt) {
+                    <option [value]="jt">{{ jt }}</option>
+                  }
+                </select>
+              </div>
+            </div>
+
+            <label class="field-label muted">Description</label>
+            <textarea
+              class="text-input"
+              rows="2"
+              placeholder="Business meaning of this join"
+              [(ngModel)]="relDescription"
+            ></textarea>
+
+            <div class="drawer-actions">
+              <button
+                class="primary-btn small-btn"
+                [disabled]="savingRel() || !relToTableId || !relFromColumns.length || relFromColumns.length !== relToColumns.length"
+                (click)="saveRelationship()"
+              >
+                @if (savingRel()) { Saving… } @else { Save relationship }
+              </button>
+              <button class="ghost-btn small-btn" (click)="cancelRelationshipForm()">Cancel</button>
+            </div>
+            @if (relFromColumns.length && relToColumns.length && relFromColumns.length !== relToColumns.length) {
+              <p class="rel-error">Select the same number of from and to columns (composite keys).</p>
+            }
+          </div>
+        }
+      </div>
+
       <div class="drawer-section">
         <div class="section-label">Columns ({{ table.columns?.length || 0 }})</div>
         <table class="bl-table">

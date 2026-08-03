@@ -22,6 +22,7 @@ public class PipelineContext {
   private IntentModel intent;
   private List<ResolvedTableModel> resolvedTables = new ArrayList<>();
   private List<Map<String, Object>> glossaryContext = new ArrayList<>();
+  private List<Map<String, Object>> businessTermContext = new ArrayList<>();
   private List<Map<String, Object>> metricContext = new ArrayList<>();
   private LibraryMatchModel libraryMatch;
   private ExecutionPlanModel plan;

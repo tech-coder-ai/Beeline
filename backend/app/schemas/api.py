@@ -128,6 +128,46 @@ class ColumnUpdate(BaseModel):
     is_pii: bool | None = None
 
 
+class RelationshipIn(BaseModel):
+    from_table_id: str
+    to_table_id: str
+    from_columns: list[str]
+    to_columns: list[str]
+    relationship_type: str = "many_to_one"
+    join_type: str = "inner"
+    description: str | None = None
+    is_approved: bool | None = True
+
+
+class RelationshipUpdate(BaseModel):
+    from_columns: list[str] | None = None
+    to_columns: list[str] | None = None
+    relationship_type: str | None = None
+    join_type: str | None = None
+    description: str | None = None
+    is_approved: bool | None = None
+
+
+class RelationshipOut(BaseModel):
+    id: str
+    from_table_id: str
+    from_table_name: str
+    from_database_name: str
+    to_table_id: str
+    to_table_name: str
+    to_database_name: str
+    from_columns: list[str]
+    to_columns: list[str]
+    relationship_type: str
+    join_type: str
+    description: str | None
+    source: str
+    confidence: float | None
+    is_approved: bool
+    created_at: datetime
+    updated_at: datetime
+
+
 # ---------------------------------------------------------------- glossary
 class GlossaryTermIn(BaseModel):
     term: str
@@ -144,6 +184,41 @@ class GlossaryTermOut(GlossaryTermIn):
     status: str
     source: str
     created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class BusinessTermIn(BaseModel):
+    term: str
+    entity: str | None = None
+    column_name: str
+    value: str
+    table_id: str | None = None
+
+
+class BusinessTermOut(BusinessTermIn):
+    id: str
+    entity: str
+    status: str
+    source: str
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class AbbreviationIn(BaseModel):
+    abbreviation: str
+    canonical: str
+    description: str | None = None
+
+
+class AbbreviationOut(AbbreviationIn):
+    id: str
+    status: str
+    source: str
+    created_at: datetime
+    updated_at: datetime
 
     model_config = {"from_attributes": True}
 

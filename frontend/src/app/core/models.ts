@@ -200,6 +200,26 @@ export interface CatalogTable {
   columns?: CatalogColumn[];
 }
 
+export interface CatalogRelationship {
+  id: string;
+  from_table_id: string;
+  from_table_name: string;
+  from_database_name: string;
+  to_table_id: string;
+  to_table_name: string;
+  to_database_name: string;
+  from_columns: string[];
+  to_columns: string[];
+  relationship_type: string;
+  join_type: string;
+  description?: string | null;
+  source: string;
+  confidence?: number | null;
+  is_approved: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface GlossaryTerm {
   id?: string;
   term: string;
@@ -212,6 +232,30 @@ export interface GlossaryTerm {
   status?: string;
   source?: string;
   created_at?: string;
+}
+
+export interface BusinessTerm {
+  id?: string;
+  term: string;
+  entity: string;
+  column_name: string;
+  value: string;
+  table_id?: string | null;
+  status?: string;
+  source?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface Abbreviation {
+  id?: string;
+  abbreviation: string;
+  canonical: string;
+  description?: string | null;
+  status?: string;
+  source?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface ApprovalItem {

@@ -15,7 +15,7 @@ from app.core.logging import get_logger
 from app.llm import prompts
 from app.llm.providers import get_llm
 from app.models.catalog import CatalogRelationship, CatalogTable
-from app.pipeline.types import ExecutionPlan, PipelineContext
+from app.services.catalog_relationships import format_for_planner
 
 logger = get_logger(__name__)
 
@@ -41,6 +41,7 @@ class QueryPlanner:
             f"Question: {ctx.effective_prompt}\n\n"
             f"Intent analysis: {ctx.intent.model_dump_json() if ctx.intent else '{}'}\n\n"
             f"Business glossary context: {json.dumps(ctx.glossary_context)}\n\n"
+            f"Business term bindings (term -> entity.column = value): {json.dumps(ctx.business_term_context)}\n\n"
             f"Defined business metrics: {json.dumps(ctx.metric_context)}\n\n"
             f"Available schema:\n{schema_context}\n\n"
             f"Known relationships:\n{relationships or '(none declared)'}"
@@ -98,11 +99,7 @@ class QueryPlanner:
                 )
             )
         ).scalars().all()
-        return "\n".join(
-            f"{table_ids[r.from_table_id]}.{r.from_column} -> "
-            f"{table_ids[r.to_table_id]}.{r.to_column} ({r.relationship_type})"
-            for r in rows
-        )
+        return format_for_planner(table_ids, rows)
 
     @staticmethod
     def _parse_plan(parsed: dict) -> ExecutionPlan:

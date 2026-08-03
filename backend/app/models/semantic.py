@@ -37,6 +37,32 @@ class Synonym(Base, IdMixin, TimestampMixin):
     term_ref: Mapped[GlossaryTerm] = relationship(back_populates="synonyms")
 
 
+class Abbreviation(Base, IdMixin, TimestampMixin):
+    """Short form expansions, e.g. GMV -> Gross Merchandise Value."""
+
+    __tablename__ = "abbreviations"
+
+    abbreviation: Mapped[str] = mapped_column(String(64), index=True)
+    canonical: Mapped[str] = mapped_column(String(255))
+    description: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(16), default="approved")
+    source: Mapped[str] = mapped_column(String(16), default="manual")
+
+
+class BusinessTerm(Base, IdMixin, TimestampMixin):
+    """Maps a business term to a catalog entity column value, e.g. Active -> orders.status = 'A'."""
+
+    __tablename__ = "business_terms"
+
+    term: Mapped[str] = mapped_column(String(255), index=True)
+    entity: Mapped[str] = mapped_column(String(512), index=True)  # db.table
+    column_name: Mapped[str] = mapped_column(String(255))
+    value: Mapped[str] = mapped_column(Text)
+    table_id: Mapped[str | None] = mapped_column(ForeignKey("catalog_tables.id"), index=True)
+    status: Mapped[str] = mapped_column(String(16), default="approved")
+    source: Mapped[str] = mapped_column(String(16), default="manual")
+
+
 class BusinessMetric(Base, IdMixin, TimestampMixin):
     """Named metric with its SQL expression, e.g. Revenue = SUM(order_amount)."""
 

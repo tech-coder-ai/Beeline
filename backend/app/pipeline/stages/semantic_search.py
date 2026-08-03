@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.models.catalog import CatalogDatabase, CatalogTable
 from app.models.queries import QueryLibraryEntry
-from app.models.semantic import BusinessMetric, GlossaryTerm, Synonym
+from app.models.semantic import BusinessMetric, BusinessTerm, GlossaryTerm, Synonym
 from app.pipeline.types import LibraryMatch, PipelineContext, ResolvedTable
 
 MAX_TABLES = 6
@@ -45,6 +45,7 @@ class SemanticSearch:
         q_tokens = _tokens(search_text)
 
         await self._resolve_glossary(ctx, db, question, q_tokens)
+        await self._resolve_business_terms(ctx, db, search_text, q_tokens)
         await self._resolve_metrics(ctx, db, search_text, q_tokens)
         await self._resolve_tables(ctx, db, search_text, q_tokens)
         await self._search_library(ctx, db, question)
@@ -78,6 +79,27 @@ class SemanticSearch:
                 "synonyms": [s.synonym for s in t.synonyms],
             }
             for _, t in scored[:8]
+        ]
+
+    async def _resolve_business_terms(self, ctx, db, search_text: str, q_tokens: set[str]) -> None:
+        terms = (
+            await db.execute(select(BusinessTerm).where(BusinessTerm.status == "approved"))
+        ).scalars().all()
+        scored = []
+        for term in terms:
+            candidate = f"{term.term} {term.entity} {term.column_name} {term.value}"
+            score = _score(search_text, q_tokens, candidate)
+            if score > 0.2:
+                scored.append((score, term))
+        scored.sort(key=lambda pair: -pair[0])
+        ctx.business_term_context = [
+            {
+                "term": t.term,
+                "entity": t.entity,
+                "column_name": t.column_name,
+                "value": t.value,
+            }
+            for _, t in scored[:12]
         ]
 
     async def _resolve_metrics(self, ctx, db, search_text: str, q_tokens: set[str]) -> None:

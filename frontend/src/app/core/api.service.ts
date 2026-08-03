@@ -6,6 +6,7 @@ import {
   AuditLogEntry,
   DataLensResponse,
   CatalogDatabase,
+  CatalogRelationship,
   CatalogTable,
   ChatMessage,
   ChatSession,
@@ -13,6 +14,8 @@ import {
   Dashboard,
   DashboardWidget,
   ExecutionLog,
+  BusinessTerm,
+  Abbreviation,
   GlossaryTerm,
   SavedQuery,
   SqlExplanation,
@@ -111,6 +114,42 @@ export class ApiService {
     return this.http.patch(`${API}/metadata/columns/${columnId}`, update);
   }
 
+  listRelationships(tableId: string): Observable<CatalogRelationship[]> {
+    return this.http.get<CatalogRelationship[]>(`${API}/metadata/relationships`, {
+      params: { table_id: tableId },
+    });
+  }
+
+  createRelationship(body: {
+    from_table_id: string;
+    to_table_id: string;
+    from_columns: string[];
+    to_columns: string[];
+    relationship_type?: string;
+    join_type?: string;
+    description?: string | null;
+  }): Observable<CatalogRelationship> {
+    return this.http.post<CatalogRelationship>(`${API}/metadata/relationships`, body);
+  }
+
+  updateRelationship(
+    relationshipId: string,
+    body: Partial<{
+      from_columns: string[];
+      to_columns: string[];
+      relationship_type: string;
+      join_type: string;
+      description: string | null;
+      is_approved: boolean;
+    }>,
+  ): Observable<CatalogRelationship> {
+    return this.http.patch<CatalogRelationship>(`${API}/metadata/relationships/${relationshipId}`, body);
+  }
+
+  deleteRelationship(relationshipId: string): Observable<{ deleted: string }> {
+    return this.http.delete<{ deleted: string }>(`${API}/metadata/relationships/${relationshipId}`);
+  }
+
   // ------------------------------------------------------------- approvals
   listApprovals(status = 'pending', entityType?: string): Observable<ApprovalItem[]> {
     const params: Record<string, string> = { status };
@@ -137,16 +176,20 @@ export class ApiService {
     return this.http.post(`${API}/metadata/approvals/bulk/decide`, { ids, action });
   }
 
-  importPreview(file: File): Observable<Record<string, unknown>> {
+  importPreview(file: File, importType?: string): Observable<Record<string, unknown>> {
     const form = new FormData();
     form.append('file', file);
-    return this.http.post<Record<string, unknown>>(`${API}/metadata/import/preview`, form);
+    const params: Record<string, string> = {};
+    if (importType) params['import_type'] = importType;
+    return this.http.post<Record<string, unknown>>(`${API}/metadata/import/preview`, form, { params });
   }
 
-  importCommit(file: File): Observable<Record<string, unknown>> {
+  importCommit(file: File, importType?: string): Observable<Record<string, unknown>> {
     const form = new FormData();
     form.append('file', file);
-    return this.http.post<Record<string, unknown>>(`${API}/metadata/import/commit`, form);
+    const params: Record<string, string> = {};
+    if (importType) params['import_type'] = importType;
+    return this.http.post<Record<string, unknown>>(`${API}/metadata/import/commit`, form, { params });
   }
 
   // ------------------------------------------------------------- glossary
@@ -166,6 +209,43 @@ export class ApiService {
 
   deleteTerm(id: string): Observable<unknown> {
     return this.http.delete(`${API}/glossary/${id}`);
+  }
+
+  listBusinessTerms(search?: string, entity?: string): Observable<BusinessTerm[]> {
+    const params: Record<string, string> = {};
+    if (search) params['search'] = search;
+    if (entity) params['entity'] = entity;
+    return this.http.get<BusinessTerm[]>(`${API}/business-terms`, { params });
+  }
+
+  createBusinessTerm(term: BusinessTerm): Observable<BusinessTerm> {
+    return this.http.post<BusinessTerm>(`${API}/business-terms`, term);
+  }
+
+  updateBusinessTerm(id: string, term: BusinessTerm): Observable<BusinessTerm> {
+    return this.http.put<BusinessTerm>(`${API}/business-terms/${id}`, term);
+  }
+
+  deleteBusinessTerm(id: string): Observable<unknown> {
+    return this.http.delete(`${API}/business-terms/${id}`);
+  }
+
+  listAbbreviations(search?: string): Observable<Abbreviation[]> {
+    const params: Record<string, string> = {};
+    if (search) params['search'] = search;
+    return this.http.get<Abbreviation[]>(`${API}/abbreviations`, { params });
+  }
+
+  createAbbreviation(row: Abbreviation): Observable<Abbreviation> {
+    return this.http.post<Abbreviation>(`${API}/abbreviations`, row);
+  }
+
+  updateAbbreviation(id: string, row: Abbreviation): Observable<Abbreviation> {
+    return this.http.put<Abbreviation>(`${API}/abbreviations/${id}`, row);
+  }
+
+  deleteAbbreviation(id: string): Observable<unknown> {
+    return this.http.delete(`${API}/abbreviations/${id}`);
   }
 
   // ------------------------------------------------------------- sql & queries

@@ -63,6 +63,8 @@ def create_app() -> FastAPI:
     app.include_router(chat.router, prefix=prefix)
     app.include_router(metadata.router, prefix=prefix)
     app.include_router(metadata.glossary_router, prefix=prefix)
+    app.include_router(metadata.business_terms_router, prefix=prefix)
+    app.include_router(metadata.abbreviations_router, prefix=prefix)
     app.include_router(workspace.router, prefix=prefix)
     app.include_router(admin.router, prefix=prefix)
     app.include_router(admin.health_router, prefix=prefix)

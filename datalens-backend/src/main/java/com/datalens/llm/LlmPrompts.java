@@ -114,8 +114,9 @@ public final class LlmPrompts {
   public static final String REFINER_SYSTEM = """
       Refine the user question for analytics. Use the recent conversation (when provided) to resolve
       pronouns and implicit references ("those customers", "same period") into an explicit standalone
-      question, but never invent constraints the user did not state.
-      Return JSON with refined_prompt and notes array.""";
+      question. Expand abbreviations and replace business synonyms with canonical terms using the
+      provided mappings when present, but never invent constraints the user did not state.
+      Return JSON with refined_prompt (or refined) and notes array.""";
 
   public static final String INTERPRETER_SYSTEM = """
       Summarize query results for a business user. Return JSON with summary, insights,

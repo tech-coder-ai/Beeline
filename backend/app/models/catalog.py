@@ -96,7 +96,11 @@ class CatalogRelationship(Base, IdMixin, TimestampMixin):
     from_column: Mapped[str] = mapped_column(String(255))
     to_table_id: Mapped[str] = mapped_column(ForeignKey("catalog_tables.id"), index=True)
     to_column: Mapped[str] = mapped_column(String(255))
+    from_columns: Mapped[list | None] = mapped_column(JSON)
+    to_columns: Mapped[list | None] = mapped_column(JSON)
     relationship_type: Mapped[str] = mapped_column(String(32), default="many_to_one")
+    join_type: Mapped[str] = mapped_column(String(16), default="inner")
+    description: Mapped[str | None] = mapped_column(Text)
     source: Mapped[str] = mapped_column(String(32), default="manual")  # manual|imported|ai|inferred
     confidence: Mapped[float | None] = mapped_column(Float)
     is_approved: Mapped[bool] = mapped_column(Boolean, default=True)

@@ -12,7 +12,7 @@ from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.llm import prompts
 from app.llm.providers import get_llm
-from app.models.semantic import GlossaryTerm, Synonym
+from app.models.semantic import Abbreviation, GlossaryTerm, Synonym
 from app.pipeline.types import PipelineContext
 
 logger = get_logger(__name__)
@@ -31,16 +31,22 @@ class QueryRefiner:
                 .where(GlossaryTerm.status == "approved")
             )
         ).all()
-        glossary_hint = "\n".join(f"{syn} => {term}" for syn, term in synonym_rows[:200])
+        abbrev_rows = (
+            await db.execute(select(Abbreviation).where(Abbreviation.status == "approved"))
+        ).scalars().all()
+
+        lines = [f"{syn} => {term}" for syn, term in synonym_rows[:200]]
+        lines.extend(f"{a.abbreviation} => {a.canonical}" for a in abbrev_rows[:200])
+        hint_block = "\n".join(lines)
 
         try:
             llm = get_llm()
             parsed, result = await llm.complete_json(
                 prompts.REFINER_SYSTEM,
-                f"Glossary synonym mappings:\n{glossary_hint or '(none)'}\n\nUser message:\n{ctx.prompt}",
+                f"Synonym and abbreviation mappings:\n{hint_block or '(none)'}\n\nUser message:\n{ctx.prompt}",
             )
             ctx.record_llm("refine", result)
-            refined = (parsed.get("refined") or "").strip()
+            refined = (parsed.get("refined") or parsed.get("refined_prompt") or "").strip()
             if refined and refined.lower() != ctx.prompt.strip().lower():
                 ctx.refined_prompt = refined
                 ctx.refinement_notes = [str(n) for n in parsed.get("notes", [])][:5]

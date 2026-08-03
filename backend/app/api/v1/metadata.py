@@ -9,16 +9,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
-from app.core.exceptions import NotFound
+from app.core.exceptions import NotFound, ValidationFailed
 from app.models.catalog import CatalogColumn, CatalogDatabase, CatalogTable
-from app.models.semantic import BusinessMetric, GlossaryTerm, Synonym
+from app.models.semantic import Abbreviation, BusinessMetric, BusinessTerm, GlossaryTerm, Synonym
 from app.schemas.api import (
+    AbbreviationIn,
+    AbbreviationOut,
     ApprovalDecision,
     ApprovalOut,
     BulkApprovalDecision,
+    BusinessTermIn,
+    BusinessTermOut,
     ColumnUpdate,
     GlossaryTermIn,
     GlossaryTermOut,
+    RelationshipIn,
+    RelationshipOut,
+    RelationshipUpdate,
     TableDetailOut,
     TableEnrichRequest,
     TableOut,
@@ -26,11 +33,17 @@ from app.schemas.api import (
 )
 from app.services.approval import approval_service
 from app.services.audit import audit
+from app.services.catalog_relationships import create as create_relationship
+from app.services.catalog_relationships import delete as delete_relationship
+from app.services.catalog_relationships import list_for_table as list_relationships
+from app.services.catalog_relationships import update as update_relationship
 from app.services.enrichment import enrichment_service
-from app.services.import_export import import_service
+from app.services.semantic_import import semantic_import_service
 
 router = APIRouter(prefix="/metadata", tags=["metadata"])
 glossary_router = APIRouter(prefix="/glossary", tags=["glossary"])
+business_terms_router = APIRouter(prefix="/business-terms", tags=["business-terms"])
+abbreviations_router = APIRouter(prefix="/abbreviations", tags=["abbreviations"])
 
 
 # ------------------------------------------------------------------ catalog
@@ -139,6 +152,44 @@ async def enrich_table(
     return result
 
 
+@router.get("/relationships", response_model=list[RelationshipOut])
+async def list_table_relationships(table_id: str, db: AsyncSession = Depends(get_db)):
+    return await list_relationships(db, table_id)
+
+
+@router.post("/relationships", response_model=RelationshipOut)
+async def create_table_relationship(body: RelationshipIn, db: AsyncSession = Depends(get_db)):
+    out = await create_relationship(db, body)
+    await audit(
+        db,
+        "default",
+        "metadata.relationship.create",
+        entity_type="relationship",
+        entity_id=out.id,
+        detail={"from": out.from_table_id, "to": out.to_table_id},
+    )
+    await db.commit()
+    return out
+
+
+@router.patch("/relationships/{relationship_id}", response_model=RelationshipOut)
+async def patch_table_relationship(
+    relationship_id: str, body: RelationshipUpdate, db: AsyncSession = Depends(get_db)
+):
+    out = await update_relationship(db, relationship_id, body)
+    await audit(db, "default", "metadata.relationship.update", entity_type="relationship", entity_id=relationship_id)
+    await db.commit()
+    return out
+
+
+@router.delete("/relationships/{relationship_id}")
+async def remove_table_relationship(relationship_id: str, db: AsyncSession = Depends(get_db)):
+    await delete_relationship(db, relationship_id)
+    await audit(db, "default", "metadata.relationship.delete", entity_type="relationship", entity_id=relationship_id)
+    await db.commit()
+    return {"deleted": relationship_id}
+
+
 @router.patch("/columns/{column_id}")
 async def update_column(column_id: str, update: ColumnUpdate, db: AsyncSession = Depends(get_db)):
     column = await db.get(CatalogColumn, column_id)
@@ -201,16 +252,24 @@ async def rollback_version(version_id: str, db: AsyncSession = Depends(get_db)):
 
 # ------------------------------------------------------------------ import
 @router.post("/import/preview")
-async def import_preview(file: UploadFile, db: AsyncSession = Depends(get_db)):
-    rows = import_service.parse(file.filename or "upload.csv", await file.read())
-    return await import_service.preview(db, rows)
+async def import_preview(
+    file: UploadFile,
+    import_type: str | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    rows = semantic_import_service.parse(file.filename or "upload.csv", await file.read())
+    return await semantic_import_service.preview(db, rows, import_type)
 
 
 @router.post("/import/commit")
-async def import_commit(file: UploadFile, db: AsyncSession = Depends(get_db)):
-    rows = import_service.parse(file.filename or "upload.csv", await file.read())
-    result = await import_service.commit(db, rows)
-    await audit(db, "default", "metadata.import", detail={"rows": len(rows)})
+async def import_commit(
+    file: UploadFile,
+    import_type: str | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    rows = semantic_import_service.parse(file.filename or "upload.csv", await file.read())
+    result = await semantic_import_service.commit(db, rows, import_type)
+    await audit(db, "default", "metadata.import", detail={"import_type": result.get("import_type")})
     await db.commit()
     return result
 
@@ -303,3 +362,153 @@ async def list_metrics(db: AsyncSession = Depends(get_db)):
         )}
         for m in metrics
     ]
+
+
+async def _resolve_business_entity(db: AsyncSession, entity: str | None, table_id: str | None) -> str:
+    if entity and entity.strip():
+        return entity.strip()
+    if not table_id:
+        raise ValidationFailed("entity or table_id is required")
+    table = await db.get(CatalogTable, table_id)
+    if not table:
+        raise NotFound("Table not found")
+    db_row = await db.get(CatalogDatabase, table.database_id)
+    db_name = db_row.name if db_row else ""
+    return f"{db_name}.{table.name}"
+
+
+def _business_term_out(row: BusinessTerm) -> BusinessTermOut:
+    return BusinessTermOut(
+        id=row.id,
+        term=row.term,
+        entity=row.entity,
+        column_name=row.column_name,
+        value=row.value,
+        table_id=row.table_id,
+        status=row.status,
+        source=row.source,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+@business_terms_router.get("", response_model=list[BusinessTermOut])
+async def list_business_terms(
+    search: str | None = None,
+    entity: str | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = select(BusinessTerm).order_by(BusinessTerm.term)
+    if search:
+        stmt = stmt.where(BusinessTerm.term.ilike(f"%{search}%"))
+    if entity:
+        stmt = stmt.where(BusinessTerm.entity.ilike(f"%{entity}%"))
+    rows = (await db.execute(stmt)).scalars().all()
+    return [_business_term_out(r) for r in rows]
+
+
+@business_terms_router.post("", response_model=BusinessTermOut)
+async def create_business_term(body: BusinessTermIn, db: AsyncSession = Depends(get_db)):
+    resolved_entity = await _resolve_business_entity(db, body.entity, body.table_id)
+    row = BusinessTerm(
+        term=body.term.strip(),
+        entity=resolved_entity,
+        column_name=body.column_name.strip(),
+        value=body.value.strip(),
+        table_id=body.table_id,
+        source="manual",
+        status="approved",
+    )
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+    await audit(db, "default", "business_term.create", entity_type="business_term", entity_id=row.id)
+    await db.commit()
+    return _business_term_out(row)
+
+
+@business_terms_router.put("/{term_id}", response_model=BusinessTermOut)
+async def update_business_term(term_id: str, body: BusinessTermIn, db: AsyncSession = Depends(get_db)):
+    row = await db.get(BusinessTerm, term_id)
+    if not row:
+        raise NotFound("Business term not found")
+    row.term = body.term.strip()
+    row.entity = await _resolve_business_entity(db, body.entity, body.table_id)
+    row.column_name = body.column_name.strip()
+    row.value = body.value.strip()
+    row.table_id = body.table_id
+    await db.commit()
+    await db.refresh(row)
+    await audit(db, "default", "business_term.update", entity_type="business_term", entity_id=term_id)
+    await db.commit()
+    return _business_term_out(row)
+
+
+@business_terms_router.delete("/{term_id}")
+async def delete_business_term(term_id: str, db: AsyncSession = Depends(get_db)):
+    row = await db.get(BusinessTerm, term_id)
+    if not row:
+        raise NotFound("Business term not found")
+    await db.delete(row)
+    await db.commit()
+    return {"deleted": term_id}
+
+
+def _abbreviation_out(row: Abbreviation) -> AbbreviationOut:
+    return AbbreviationOut(
+        id=row.id,
+        abbreviation=row.abbreviation,
+        canonical=row.canonical,
+        description=row.description,
+        status=row.status,
+        source=row.source,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+@abbreviations_router.get("", response_model=list[AbbreviationOut])
+async def list_abbreviations(search: str | None = None, db: AsyncSession = Depends(get_db)):
+    rows = (await db.execute(select(Abbreviation).order_by(Abbreviation.abbreviation))).scalars().all()
+    if search:
+        needle = search.lower()
+        rows = [r for r in rows if needle in r.abbreviation.lower() or needle in r.canonical.lower()]
+    return [_abbreviation_out(r) for r in rows]
+
+
+@abbreviations_router.post("", response_model=AbbreviationOut)
+async def create_abbreviation(body: AbbreviationIn, db: AsyncSession = Depends(get_db)):
+    row = Abbreviation(
+        abbreviation=body.abbreviation.strip(),
+        canonical=body.canonical.strip(),
+        description=body.description,
+        source="manual",
+        status="approved",
+    )
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+    return _abbreviation_out(row)
+
+
+@abbreviations_router.put("/{abbreviation_id}", response_model=AbbreviationOut)
+async def update_abbreviation(abbreviation_id: str, body: AbbreviationIn, db: AsyncSession = Depends(get_db)):
+    row = await db.get(Abbreviation, abbreviation_id)
+    if not row:
+        raise NotFound("Abbreviation not found")
+    row.abbreviation = body.abbreviation.strip()
+    row.canonical = body.canonical.strip()
+    row.description = body.description
+    await db.commit()
+    await db.refresh(row)
+    return _abbreviation_out(row)
+
+
+@abbreviations_router.delete("/{abbreviation_id}")
+async def delete_abbreviation(abbreviation_id: str, db: AsyncSession = Depends(get_db)):
+    row = await db.get(Abbreviation, abbreviation_id)
+    if not row:
+        raise NotFound("Abbreviation not found")
+    await db.delete(row)
+    await db.commit()
+    return {"deleted": abbreviation_id}

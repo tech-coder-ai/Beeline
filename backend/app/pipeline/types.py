@@ -118,6 +118,7 @@ class PipelineContext:
     intent: Intent | None = None
     resolved_tables: list[ResolvedTable] = field(default_factory=list)
     glossary_context: list[dict] = field(default_factory=list)
+    business_term_context: list[dict] = field(default_factory=list)
     metric_context: list[dict] = field(default_factory=list)
     library_match: LibraryMatch | None = None
 
