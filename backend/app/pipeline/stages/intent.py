@@ -10,7 +10,7 @@ import re
 from app.core.exceptions import LLMUnavailable
 from app.core.logging import get_logger
 from app.llm import prompts
-from app.llm.providers import get_llm
+from app.llm.trace import complete_json_traced
 from app.pipeline.types import Intent, PipelineContext
 
 logger = get_logger(__name__)
@@ -50,12 +50,8 @@ class IntentEngine:
             if ctx.clarification_answer else ""
         )
         try:
-            llm = get_llm()
-            parsed, result = await llm.complete_json(
-                prompts.INTENT_SYSTEM,
-                f"{history_block}{clarification_block}Current message:\n{ctx.effective_prompt}",
-            )
-            ctx.record_llm("intent", result)
+            user_message = f"{history_block}{clarification_block}Current message:\n{ctx.effective_prompt}"
+            parsed, _ = await complete_json_traced(ctx, "intent", prompts.INTENT_SYSTEM, user_message)
             if parsed:
                 ctx.intent = Intent(**{k: v for k, v in parsed.items() if k in Intent.model_fields})
                 ctx.confidence["business"] = float(ctx.intent.confidence)

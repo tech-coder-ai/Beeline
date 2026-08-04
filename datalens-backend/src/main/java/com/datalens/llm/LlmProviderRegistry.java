@@ -69,9 +69,10 @@ public class LlmProviderRegistry {
       String systemPrompt, String userMessage, com.datalens.pipeline.PipelineContext ctx, String purpose)
       throws Exception {
     LlmProvider llm = getActive();
-    LlmResult result =
-        llm.complete(systemPrompt + "\n\nRespond with valid JSON only. No prose, no markdown fences.", userMessage);
-    if (ctx != null) ctx.recordLlm(purpose, result);
+    String effectiveSystem =
+        systemPrompt + "\n\nRespond with valid JSON only. No prose, no markdown fences.";
+    LlmResult result = llm.complete(effectiveSystem, userMessage);
+    if (ctx != null) ctx.recordLlm(purpose, result, effectiveSystem, userMessage);
     return llmJson.parseLoosely(result.getText());
   }
 

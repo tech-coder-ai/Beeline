@@ -102,6 +102,16 @@ export interface ResponseAction {
   confirm: boolean;
 }
 
+export interface LlmPromptTrace {
+  purpose: string;
+  provider?: string;
+  model?: string;
+  system_prompt?: string;
+  user_message?: string;
+  prompt_tokens?: number | null;
+  completion_tokens?: number | null;
+}
+
 export interface DataLensResponse {
   kind: ResponseKind;
   execution_id?: string | null;
@@ -124,6 +134,7 @@ export interface DataLensResponse {
   metrics_used: string[];
   warnings: string[];
   actions: ResponseAction[];
+  prompts_used?: LlmPromptTrace[];
   metadata: Record<string, unknown>;
   error?: string | null;
   preview_executed?: boolean;

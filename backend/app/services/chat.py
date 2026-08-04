@@ -11,6 +11,7 @@ from app.core.exceptions import NotFound, ValidationFailed
 from app.core.json_utils import json_safe_tree
 from app.models.base import utcnow
 from app.models.chat import ChatMessage, ChatSession, ExecutionHistory
+from app.pipeline.debug_prompts import attach_debug_prompts
 from app.pipeline.orchestrator import orchestrator
 from app.pipeline.types import ExecutionPlan, PipelineContext
 from app.schemas.api import ChatRequest, ChatTurnOut
@@ -126,10 +127,15 @@ class ChatService:
             from app.pipeline.types import Intent
             ctx.intent = Intent(**{k: v for k, v in history.intent.items()
                                    if k in Intent.model_fields})
+        if history.token_usage and isinstance(history.token_usage, dict):
+            prior_calls = history.token_usage.get("calls")
+            if prior_calls:
+                ctx.llm_calls = list(prior_calls)
 
         response = await orchestrator.execute_and_respond(ctx, db, history)
         response.execution_id = history.id
         orchestrator._record_history(ctx, history, response)
+        attach_debug_prompts(ctx, response)
 
         if history.session_id:
             preview_messages = (

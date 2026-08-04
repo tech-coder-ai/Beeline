@@ -198,3 +198,4 @@ feature_flags:
   csv_import: true
   explain_sql: true
   feedback: true
+  debug_mode: false                 # expose pipeline LLM prompts in chat debug panel

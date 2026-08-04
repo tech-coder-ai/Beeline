@@ -10,6 +10,12 @@
       <mat-icon>warning_amber</mat-icon> Warnings
       @if (warningCount() > 0) { <span class="chip warn count">{{ warningCount() }}</span> }
     </button>
+    @if (showPromptsTab()) {
+      <button class="tab" [class.active]="expanded() && activeTab() === 'prompts'" [disabled]="!hasPrompts()" (click)="setTab('prompts')">
+        <mat-icon>psychology</mat-icon> Prompts
+        @if (promptCount() > 0) { <span class="chip count">{{ promptCount() }}</span> }
+      </button>
+    }
     <span class="spacer"></span>
     <button class="icon-btn" (click)="toggle()">
       <mat-icon>{{ expanded() ? 'expand_more' : 'expand_less' }}</mat-icon>
@@ -44,6 +50,36 @@
           <ul class="warning-list">
             @for (w of response()?.warnings ?? []; track w) { <li>{{ w }}</li> }
           </ul>
+        }
+        @case ('prompts') {
+          <div class="prompt-list">
+            @for (p of response()?.prompts_used ?? []; track promptKey($index, p.purpose); let i = $index) {
+              @let key = promptKey(i, p.purpose);
+              <article class="prompt-card">
+                <button type="button" class="prompt-header" (click)="togglePrompt(key)">
+                  <span class="purpose">{{ p.purpose }}</span>
+                  <span class="meta muted">
+                    @if (p.model) { {{ p.model }} }
+                    @if (p.prompt_tokens != null) { · {{ p.prompt_tokens }} in }
+                    @if (p.completion_tokens != null) { / {{ p.completion_tokens }} out }
+                  </span>
+                  <mat-icon>{{ expandedPrompt() === key ? 'expand_less' : 'expand_more' }}</mat-icon>
+                </button>
+                @if (expandedPrompt() === key) {
+                  <div class="prompt-body">
+                    <div class="prompt-block">
+                      <span class="label">System</span>
+                      <pre>{{ p.system_prompt }}</pre>
+                    </div>
+                    <div class="prompt-block">
+                      <span class="label">User</span>
+                      <pre>{{ p.user_message }}</pre>
+                    </div>
+                  </div>
+                }
+              </article>
+            }
+          </div>
         }
       }
     </div>

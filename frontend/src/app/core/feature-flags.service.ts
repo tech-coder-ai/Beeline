@@ -8,7 +8,8 @@ export type FeatureFlagName =
   | 'approvals'
   | 'csv_import'
   | 'explain_sql'
-  | 'feedback';
+  | 'feedback'
+  | 'debug_mode';
 
 const DEFAULT_FLAGS: Record<FeatureFlagName, boolean> = {
   dashboards: true,
@@ -18,6 +19,7 @@ const DEFAULT_FLAGS: Record<FeatureFlagName, boolean> = {
   csv_import: true,
   explain_sql: true,
   feedback: true,
+  debug_mode: false,
 };
 
 @Injectable({ providedIn: 'root' })
@@ -35,6 +37,7 @@ export class FeatureFlagService {
   readonly csvImport = computed(() => this.isEnabled('csv_import'));
   readonly explainSql = computed(() => this.isEnabled('explain_sql'));
   readonly feedback = computed(() => this.isEnabled('feedback'));
+  readonly debugMode = computed(() => this.isEnabled('debug_mode'));
 
   constructor() {
     this.refresh();

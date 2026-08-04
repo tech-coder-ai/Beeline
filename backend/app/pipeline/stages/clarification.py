@@ -5,7 +5,7 @@ import json
 
 from app.core.logging import get_logger
 from app.llm import prompts
-from app.llm.providers import get_llm
+from app.llm.trace import complete_json_traced
 from app.pipeline.types import PipelineContext
 from app.schemas.response import ClarificationOption, ClarificationRequest
 
@@ -25,14 +25,12 @@ class ClarificationEngine:
             ][:60],
         }
         try:
-            llm = get_llm()
-            parsed, result = await llm.complete_json(
-                prompts.CLARIFIER_SYSTEM,
+            user_message = (
                 f"Question: {ctx.effective_prompt}\n\n"
                 f"Ambiguities: {json.dumps(ambiguities)}\n\n"
-                f"Available context: {json.dumps(available)}",
+                f"Available context: {json.dumps(available)}"
             )
-            ctx.record_llm("clarify", result)
+            parsed, _ = await complete_json_traced(ctx, "clarify", prompts.CLARIFIER_SYSTEM, user_message)
             options = [
                 ClarificationOption(
                     label=str(o.get("label", "")),

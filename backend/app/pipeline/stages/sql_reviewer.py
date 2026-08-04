@@ -8,7 +8,7 @@ from sqlglot import exp
 
 from app.core.logging import get_logger
 from app.llm import prompts
-from app.llm.providers import get_llm
+from app.llm.trace import complete_json_traced
 from app.pipeline.sql_utils import sanitize_sql
 from app.pipeline.types import PipelineContext
 from app.schemas.response import ClarificationOption, ClarificationRequest
@@ -82,18 +82,14 @@ class SqlReviewer:
 
     async def _llm_review(self, ctx: PipelineContext, sql: str) -> dict | None:
         try:
-            llm = get_llm()
             payload = {
                 "question": ctx.effective_prompt,
                 "sql": sql,
                 "plan_rationale": ctx.plan.rationale if ctx.plan else "",
                 "tables": ctx.plan.tables if ctx.plan else [],
             }
-            parsed, result = await llm.complete_json(
-                prompts.SQL_REVIEWER_SYSTEM,
-                json.dumps(payload, default=str),
-            )
-            ctx.record_llm("sql_review", result)
+            user_message = json.dumps(payload, default=str)
+            parsed, _ = await complete_json_traced(ctx, "sql_review", prompts.SQL_REVIEWER_SYSTEM, user_message)
             return {
                 "approved": bool(parsed.get("approved", True)),
                 "confidence": float(parsed.get("confidence", 0.85)),

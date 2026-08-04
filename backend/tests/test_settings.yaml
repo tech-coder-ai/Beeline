@@ -129,3 +129,4 @@ feature_flags:
   csv_import: true
   explain_sql: true
   feedback: true
+  debug_mode: false

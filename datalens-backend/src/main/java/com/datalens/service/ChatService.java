@@ -9,6 +9,7 @@ import com.datalens.model.entity.ExecutionHistory;
 import com.datalens.model.repository.ChatMessageRepository;
 import com.datalens.model.repository.ChatSessionRepository;
 import com.datalens.model.repository.ExecutionHistoryRepository;
+import com.datalens.pipeline.DebugPrompts;
 import com.datalens.pipeline.ExecutionPlanModel;
 import com.datalens.pipeline.IntentModel;
 import com.datalens.pipeline.Orchestrator;
@@ -164,6 +165,9 @@ public class ChatService {
     }
     if (h.getExecutionPlan() != null) ctx.setPlan(mapper.convertValue(h.getExecutionPlan(), ExecutionPlanModel.class));
     if (h.getIntent() != null) ctx.setIntent(mapper.convertValue(h.getIntent(), IntentModel.class));
+    if (h.getTokenUsage() instanceof Map<?, ?> usage) {
+      DebugPrompts.restoreCalls(ctx, (Map<String, Object>) usage);
+    }
     DataLensResponseDto response;
     try {
       response = orchestrator.executeAndRespond(ctx, h);

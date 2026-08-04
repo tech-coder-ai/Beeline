@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.llm import prompts
-from app.llm.providers import get_llm
+from app.llm.trace import complete_json_traced
 from app.models.semantic import Abbreviation, GlossaryTerm, Synonym
 from app.pipeline.types import PipelineContext
 
@@ -42,12 +42,8 @@ class QueryRefiner:
         hint_block = "\n".join(lines)
 
         try:
-            llm = get_llm()
-            parsed, result = await llm.complete_json(
-                prompts.REFINER_SYSTEM,
-                f"Synonym and abbreviation mappings:\n{hint_block or '(none)'}\n\nUser message:\n{ctx.prompt}",
-            )
-            ctx.record_llm("refine", result)
+            user_message = f"Synonym and abbreviation mappings:\n{hint_block or '(none)'}\n\nUser message:\n{ctx.prompt}"
+            parsed, _ = await complete_json_traced(ctx, "refine", prompts.REFINER_SYSTEM, user_message)
             refined = (parsed.get("refined") or parsed.get("refined_prompt") or "").strip()
             if refined and refined.lower() != ctx.prompt.strip().lower():
                 ctx.refined_prompt = refined

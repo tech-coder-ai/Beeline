@@ -53,13 +53,15 @@ public class PipelineContext {
     return refinedPrompt != null && !refinedPrompt.isBlank() ? refinedPrompt : prompt;
   }
 
-  public void recordLlm(String purpose, LlmResult result) {
+  public void recordLlm(String purpose, LlmResult result, String systemPrompt, String userMessage) {
     Map<String, Object> call = new HashMap<>();
     call.put("purpose", purpose);
     call.put("provider", result.getProvider());
     call.put("model", result.getModel());
     call.put("prompt_tokens", result.getPromptTokens());
     call.put("completion_tokens", result.getCompletionTokens());
+    if (systemPrompt != null) call.put("system_prompt", systemPrompt);
+    if (userMessage != null) call.put("user_message", userMessage);
     llmCalls.add(call);
   }
 }

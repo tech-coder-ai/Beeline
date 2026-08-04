@@ -124,7 +124,7 @@ public class SqlReviewer {
         payload.put("tables", ctx.getPlan().getTables());
       }
       Map<String, Object> parsed =
-          llm.completeJson(LlmPrompts.SQL_REVIEWER_SYSTEM, mapper.writeValueAsString(payload));
+          llm.completeJson(LlmPrompts.SQL_REVIEWER_SYSTEM, mapper.writeValueAsString(payload), ctx, "sql_review");
       Map<String, Object> out = new LinkedHashMap<>();
       out.put("approved", !parsed.containsKey("approved") || Boolean.TRUE.equals(parsed.get("approved")));
       out.put("confidence", ((Number) parsed.getOrDefault("confidence", 0.85)).doubleValue());

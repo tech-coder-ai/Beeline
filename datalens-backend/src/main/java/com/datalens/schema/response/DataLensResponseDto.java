@@ -34,6 +34,7 @@ public class DataLensResponseDto {
   private List<String> metricsUsed = new ArrayList<>();
   private List<String> warnings = new ArrayList<>();
   private List<ResponseActionDto> actions = new ArrayList<>();
+  private List<LlmPromptTraceDto> promptsUsed = new ArrayList<>();
   private Map<String, Object> metadata = new HashMap<>();
   private String error;
 }

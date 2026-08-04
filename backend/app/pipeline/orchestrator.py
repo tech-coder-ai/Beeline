@@ -41,6 +41,7 @@ from app.pipeline.stages.sql_reviewer import SqlReviewer
 from app.pipeline.stages.validator import SQLValidator
 from app.pipeline.stages.visualization import VisualizationPlanner
 from app.pipeline.sql_utils import sanitize_sql, compact_connector_error
+from app.pipeline.debug_prompts import attach_debug_prompts
 from app.pipeline.types import ExecutionPlan, PipelineContext
 from app.schemas.response import (
     BeelineResponse,
@@ -119,6 +120,7 @@ class Orchestrator:
         self._record_history(ctx, history, response)
         await db.flush()
         response.execution_id = history.id
+        attach_debug_prompts(ctx, response)
         return response
 
     # ------------------------------------------------------------------ pipeline
@@ -275,7 +277,7 @@ class Orchestrator:
             "sql": ctx.optimized_sql, "rows": ctx.row_count, "ms": ctx.execution_time_ms,
         })
 
-        return BeelineResponse(
+        response = BeelineResponse(
             kind="answer",
             summary=narrative["summary"],
             confidence=self._confidence_breakdown(ctx),
@@ -308,6 +310,8 @@ class Orchestrator:
                 "library_match": ctx.library_match.question if ctx.library_match else None,
             },
         )
+        attach_debug_prompts(ctx, response)
+        return response
 
     # ------------------------------------------------------------------ helpers
     async def _metadata_answer(self, ctx: PipelineContext) -> BeelineResponse:

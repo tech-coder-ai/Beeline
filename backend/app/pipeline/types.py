@@ -143,14 +143,26 @@ class PipelineContext:
     llm_calls: list[dict] = field(default_factory=list)       # traceability
     execution_id: str | None = None
 
-    def record_llm(self, purpose: str, result) -> None:
-        self.llm_calls.append({
+    def record_llm(
+        self,
+        purpose: str,
+        result,
+        *,
+        system_prompt: str | None = None,
+        user_message: str | None = None,
+    ) -> None:
+        call: dict[str, Any] = {
             "purpose": purpose,
             "provider": getattr(result, "provider", ""),
             "model": getattr(result, "model", ""),
             "prompt_tokens": getattr(result, "prompt_tokens", None),
             "completion_tokens": getattr(result, "completion_tokens", None),
-        })
+        }
+        if system_prompt is not None:
+            call["system_prompt"] = system_prompt
+        if user_message is not None:
+            call["user_message"] = user_message
+        self.llm_calls.append(call)
 
     @property
     def effective_prompt(self) -> str:

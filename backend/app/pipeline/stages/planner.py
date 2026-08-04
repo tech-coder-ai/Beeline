@@ -13,8 +13,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import LLMUnavailable
 from app.core.logging import get_logger
 from app.llm import prompts
-from app.llm.providers import get_llm
+from app.llm.trace import complete_json_traced
 from app.models.catalog import CatalogRelationship, CatalogTable
+from app.pipeline.types import ExecutionPlan, PipelineContext
 from app.services.catalog_relationships import format_for_planner
 
 logger = get_logger(__name__)
@@ -48,9 +49,7 @@ class QueryPlanner:
         )
 
         try:
-            llm = get_llm()
-            parsed, result = await llm.complete_json(prompts.PLANNER_SYSTEM, user_block)
-            ctx.record_llm("plan", result)
+            parsed, _ = await complete_json_traced(ctx, "plan", prompts.PLANNER_SYSTEM, user_block)
         except LLMUnavailable:
             raise
         except Exception as exc:  # noqa: BLE001

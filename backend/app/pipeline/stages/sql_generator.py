@@ -12,7 +12,7 @@ from app.connectors.base import IAnalyticsConnector
 from app.core.exceptions import LLMUnavailable, ValidationFailed
 from app.core.logging import get_logger
 from app.llm import prompts
-from app.llm.providers import get_llm
+from app.llm.trace import complete_json_traced
 from app.pipeline.sql_utils import sanitize_sql
 from app.pipeline.types import ExecutionPlan, PipelineContext
 
@@ -49,7 +49,6 @@ class SQLGenerator:
 
         dialect_name = connector.dialect.sqlglot_dialect
         try:
-            llm = get_llm()
             system = prompts.SQL_SYSTEM.format(
                 dialect=dialect_name.upper(),
                 dialect_hints=connector.dialect.dialect_hints(),
@@ -63,13 +62,12 @@ class SQLGenerator:
                 )
                 for t in ctx.resolved_tables
             )
-            parsed, result = await llm.complete_json(
-                system,
+            user_message = (
                 f"Execution plan:\n{plan.model_dump_json(indent=2)}\n\n"
                 f"Schema (only these identifiers exist):\n{schema_context}\n\n"
-                f"Relative date translations: {json.dumps(_RELATIVE_HIVE)}",
+                f"Relative date translations: {json.dumps(_RELATIVE_HIVE)}"
             )
-            ctx.record_llm("sql", result)
+            parsed, _ = await complete_json_traced(ctx, "sql", system, user_message)
             sql = sanitize_sql((parsed.get("sql") or "").strip().rstrip(";"), dialect_name)
             if sql:
                 ctx.sql = sql

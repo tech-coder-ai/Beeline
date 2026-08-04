@@ -128,6 +128,7 @@ public class Orchestrator {
     recordHistory(ctx, history, response);
     historyRepo.save(history);
     response.setExecutionId(history.getId());
+    DebugPrompts.attach(settings, ctx, response);
     return response;
   }
 
@@ -206,6 +207,7 @@ public class Orchestrator {
     List<String> allWarnings = new ArrayList<>(ctx.getWarnings());
     allWarnings.addAll(ctx.getValidationWarnings());
     response.setWarnings(allWarnings);
+    DebugPrompts.attach(settings, ctx, response);
     return response;
   }
 

@@ -115,6 +115,18 @@ class ResponseAction(BaseModel):
     confirm: bool = True
 
 
+class LlmPromptTrace(BaseModel):
+    """One LLM call captured during the chat pipeline (debug mode only)."""
+
+    purpose: str = ""
+    provider: str = ""
+    model: str = ""
+    system_prompt: str = ""
+    user_message: str = ""
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+
+
 class BeelineResponse(BaseModel):
     """The single response schema the frontend renders adaptively."""
 
@@ -139,5 +151,6 @@ class BeelineResponse(BaseModel):
     metrics_used: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     actions: list[ResponseAction] = Field(default_factory=list)
+    prompts_used: list[LlmPromptTrace] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)
     error: str | None = None

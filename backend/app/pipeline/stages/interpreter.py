@@ -9,7 +9,7 @@ import json
 
 from app.core.logging import get_logger
 from app.llm import prompts
-from app.llm.providers import get_llm
+from app.llm.trace import complete_json_traced
 from app.pipeline.types import PipelineContext
 from app.pipeline.stages.visualization import ColumnProfile, _to_number
 
@@ -104,13 +104,11 @@ class ResultInterpreter:
                 "total_rows": ctx.row_count,
                 "truncated_sample": len(ctx.result_rows) > MAX_SAMPLE_ROWS,
             }
-            llm = get_llm()
-            parsed, result = await llm.complete_json(
-                prompts.INTERPRETER_SYSTEM,
+            user_message = (
                 f"Question: {ctx.effective_prompt}\n\nSQL:\n{ctx.optimized_sql or ctx.sql}\n\n"
-                f"Result sample:\n{json.dumps(sample, default=str)}",
+                f"Result sample:\n{json.dumps(sample, default=str)}"
             )
-            ctx.record_llm("interpret", result)
+            parsed, _ = await complete_json_traced(ctx, "interpret", prompts.INTERPRETER_SYSTEM, user_message)
             return parsed
         except Exception as exc:  # noqa: BLE001 - narrative is optional
             logger.debug("LLM narrative unavailable: %s", exc)
