@@ -4,179 +4,205 @@
       <mat-icon>search</mat-icon>
       <input class="search-input" placeholder="Search terms..." [ngModel]="search()" (ngModelChange)="onSearch($event)" />
     </div>
-    <button class="primary-btn" (click)="startNew()"><mat-icon>add</mat-icon> New definition</button>
+    <div class="section-tabs">
+      @for (section of sections; track section.id) {
+        <button class="section-tab" [class.active]="activeSection() === section.id" (click)="activeSection.set(section.id)">
+          {{ section.label }}
+          <span class="count">{{ section.count() }}</span>
+        </button>
+      }
+    </div>
+    @switch (activeSection()) {
+      @case ('definitions') {
+        <button class="primary-btn" (click)="startNew()"><mat-icon>add</mat-icon> New definition</button>
+      }
+      @case ('bindings') {
+        <button class="primary-btn" (click)="startNewBusiness()"><mat-icon>add</mat-icon> New binding</button>
+      }
+      @case ('abbreviations') {
+        <button class="primary-btn" (click)="startNewAbbreviation()"><mat-icon>add</mat-icon> New abbreviation</button>
+      }
+    }
   </div>
 
-  <section class="section-block">
-    <div class="section-header">
-      <h3>Definitions</h3>
-      <p class="muted">Business vocabulary with definitions and synonyms.</p>
-    </div>
-
-    @if (editing(); as term) {
-      <div class="editor glass-card">
-        <div class="editor-grid">
-          <label>
-            <span class="muted">Term</span>
-            <input class="text-input" [(ngModel)]="term.term" placeholder="e.g. Revenue" />
-          </label>
-          <label>
-            <span class="muted">Owner</span>
-            <input class="text-input" [(ngModel)]="term.owner" placeholder="e.g. Finance team" />
-          </label>
-        </div>
-        <label>
-          <span class="muted">Definition</span>
-          <textarea class="text-input" rows="2" [(ngModel)]="term.definition"></textarea>
-        </label>
-        <label>
-          <span class="muted">Business meaning</span>
-          <textarea class="text-input" rows="2" [(ngModel)]="term.business_meaning"></textarea>
-        </label>
-        <div class="editor-grid">
-          <label>
-            <span class="muted">Synonyms (comma separated)</span>
-            <input class="text-input" [(ngModel)]="synonymsText" placeholder="Sales, Income" />
-          </label>
-          <label>
-            <span class="muted">Tags (comma separated)</span>
-            <input class="text-input" [(ngModel)]="tagsText" placeholder="finance, kpi" />
-          </label>
-        </div>
-        <div class="editor-actions">
-          <button class="primary-btn" (click)="save()">Save</button>
-          <button class="ghost-btn" (click)="cancel()">Cancel</button>
-        </div>
-      </div>
-    }
-
-    <div class="term-list">
-      @for (term of terms(); track term.id) {
-        <div class="term-card glass-card">
-          <div class="term-header">
-            <span class="term-name">{{ term.term }}</span>
-            @if (term.source === 'ai') { <span class="chip neutral">AI</span> }
-            <span class="spacer"></span>
-            <button class="icon-btn" (click)="startEdit(term)"><mat-icon>edit</mat-icon></button>
-            <button class="icon-btn" (click)="remove(term)"><mat-icon>delete</mat-icon></button>
+  <div class="section-panel">
+    @switch (activeSection()) {
+      @case ('definitions') {
+        <section class="section-block">
+          <div class="section-header">
+            <h3>Definitions</h3>
+            <p class="muted">Business vocabulary with definitions and synonyms.</p>
           </div>
-          <p class="term-def">{{ term.definition }}</p>
-          @if (term.synonyms.length) {
-            <div class="pill-list">
-              @for (s of term.synonyms; track s) { <span class="chip">{{ s }}</span> }
+
+          @if (editing(); as term) {
+            <div class="editor glass-card">
+              <div class="editor-grid">
+                <label>
+                  <span class="muted">Term</span>
+                  <input class="text-input" [(ngModel)]="term.term" placeholder="e.g. Revenue" />
+                </label>
+                <label>
+                  <span class="muted">Owner</span>
+                  <input class="text-input" [(ngModel)]="term.owner" placeholder="e.g. Finance team" />
+                </label>
+              </div>
+              <label>
+                <span class="muted">Definition</span>
+                <textarea class="text-input" rows="2" [(ngModel)]="term.definition"></textarea>
+              </label>
+              <label>
+                <span class="muted">Business meaning</span>
+                <textarea class="text-input" rows="2" [(ngModel)]="term.business_meaning"></textarea>
+              </label>
+              <div class="editor-grid">
+                <label>
+                  <span class="muted">Synonyms (comma separated)</span>
+                  <input class="text-input" [(ngModel)]="synonymsText" placeholder="Sales, Income" />
+                </label>
+                <label>
+                  <span class="muted">Tags (comma separated)</span>
+                  <input class="text-input" [(ngModel)]="tagsText" placeholder="finance, kpi" />
+                </label>
+              </div>
+              <div class="editor-actions">
+                <button class="primary-btn" (click)="save()">Save</button>
+                <button class="ghost-btn" (click)="cancel()">Cancel</button>
+              </div>
             </div>
           }
-        </div>
-      } @empty {
-        <p class="muted">No glossary definitions yet.</p>
-      }
-    </div>
-  </section>
 
-  <section class="section-block">
-    <div class="section-header">
-      <div class="section-title-row">
-        <h3>Business term bindings</h3>
-        <button class="primary-btn" (click)="startNewBusiness()"><mat-icon>add</mat-icon> New binding</button>
-      </div>
-      <p class="muted">Map business terms to entity columns and values for NL query grounding.</p>
-    </div>
-
-    @if (editingBusiness(); as bt) {
-      <div class="editor glass-card">
-        <div class="editor-grid">
-          <label>
-            <span class="muted">Term</span>
-            <input class="text-input" [(ngModel)]="bt.term" placeholder="e.g. Active customer" />
-          </label>
-          <label>
-            <span class="muted">Entity (database.table)</span>
-            <input class="text-input" [(ngModel)]="bt.entity" placeholder="e.g. analytics.orders" />
-          </label>
-        </div>
-        <div class="editor-grid">
-          <label>
-            <span class="muted">Column name</span>
-            <input class="text-input" [(ngModel)]="bt.column_name" placeholder="e.g. status" />
-          </label>
-          <label>
-            <span class="muted">Value</span>
-            <input class="text-input" [(ngModel)]="bt.value" placeholder="e.g. ACTIVE" />
-          </label>
-        </div>
-        <div class="editor-actions">
-          <button class="primary-btn" (click)="saveBusiness()">Save</button>
-          <button class="ghost-btn" (click)="cancelBusiness()">Cancel</button>
-        </div>
-      </div>
-    }
-
-    <div class="binding-list">
-      @for (bt of businessTerms(); track bt.id) {
-        <div class="binding-card glass-card">
-          <div class="term-header">
-            <span class="term-name">{{ bt.term }}</span>
-            <span class="spacer"></span>
-            <button class="icon-btn" (click)="startEditBusiness(bt)"><mat-icon>edit</mat-icon></button>
-            <button class="icon-btn" (click)="removeBusiness(bt)"><mat-icon>delete</mat-icon></button>
+          <div class="scroll-grid">
+            @for (term of terms(); track term.id) {
+              <div class="term-card glass-card">
+                <div class="term-header">
+                  <span class="term-name">{{ term.term }}</span>
+                  @if (term.source === 'ai') { <span class="chip neutral">AI</span> }
+                  <span class="spacer"></span>
+                  <button class="icon-btn" (click)="startEdit(term)"><mat-icon>edit</mat-icon></button>
+                  <button class="icon-btn" (click)="remove(term)"><mat-icon>delete</mat-icon></button>
+                </div>
+                <p class="term-def">{{ term.definition }}</p>
+                @if (term.synonyms.length) {
+                  <div class="pill-list">
+                    @for (s of term.synonyms; track s) { <span class="chip">{{ s }}</span> }
+                  </div>
+                }
+              </div>
+            } @empty {
+              <p class="muted empty-copy">No glossary definitions yet.</p>
+            }
           </div>
-          <p class="binding-expr mono">
-            {{ bt.entity }}.{{ bt.column_name }} = {{ bt.value }}
-          </p>
-        </div>
-      } @empty {
-        <p class="muted">No business term bindings yet.</p>
+        </section>
       }
-    </div>
-  </section>
 
-  <section class="section-block">
-    <div class="section-header">
-      <div class="section-title-row">
-        <h3>Abbreviations</h3>
-        <button class="primary-btn" (click)="startNewAbbreviation()"><mat-icon>add</mat-icon> New abbreviation</button>
-      </div>
-      <p class="muted">Expand short forms like GMV into full business terms during query refinement.</p>
-    </div>
-
-    @if (editingAbbreviation(); as abbr) {
-      <div class="editor glass-card">
-        <div class="editor-grid">
-          <label>
-            <span class="muted">Abbreviation</span>
-            <input class="text-input" [(ngModel)]="abbr.abbreviation" placeholder="e.g. GMV" />
-          </label>
-          <label>
-            <span class="muted">Canonical</span>
-            <input class="text-input" [(ngModel)]="abbr.canonical" placeholder="e.g. Gross Merchandise Value" />
-          </label>
-        </div>
-        <label>
-          <span class="muted">Description (optional)</span>
-          <input class="text-input" [(ngModel)]="abbr.description" placeholder="Optional notes" />
-        </label>
-        <div class="editor-actions">
-          <button class="primary-btn" (click)="saveAbbreviation()">Save</button>
-          <button class="ghost-btn" (click)="cancelAbbreviation()">Cancel</button>
-        </div>
-      </div>
-    }
-
-    <div class="binding-list">
-      @for (abbr of abbreviations(); track abbr.id) {
-        <div class="binding-card glass-card">
-          <div class="term-header">
-            <span class="term-name mono">{{ abbr.abbreviation }}</span>
-            <span class="muted">→</span>
-            <span>{{ abbr.canonical }}</span>
-            <span class="spacer"></span>
-            <button class="icon-btn" (click)="startEditAbbreviation(abbr)"><mat-icon>edit</mat-icon></button>
-            <button class="icon-btn" (click)="removeAbbreviation(abbr)"><mat-icon>delete</mat-icon></button>
+      @case ('bindings') {
+        <section class="section-block">
+          <div class="section-header">
+            <h3>Business term bindings</h3>
+            <p class="muted">Map business terms to entity columns and values for NL query grounding.</p>
           </div>
-        </div>
-      } @empty {
-        <p class="muted">No abbreviations yet.</p>
+
+          @if (editingBusiness(); as bt) {
+            <div class="editor glass-card">
+              <div class="editor-grid">
+                <label>
+                  <span class="muted">Term</span>
+                  <input class="text-input" [(ngModel)]="bt.term" placeholder="e.g. Active customer" />
+                </label>
+                <label>
+                  <span class="muted">Entity (canonical table name)</span>
+                  <input class="text-input" [(ngModel)]="bt.entity" placeholder="e.g. Data Element" />
+                </label>
+              </div>
+              <div class="editor-grid">
+                <label>
+                  <span class="muted">Column name</span>
+                  <input class="text-input" [(ngModel)]="bt.column_name" placeholder="e.g. status" />
+                </label>
+                <label>
+                  <span class="muted">Value</span>
+                  <input class="text-input" [(ngModel)]="bt.value" placeholder="e.g. ACTIVE" />
+                </label>
+              </div>
+              <div class="editor-actions">
+                <button class="primary-btn" (click)="saveBusiness()">Save</button>
+                <button class="ghost-btn" (click)="cancelBusiness()">Cancel</button>
+              </div>
+            </div>
+          }
+
+          <div class="scroll-list">
+            @for (bt of businessTerms(); track bt.id) {
+              <div class="binding-card glass-card">
+                <div class="term-header">
+                  <span class="term-name">{{ bt.term }}</span>
+                  <span class="spacer"></span>
+                  <button class="icon-btn" (click)="startEditBusiness(bt)"><mat-icon>edit</mat-icon></button>
+                  <button class="icon-btn" (click)="removeBusiness(bt)"><mat-icon>delete</mat-icon></button>
+                </div>
+                <p class="binding-expr mono">{{ bt.entity }}.{{ bt.column_name }} = {{ bt.value }}</p>
+              </div>
+            } @empty {
+              <p class="muted empty-copy">No business term bindings yet.</p>
+            }
+          </div>
+        </section>
       }
-    </div>
-  </section>
+
+      @case ('abbreviations') {
+        <section class="section-block">
+          <div class="section-header">
+            <h3>Abbreviations</h3>
+            <p class="muted">Expand short forms using canonical entity names and values during query refinement.</p>
+          </div>
+
+          @if (editingAbbreviation(); as abbr) {
+            <div class="editor glass-card">
+              <div class="editor-grid">
+                <label>
+                  <span class="muted">Abbreviation</span>
+                  <input class="text-input" [(ngModel)]="abbr.abbreviation" placeholder="e.g. GMV" />
+                </label>
+                <label>
+                  <span class="muted">Entity</span>
+                  <input class="text-input" [(ngModel)]="abbr.entity" placeholder="e.g. Data Element" />
+                </label>
+              </div>
+              <label>
+                <span class="muted">Value</span>
+                <input class="text-input" [(ngModel)]="abbr.value" placeholder="e.g. Gross Merchandise Value" />
+              </label>
+              <label>
+                <span class="muted">Description (optional)</span>
+                <input class="text-input" [(ngModel)]="abbr.description" placeholder="Optional notes" />
+              </label>
+              <div class="editor-actions">
+                <button class="primary-btn" (click)="saveAbbreviation()">Save</button>
+                <button class="ghost-btn" (click)="cancelAbbreviation()">Cancel</button>
+              </div>
+            </div>
+          }
+
+          <div class="scroll-list">
+            @for (abbr of abbreviations(); track abbr.id) {
+              <div class="binding-card glass-card">
+                <div class="term-header">
+                  <span class="term-name mono">{{ abbr.abbreviation }}</span>
+                  <span class="muted">→</span>
+                  <span>{{ abbr.entity }}</span>
+                  <span class="muted">=</span>
+                  <span>{{ abbr.value }}</span>
+                  <span class="spacer"></span>
+                  <button class="icon-btn" (click)="startEditAbbreviation(abbr)"><mat-icon>edit</mat-icon></button>
+                  <button class="icon-btn" (click)="removeAbbreviation(abbr)"><mat-icon>delete</mat-icon></button>
+                </div>
+              </div>
+            } @empty {
+              <p class="muted empty-copy">No abbreviations yet.</p>
+            }
+          </div>
+        </section>
+      }
+    }
+  </div>
 </div>

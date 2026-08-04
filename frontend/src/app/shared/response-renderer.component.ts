@@ -1,5 +1,5 @@
 import { DecimalPipe } from '@angular/common';
-import { Component, inject, input, output } from '@angular/core';
+import { Component, effect, inject, input, output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -32,7 +32,7 @@ export class ResponseRendererComponent {
   readonly compact = input(false);
 
   readonly clarify = output<ClarificationOption | string>();
-  readonly executePreview = output<void>();
+  readonly executePreview = output<string>();
   readonly refineQuestion = output<void>();
   readonly followUp = output<string>();
   readonly saveQuery = output<void>();
@@ -48,6 +48,14 @@ export class ResponseRendererComponent {
   explainLoading = false;
   loadedExplanation: SqlExplanation | null = null;
   clarificationText = '';
+  previewSql = '';
+
+  constructor() {
+    effect(() => {
+      const sql = this.response().sql ?? '';
+      this.previewSql = sql;
+    });
+  }
 
   vote(rating: 'up' | 'down'): void {
     const r = this.response();
@@ -93,5 +101,14 @@ export class ResponseRendererComponent {
       this.clarify.emit(this.clarificationText.trim());
       this.clarificationText = '';
     }
+  }
+
+  onPreviewSqlChange(sql: string): void {
+    this.previewSql = sql;
+  }
+
+  emitExecutePreview(): void {
+    const sql = this.previewSql.trim() || this.response().sql || '';
+    this.executePreview.emit(sql);
   }
 }

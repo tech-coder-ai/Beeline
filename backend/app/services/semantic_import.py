@@ -21,6 +21,8 @@ class SemanticImportService:
         if not rows:
             raise ValidationFailed("The file contains no data rows")
         keys = set(rows[0].keys())
+        if {"abbreviation", "entity", "value"} <= keys or {"abbrev", "entity", "value"} <= keys:
+            return "abbreviations"
         if {"abbreviation", "canonical"} <= keys or {"abbrev", "canonical"} <= keys:
             return "abbreviations"
         if {"term", "entity", "column_name", "value"} <= keys:
@@ -31,7 +33,7 @@ class SemanticImportService:
             return "metadata"
         raise ValidationFailed(
             "Could not detect import type. Use columns for synonyms (canonical,synonym), "
-            "business_terms (term,entity,column_name,value), or abbreviations (abbreviation,canonical)."
+            "business_terms (term,entity,column_name,value), or abbreviations (abbreviation,entity,value)."
         )
 
     async def preview(self, db: AsyncSession, rows: list[dict], import_type: str | None) -> dict:
@@ -132,17 +134,18 @@ class SemanticImportService:
         changes, unmatched = [], []
         for index, row in enumerate(rows):
             abbrev = (row.get("abbreviation") or row.get("abbrev") or "").strip()
-            canonical = (row.get("canonical") or "").strip()
-            if not abbrev or not canonical:
-                unmatched.append({"row": index + 1, "reason": "abbreviation and canonical are required"})
+            entity = (row.get("entity") or row.get("canonical") or "").strip()
+            value = (row.get("value") or row.get("canonical") or "").strip()
+            if not abbrev or not entity or not value:
+                unmatched.append({"row": index + 1, "reason": "abbreviation, entity, and value are required"})
                 continue
             changes.append(
                 {
                     "entity_type": "abbreviation",
                     "label": abbrev,
-                    "field": "canonical",
+                    "field": "binding",
                     "current": None,
-                    "proposed": canonical,
+                    "proposed": f"{entity} = {value}",
                 }
             )
         return {
@@ -202,13 +205,15 @@ class SemanticImportService:
         applied = 0
         for row in rows:
             abbrev = (row.get("abbreviation") or row.get("abbrev") or "").strip()
-            canonical = (row.get("canonical") or "").strip()
-            if not abbrev or not canonical:
+            entity = (row.get("entity") or row.get("canonical") or "").strip()
+            value = (row.get("value") or row.get("canonical") or "").strip()
+            if not abbrev or not entity or not value:
                 continue
             db.add(
                 Abbreviation(
                     abbreviation=abbrev,
-                    canonical=canonical,
+                    entity=entity,
+                    value=value,
                     description=(row.get("description") or "").strip() or None,
                     source="imported",
                     status="approved",

@@ -154,7 +154,12 @@ public class PipelineStages {
         if (hints.length() > 8000) break;
       }
       for (Abbreviation abbr : abbreviationRepo.findByStatusOrderByAbbreviationAsc("approved")) {
-        hints.append(abbr.getAbbreviation()).append(" => ").append(abbr.getCanonical()).append("\n");
+        hints.append(abbr.getAbbreviation())
+            .append(" => entity ")
+            .append(abbr.getEntity())
+            .append(", value ")
+            .append(abbr.getValue())
+            .append("\n");
         if (hints.length() > 10000) break;
       }
       String hintBlock =
@@ -347,9 +352,42 @@ public class PipelineStages {
     } catch (Exception e) {
       ctx.getWarnings().add("LLM SQL generation failed; using deterministic builder: " + e.getMessage());
     }
-    ctx.setSql(SqlUtils.buildDeterministic(plan));
+    ctx.setSql(SqlUtils.buildDeterministic(plan, columnTypesForPlan(ctx, plan)));
     ctx.setSqlFromDeterministicBuilder(true);
     ctx.getConfidence().put("sql", Math.max(ctx.getConfidence().getOrDefault("sql", 0.0), 0.5));
+  }
+
+  private java.util.Map<String, String> columnTypesForPlan(PipelineContext ctx, ExecutionPlanModel plan) {
+    java.util.Map<String, String> types = new java.util.HashMap<>();
+    for (ResolvedTableModel table : ctx.getResolvedTables()) {
+      if (table.getColumns() == null) continue;
+      for (Map<String, Object> col : table.getColumns()) {
+        Object name = col.get("name");
+        Object dataType = col.get("data_type");
+        if (name == null || dataType == null) continue;
+        String qualified = table.qualifiedName() + "." + name;
+        types.put(qualified.toLowerCase(Locale.ROOT), String.valueOf(dataType));
+        types.put(String.valueOf(name).toLowerCase(Locale.ROOT), String.valueOf(dataType));
+      }
+    }
+    if (plan != null) {
+      for (String tableRef : plan.getTables()) {
+        String key = SqlUtils.normalizeTableRef(tableRef);
+        tables.findAll().stream()
+            .filter(t -> key.endsWith("." + t.getName().toLowerCase(Locale.ROOT)) || key.equals(t.getName().toLowerCase(Locale.ROOT)))
+            .findFirst()
+            .ifPresent(
+                t ->
+                    columns.findByTableIdOrderByPositionAsc(t.getId()).forEach(
+                        c -> {
+                          types.put(
+                              (key.contains(".") ? key : t.getName()) + "." + c.getName().toLowerCase(Locale.ROOT),
+                              c.getDataType());
+                          types.put(c.getName().toLowerCase(Locale.ROOT), c.getDataType());
+                        }));
+      }
+    }
+    return types;
   }
 
   /**
@@ -367,7 +405,7 @@ public class PipelineStages {
       if (ctx.isSqlFromDeterministicBuilder() || ctx.getPlan() == null) throw e;
       if (tryLlmRepair(ctx, connector, dialect, known, e.getMessage())) return;
       ctx.getWarnings().add("Regenerated SQL from the structured plan after Hive rejected the AI-generated query.");
-      ctx.setSql(SqlUtils.buildDeterministic(ctx.getPlan()));
+      ctx.setSql(SqlUtils.buildDeterministic(ctx.getPlan(), columnTypesForPlan(ctx, ctx.getPlan())));
       ctx.setSqlFromDeterministicBuilder(true);
       applySqlChecks(ctx, connector, dialect, known);
     }
@@ -489,6 +527,17 @@ public class PipelineStages {
   }
 
   public Map<String, Object> interpret(PipelineContext ctx) {
+    if (ctx.getRowCount() <= 0) {
+      return Map.of(
+          "summary",
+          "The query ran successfully but returned no rows for your criteria.",
+          "insights",
+          List.of("Try broadening filters, checking spelling, or choosing a different time range."),
+          "recommendations",
+          List.of(),
+          "follow_up_questions",
+          List.of());
+    }
     try {
       Map<String, Object> parsed =
           llm.completeJson(
@@ -730,6 +779,8 @@ public class PipelineStages {
               .orElse("");
       String candidate =
           table.getName()
+              + " "
+              + (table.getCanonicalName() != null ? table.getCanonicalName() : "")
               + " "
               + (table.getDescription() != null ? table.getDescription() : "")
               + " "

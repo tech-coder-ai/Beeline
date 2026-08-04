@@ -55,8 +55,9 @@ public class SemanticImportService {
   public String detectType(List<Map<String, String>> rows) {
     if (rows.isEmpty()) throw new ValidationFailed("The file contains no data rows");
     Set<String> keys = rows.get(0).keySet();
-    if (keys.contains("abbreviation") && keys.contains("canonical")
-        || keys.contains("abbrev") && keys.contains("canonical")) {
+    if (keys.contains("abbreviation")
+            && (keys.contains("entity") || keys.contains("canonical"))
+        || keys.contains("abbrev") && (keys.contains("entity") || keys.contains("canonical"))) {
       return "abbreviations";
     }
     if (keys.contains("term") && keys.contains("entity") && keys.contains("column_name") && keys.contains("value")) {
@@ -68,7 +69,7 @@ public class SemanticImportService {
     if (keys.contains("table")) return "metadata";
     throw new ValidationFailed(
         "Could not detect import type. Use columns for synonyms (canonical,synonym), "
-            + "business_terms (term,entity,column_name,value), or abbreviations (abbreviation,canonical).");
+            + "business_terms (term,entity,column_name,value), or abbreviations (abbreviation,entity,value).");
   }
 
   public Map<String, Object> preview(List<Map<String, String>> rows, String importType) {
@@ -153,18 +154,19 @@ public class SemanticImportService {
     for (int i = 0; i < rows.size(); i++) {
       Map<String, String> row = rows.get(i);
       String abbrev = row.getOrDefault("abbreviation", row.getOrDefault("abbrev", "")).trim();
-      String canonical = row.getOrDefault("canonical", "").trim();
-      if (abbrev.isBlank() || canonical.isBlank()) {
-        unmatched.add(Map.of("row", i + 1, "reason", "abbreviation and canonical are required"));
+      String entity = row.getOrDefault("entity", row.getOrDefault("canonical", "")).trim();
+      String value = row.getOrDefault("value", row.getOrDefault("canonical", "")).trim();
+      if (abbrev.isBlank() || entity.isBlank() || value.isBlank()) {
+        unmatched.add(Map.of("row", i + 1, "reason", "abbreviation, entity, and value are required"));
         continue;
       }
       changes.add(
           Map.of(
               "entity_type", "abbreviation",
               "label", abbrev,
-              "field", "canonical",
+              "field", "binding",
               "current", "",
-              "proposed", canonical));
+              "proposed", entity + " = " + value));
     }
     return result("abbreviations", rows.size() - unmatched.size(), unmatched, changes);
   }
@@ -234,11 +236,13 @@ public class SemanticImportService {
     int applied = 0;
     for (Map<String, String> row : rows) {
       String abbrev = row.getOrDefault("abbreviation", row.getOrDefault("abbrev", "")).trim();
-      String canonical = row.getOrDefault("canonical", "").trim();
-      if (abbrev.isBlank() || canonical.isBlank()) continue;
+      String entity = row.getOrDefault("entity", row.getOrDefault("canonical", "")).trim();
+      String value = row.getOrDefault("value", row.getOrDefault("canonical", "")).trim();
+      if (abbrev.isBlank() || entity.isBlank() || value.isBlank()) continue;
       Abbreviation a = new Abbreviation();
       a.setAbbreviation(abbrev);
-      a.setCanonical(canonical);
+      a.setEntity(entity);
+      a.setValue(value);
       String desc = row.getOrDefault("description", "").trim();
       if (!desc.isBlank()) a.setDescription(desc);
       a.setSource("imported");

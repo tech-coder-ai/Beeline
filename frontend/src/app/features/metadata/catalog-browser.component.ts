@@ -60,6 +60,7 @@ export class CatalogBrowserComponent implements OnInit {
   readonly targetTable = signal<CatalogTable | null>(null);
 
   descriptionDraft = '';
+  canonicalNameDraft = '';
   ownerDraft = '';
   stewardDraft = '';
   classificationDraft = '';
@@ -236,6 +237,7 @@ export class CatalogBrowserComponent implements OnInit {
 
   private resetTableDrafts(table: CatalogTable): void {
     this.descriptionDraft = table.description ?? '';
+    this.canonicalNameDraft = table.canonical_name ?? '';
     this.ownerDraft = table.owner ?? '';
     this.stewardDraft = table.steward ?? '';
     this.classificationDraft = table.classification ?? '';
@@ -261,6 +263,7 @@ export class CatalogBrowserComponent implements OnInit {
     this.api
       .updateTable(table.id, {
         description: this.descriptionDraft.trim() || null,
+        canonical_name: this.canonicalNameDraft.trim() || null,
         owner: this.ownerDraft.trim() || null,
         steward: this.stewardDraft.trim() || null,
         classification: this.classificationDraft || null,
@@ -273,6 +276,7 @@ export class CatalogBrowserComponent implements OnInit {
           this.selectedTable.set({
             ...table,
             description: this.descriptionDraft.trim() || null,
+            canonical_name: this.canonicalNameDraft.trim() || null,
             owner: this.ownerDraft.trim() || null,
             steward: this.stewardDraft.trim() || null,
             classification: this.classificationDraft || null,

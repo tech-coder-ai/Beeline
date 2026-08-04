@@ -458,7 +458,8 @@ def _abbreviation_out(row: Abbreviation) -> AbbreviationOut:
     return AbbreviationOut(
         id=row.id,
         abbreviation=row.abbreviation,
-        canonical=row.canonical,
+        entity=row.entity,
+        value=row.value,
         description=row.description,
         status=row.status,
         source=row.source,
@@ -472,7 +473,13 @@ async def list_abbreviations(search: str | None = None, db: AsyncSession = Depen
     rows = (await db.execute(select(Abbreviation).order_by(Abbreviation.abbreviation))).scalars().all()
     if search:
         needle = search.lower()
-        rows = [r for r in rows if needle in r.abbreviation.lower() or needle in r.canonical.lower()]
+        rows = [
+            r
+            for r in rows
+            if needle in r.abbreviation.lower()
+            or needle in (r.entity or "").lower()
+            or needle in (r.value or "").lower()
+        ]
     return [_abbreviation_out(r) for r in rows]
 
 
@@ -480,7 +487,8 @@ async def list_abbreviations(search: str | None = None, db: AsyncSession = Depen
 async def create_abbreviation(body: AbbreviationIn, db: AsyncSession = Depends(get_db)):
     row = Abbreviation(
         abbreviation=body.abbreviation.strip(),
-        canonical=body.canonical.strip(),
+        entity=body.entity.strip(),
+        value=body.value.strip(),
         description=body.description,
         source="manual",
         status="approved",
@@ -497,7 +505,8 @@ async def update_abbreviation(abbreviation_id: str, body: AbbreviationIn, db: As
     if not row:
         raise NotFound("Abbreviation not found")
     row.abbreviation = body.abbreviation.strip()
-    row.canonical = body.canonical.strip()
+    row.entity = body.entity.strip()
+    row.value = body.value.strip()
     row.description = body.description
     await db.commit()
     await db.refresh(row)

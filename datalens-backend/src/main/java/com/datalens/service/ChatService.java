@@ -95,7 +95,9 @@ public class ChatService {
 
   @Transactional
   public void deleteSession(String sessionId) {
-    sessions.delete(getSession(sessionId));
+    getSession(sessionId);
+    messages.deleteAll(messages.findBySessionIdOrderByCreatedAtAsc(sessionId));
+    sessions.deleteById(sessionId);
   }
 
   /** Wipes all chat history for the (single, "default") user - sessions and their messages. */
@@ -115,7 +117,7 @@ public class ChatService {
   @Transactional
   public ChatTurnOut handleTurn(ChatRequest request) {
     if (request.executePreviewId() != null && !request.executePreviewId().isBlank()) {
-      return executePreview(request.executePreviewId());
+      return executePreview(request.executePreviewId(), request.executePreviewSql());
     }
     String effective = request.message() != null ? request.message().strip() : "";
     if (effective.isBlank() && request.clarificationAnswer() != null) effective = request.clarificationAnswer().strip();
@@ -140,7 +142,7 @@ public class ChatService {
     return new ChatTurnOut(session.getId(), assistant.getId(), response);
   }
 
-  private ChatTurnOut executePreview(String executionId) {
+  private ChatTurnOut executePreview(String executionId, String overrideSql) {
     ExecutionHistory h = history.findById(executionId).orElseThrow(() -> new NotFound("No pending preview found for this id"));
     if (!"preview".equals(h.getStatus())) throw new NotFound("No pending preview found for this id");
     PipelineContext ctx = new PipelineContext();
@@ -149,8 +151,13 @@ public class ChatService {
     ctx.setUserId(h.getUserId());
     ctx.setConnectorId(h.getConnectorId());
     ctx.setExecutionId(h.getId());
-    ctx.setSql(h.getGeneratedSql());
-    ctx.setOptimizedSql(h.getOptimizedSql());
+    String sql = h.getOptimizedSql() != null ? h.getOptimizedSql() : h.getGeneratedSql();
+    if (overrideSql != null && !overrideSql.isBlank()) {
+      sql = overrideSql.strip();
+      h.setOptimizedSql(sql);
+    }
+    ctx.setSql(sql);
+    ctx.setOptimizedSql(sql);
     if (h.getCostEstimate() instanceof Map<?, ?> m) ctx.setCost((Map<String, Object>) m);
     if (h.getConfidence() instanceof Map<?, ?> m) {
       m.forEach((k, v) -> ctx.getConfidence().put(String.valueOf(k), ((Number) v).doubleValue()));
@@ -165,6 +172,7 @@ public class ChatService {
     }
     response.setExecutionId(h.getId());
     history.save(h);
+    markPreviewMessagesExecuted(h.getSessionId(), h.getId());
     ChatMessage assistant = new ChatMessage();
     assistant.setSessionId(h.getSessionId());
     assistant.setRole("assistant");
@@ -173,6 +181,21 @@ public class ChatService {
     assistant.setExecutionId(h.getId());
     messages.save(assistant);
     return new ChatTurnOut(h.getSessionId() != null ? h.getSessionId() : "", assistant.getId(), response);
+  }
+
+  @SuppressWarnings("unchecked")
+  private void markPreviewMessagesExecuted(String sessionId, String executionId) {
+    if (sessionId == null || sessionId.isBlank()) return;
+    for (ChatMessage message : messages.findBySessionIdOrderByCreatedAtAsc(sessionId)) {
+      if (!executionId.equals(message.getExecutionId())) continue;
+      Object payload = message.getResponsePayload();
+      if (!(payload instanceof Map<?, ?> raw)) continue;
+      if (!"preview".equals(String.valueOf(raw.get("kind")))) continue;
+      Map<String, Object> updated = new java.util.LinkedHashMap<>((Map<String, Object>) raw);
+      updated.put("preview_executed", true);
+      message.setResponsePayload(updated);
+      messages.save(message);
+    }
   }
 
   private ChatSession ensureSession(ChatRequest request, String effective) {

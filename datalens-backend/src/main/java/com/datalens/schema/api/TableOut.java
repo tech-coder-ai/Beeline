@@ -4,4 +4,21 @@ import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
 
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-public record TableOut(String id, String name, String tableType, String description, String owner, String steward, Object tags, String classification, Integer rowCount, Long sizeBytes, String storageFormat, Object partitionColumns, java.time.Instant lastSyncedAt, int usageCount, String databaseName, int columnCount) {}
+public record TableOut(
+    String id,
+    String name,
+    String canonicalName,
+    String tableType,
+    String description,
+    String owner,
+    String steward,
+    Object tags,
+    String classification,
+    Integer rowCount,
+    Long sizeBytes,
+    String storageFormat,
+    Object partitionColumns,
+    java.time.Instant lastSyncedAt,
+    int usageCount,
+    String databaseName,
+    int columnCount) {}

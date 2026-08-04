@@ -126,6 +126,7 @@ export interface DataLensResponse {
   actions: ResponseAction[];
   metadata: Record<string, unknown>;
   error?: string | null;
+  preview_executed?: boolean;
 }
 
 export interface ChatSession {
@@ -183,6 +184,7 @@ export interface CatalogColumn {
 export interface CatalogTable {
   id: string;
   name: string;
+  canonical_name?: string | null;
   table_type: string;
   description?: string | null;
   owner?: string | null;
@@ -250,7 +252,8 @@ export interface BusinessTerm {
 export interface Abbreviation {
   id?: string;
   abbreviation: string;
-  canonical: string;
+  entity: string;
+  value: string;
   description?: string | null;
   status?: string;
   source?: string;

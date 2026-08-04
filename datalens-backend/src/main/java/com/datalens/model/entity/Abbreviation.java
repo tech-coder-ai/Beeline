@@ -12,7 +12,8 @@ import lombok.Setter;
 @Setter
 public class Abbreviation extends BaseEntity {
   private String abbreviation;
-  private String canonical;
+  private String entity;
+  private String value;
   private String description;
   private String status;
   private String source;

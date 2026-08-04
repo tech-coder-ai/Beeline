@@ -73,7 +73,15 @@
             <p class="explain-summary">{{ r.sql_explanation.summary }}</p>
           </div>
         }
-        @if (r.sql) { <bl-sql-panel [sql]="r.sql" label="Query to run" [scrollable]="true" /> }
+        @if (r.sql) {
+          <bl-sql-panel
+            [sql]="r.sql"
+            label="Query to run"
+            [scrollable]="true"
+            [editable]="!r.preview_executed"
+            (sqlChange)="onPreviewSqlChange($event)"
+          />
+        }
         @if (r.warnings.length) {
           <ul class="suggestion-list warn-list">
             @for (w of r.warnings; track w) { <li>{{ w }}</li> }
@@ -81,9 +89,13 @@
         }
       </div>
       <div class="preview-actions">
-        <button class="primary-btn" (click)="executePreview.emit()">
-          <mat-icon>play_arrow</mat-icon> Execute
-        </button>
+        @if (r.preview_executed) {
+          <span class="muted executed-note"><mat-icon>check_circle</mat-icon> Query executed</span>
+        } @else {
+          <button class="primary-btn" (click)="emitExecutePreview()">
+            <mat-icon>play_arrow</mat-icon> Execute
+          </button>
+        }
         <button class="ghost-btn" (click)="refineQuestion.emit()">Refine question</button>
       </div>
     </div>
@@ -93,6 +105,13 @@
   @if (r.kind === 'answer') {
     @if (r.cards.length) {
       <bl-kpi-cards [cards]="r.cards" />
+    }
+
+    @if ((r.stats?.row_count ?? r.table?.rows?.length ?? 0) === 0 && !r.cards.length && !r.charts.length) {
+      <div class="empty-result banner warn">
+        <mat-icon>info</mat-icon>
+        <span>{{ r.summary || 'The query returned no rows.' }}</span>
+      </div>
     }
 
     @if ((r.charts.length && r.table?.rows?.length) || r.charts.length || (r.table && r.table.rows.length)) {

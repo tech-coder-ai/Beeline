@@ -43,7 +43,8 @@ class Abbreviation(Base, IdMixin, TimestampMixin):
     __tablename__ = "abbreviations"
 
     abbreviation: Mapped[str] = mapped_column(String(64), index=True)
-    canonical: Mapped[str] = mapped_column(String(255))
+    entity: Mapped[str] = mapped_column(String(512))
+    value: Mapped[str] = mapped_column(Text)
     description: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(16), default="approved")
     source: Mapped[str] = mapped_column(String(16), default="manual")

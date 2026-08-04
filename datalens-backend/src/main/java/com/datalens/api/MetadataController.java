@@ -126,6 +126,7 @@ public class MetadataController {
       String dbName = databases.findById(t.getDatabaseId()).map(CatalogDatabase::getName).orElse(null);
       if (search != null
           && !t.getName().toLowerCase().contains(search.toLowerCase())
+          && (t.getCanonicalName() == null || !t.getCanonicalName().toLowerCase().contains(search.toLowerCase()))
           && (t.getDescription() == null || !t.getDescription().toLowerCase().contains(search.toLowerCase()))) {
         continue;
       }
@@ -143,6 +144,7 @@ public class MetadataController {
     return new TableDetailOut(
         table.getId(),
         table.getName(),
+        table.getCanonicalName(),
         table.getTableType(),
         table.getDescription(),
         table.getOwner(),
@@ -168,6 +170,7 @@ public class MetadataController {
     if (update.steward() != null) table.setSteward(update.steward());
     if (update.tags() != null) table.setTags(update.tags());
     if (update.classification() != null) table.setClassification(update.classification());
+    if (update.canonicalName() != null) table.setCanonicalName(update.canonicalName().isBlank() ? null : update.canonicalName().trim());
     tables.save(table);
     audit.audit("default", "metadata.edit", "table", tableId, Map.of(), "info");
     return Map.of("updated", tableId);
@@ -408,7 +411,8 @@ public class MetadataController {
             a ->
                 search == null
                     || a.getAbbreviation().toLowerCase().contains(search.toLowerCase())
-                    || a.getCanonical().toLowerCase().contains(search.toLowerCase()))
+                    || (a.getEntity() != null && a.getEntity().toLowerCase().contains(search.toLowerCase()))
+                    || (a.getValue() != null && a.getValue().toLowerCase().contains(search.toLowerCase())))
         .sorted(java.util.Comparator.comparing(Abbreviation::getAbbreviation))
         .map(this::toAbbreviationOut)
         .toList();
@@ -418,7 +422,8 @@ public class MetadataController {
   public AbbreviationOut createAbbreviation(@RequestBody AbbreviationIn in) {
     Abbreviation row = new Abbreviation();
     row.setAbbreviation(in.abbreviation().trim());
-    row.setCanonical(in.canonical().trim());
+    row.setEntity(in.entity().trim());
+    row.setValue(in.value().trim());
     row.setDescription(in.description());
     row.setSource("manual");
     row.setStatus("approved");
@@ -433,7 +438,8 @@ public class MetadataController {
     Abbreviation row =
         abbreviationRepo.findById(abbreviationId).orElseThrow(() -> new NotFound("Abbreviation not found"));
     row.setAbbreviation(in.abbreviation().trim());
-    row.setCanonical(in.canonical().trim());
+    row.setEntity(in.entity().trim());
+    row.setValue(in.value().trim());
     row.setDescription(in.description());
     abbreviationRepo.save(row);
     audit.audit("default", "abbreviation.update", "abbreviation", abbreviationId, Map.of(), "info");
@@ -473,6 +479,7 @@ public class MetadataController {
     return new TableOut(
         t.getId(),
         t.getName(),
+        t.getCanonicalName(),
         t.getTableType(),
         t.getDescription(),
         t.getOwner(),
@@ -565,7 +572,8 @@ public class MetadataController {
     return new AbbreviationOut(
         row.getId(),
         row.getAbbreviation(),
-        row.getCanonical(),
+        row.getEntity(),
+        row.getValue(),
         row.getDescription(),
         row.getStatus(),
         row.getSource(),

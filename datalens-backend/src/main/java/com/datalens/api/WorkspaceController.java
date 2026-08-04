@@ -127,6 +127,9 @@ public class WorkspaceController {
     out.put("cards", viz.get("cards"));
     out.put("table", viz.get("table"));
     out.put("sql", sql);
+    if (result.getRowCount() <= 0) {
+      out.put("message", "Query completed successfully but returned no rows.");
+    }
     return out;
   }
 

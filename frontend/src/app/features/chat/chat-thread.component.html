@@ -48,7 +48,7 @@
               <bl-response-renderer
                 [response]="message.response_payload"
                 (clarify)="onClarify(message.id, $event)"
-                (executePreview)="onExecutePreview(message.response_payload.execution_id)"
+                (executePreview)="onExecutePreview(message.response_payload.execution_id, $event)"
                 (followUp)="onFollowUp($event)"
                 (refineQuestion)="onRefine(message.id)"
                 (saveQuery)="onSaveQuery(message.response_payload)"

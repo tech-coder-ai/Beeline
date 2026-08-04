@@ -120,7 +120,7 @@ export class ChatStateService {
     this.actionNotice.set(`Pinned to "${dashboardName}"`);
   }
 
-  send(message: string, extras?: { clarification_answer?: string; execute_preview_id?: string }): void {
+  send(message: string, extras?: { clarification_answer?: string; execute_preview_id?: string; execute_preview_sql?: string }): void {
     if (this.sending()) return;
     this.sending.set(true);
     this.error.set(null);
@@ -144,12 +144,27 @@ export class ChatStateService {
         connector_id: this.connectors.activeId(),
         clarification_answer: extras?.clarification_answer ?? null,
         execute_preview_id: extras?.execute_preview_id ?? null,
+        execute_preview_sql: extras?.execute_preview_sql ?? null,
       })
       .subscribe({
         next: (turn) => {
           this.sending.set(false);
           const isNewSession = !this.activeSessionId();
           this.activeSessionId.set(turn.session_id);
+          if (extras?.execute_preview_id) {
+            this.messages.update((msgs) =>
+              msgs.map((m) => {
+                const payload = m.response_payload as DataLensResponse | undefined;
+                if (m.execution_id === extras.execute_preview_id && payload?.kind === 'preview') {
+                  return {
+                    ...m,
+                    response_payload: { ...payload, preview_executed: true },
+                  };
+                }
+                return m;
+              }),
+            );
+          }
           this.messages.update((msgs) => [
             ...msgs,
             {

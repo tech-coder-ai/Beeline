@@ -33,6 +33,7 @@ class CatalogTable(Base, IdMixin, TimestampMixin):
 
     database_id: Mapped[str] = mapped_column(ForeignKey("catalog_databases.id"), index=True)
     name: Mapped[str] = mapped_column(String(255), index=True)
+    canonical_name: Mapped[str | None] = mapped_column(String(255))
     table_type: Mapped[str] = mapped_column(String(32), default="TABLE")  # TABLE | VIEW
     description: Mapped[str | None] = mapped_column(Text)            # approved business description
     technical_comment: Mapped[str | None] = mapped_column(Text)      # comment from Hive

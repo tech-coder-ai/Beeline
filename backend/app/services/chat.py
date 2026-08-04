@@ -115,7 +115,9 @@ class ChatService:
             execution_id=history.id,
         )
         ctx.sql = history.generated_sql
-        ctx.optimized_sql = history.optimized_sql
+        ctx.optimized_sql = request.execute_preview_sql.strip() if request.execute_preview_sql else history.optimized_sql
+        if request.execute_preview_sql:
+            history.optimized_sql = ctx.optimized_sql
         ctx.cost = history.cost_estimate or {}
         ctx.confidence = history.confidence or ctx.confidence
         if history.execution_plan:
@@ -128,6 +130,21 @@ class ChatService:
         response = await orchestrator.execute_and_respond(ctx, db, history)
         response.execution_id = history.id
         orchestrator._record_history(ctx, history, response)
+
+        if history.session_id:
+            preview_messages = (
+                await db.execute(
+                    select(ChatMessage).where(
+                        ChatMessage.session_id == history.session_id,
+                        ChatMessage.execution_id == history.id,
+                    )
+                )
+            ).scalars().all()
+            for message in preview_messages:
+                payload = dict(message.response_payload or {})
+                if payload.get("kind") == "preview":
+                    payload["preview_executed"] = True
+                    message.response_payload = payload
 
         message = ChatMessage(
             session_id=history.session_id,

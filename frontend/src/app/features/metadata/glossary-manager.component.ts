@@ -13,7 +13,7 @@ const EMPTY_BUSINESS_TERM: BusinessTerm = {
 };
 
 const EMPTY_ABBREVIATION: Abbreviation = {
-  abbreviation: '', canonical: '', description: '',
+  abbreviation: '', entity: '', value: '', description: '',
 };
 
 @Component({
@@ -32,8 +32,15 @@ export class GlossaryManagerComponent implements OnInit {
   readonly editing = signal<GlossaryTerm | null>(null);
   readonly editingBusiness = signal<BusinessTerm | null>(null);
   readonly editingAbbreviation = signal<Abbreviation | null>(null);
+  readonly activeSection = signal<'definitions' | 'bindings' | 'abbreviations'>('definitions');
   synonymsText = '';
   tagsText = '';
+
+  readonly sections = [
+    { id: 'definitions' as const, label: 'Definitions', count: () => this.terms().length },
+    { id: 'bindings' as const, label: 'Bindings', count: () => this.businessTerms().length },
+    { id: 'abbreviations' as const, label: 'Abbreviations', count: () => this.abbreviations().length },
+  ];
 
   ngOnInit(): void {
     this.reloadAll();
@@ -130,7 +137,7 @@ export class GlossaryManagerComponent implements OnInit {
 
   saveAbbreviation(): void {
     const row = this.editingAbbreviation();
-    if (!row || !row.abbreviation.trim() || !row.canonical.trim()) return;
+    if (!row || !row.abbreviation.trim() || !row.entity.trim() || !row.value.trim()) return;
     const request = row.id
       ? this.api.updateAbbreviation(row.id, row)
       : this.api.createAbbreviation(row);

@@ -23,7 +23,10 @@
         <div class="table-card glass-card" (click)="openTable(table)">
           <div class="table-card-header">
             <mat-icon>table_chart</mat-icon>
-            <span class="table-name">{{ table.name }}</span>
+            <span class="table-name">{{ table.canonical_name || table.name }}</span>
+            @if (table.canonical_name) {
+              <span class="chip neutral mono">{{ table.name }}</span>
+            }
             @if (table.classification) {
               <span class="chip" [class.bad]="table.classification === 'pii' || table.classification === 'confidential'">
                 {{ table.classification }}
@@ -54,6 +57,9 @@
       <div class="drawer-header">
         <div>
           <h2>{{ table.database_name }}.{{ table.name }}</h2>
+          @if (table.canonical_name) {
+            <span class="chip neutral">{{ table.canonical_name }}</span>
+          }
           <span class="chip neutral">{{ table.table_type }}</span>
           @if (table.classification) { <span class="chip">{{ table.classification }}</span> }
         </div>
@@ -68,6 +74,8 @@
           }
         </div>
         @if (editingTable()) {
+          <label class="field-label muted">Canonical name</label>
+          <input class="text-input" placeholder="e.g. Data Element" [(ngModel)]="canonicalNameDraft" />
           <label class="field-label muted">Description</label>
           <textarea class="text-input desc-input" rows="3" [(ngModel)]="descriptionDraft"></textarea>
           <div class="field-grid">
@@ -97,6 +105,9 @@
             <button class="ghost-btn" (click)="cancelTableEdit()">Cancel</button>
           </div>
         } @else {
+          @if (table.canonical_name) {
+            <p><strong>Canonical name:</strong> {{ table.canonical_name }}</p>
+          }
           <p>{{ table.description || 'No description yet.' }}</p>
           @if (table.tags?.length) {
             <div class="pill-list">

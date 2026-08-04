@@ -36,6 +36,7 @@ export class ApiService {
     connector_id?: string | null;
     clarification_answer?: string | null;
     execute_preview_id?: string | null;
+    execute_preview_sql?: string | null;
   }): Observable<ChatTurn> {
     return this.http.post<ChatTurn>(`${API}/chat`, body);
   }

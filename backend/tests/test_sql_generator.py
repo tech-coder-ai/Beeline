@@ -50,3 +50,14 @@ def test_in_operator_renders_list():
     )
     sql = SQLGenerator.build_deterministic(plan)
     assert "IN ('APAC', 'EMEA')" in sql
+
+
+def test_clob_column_is_cast_before_comparison():
+    plan = ExecutionPlan(
+        tables=["sales.orders"],
+        columns=["sales.orders.notes"],
+        filters=[PlanFilter(column="sales.orders.notes", operator="=", value="shipped")],
+    )
+    column_types = {"sales.orders.notes": "clob"}
+    sql = SQLGenerator.build_deterministic(plan, column_types)
+    assert "CAST(`sales`.`orders`.`notes` AS STRING) = 'shipped'" in sql

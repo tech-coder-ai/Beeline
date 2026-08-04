@@ -39,7 +39,8 @@ class HiveDialect(ISQLDialect):
             "date functions like date_sub/add_months/trunc, no full OUTER APPLY, "
             "prefer explicit JOIN ... ON, always filter partition columns when present. "
             "Always alias every FROM/JOIN table and reference columns as alias.column "
-            "(never `database`.`table`.`column`)."
+            "(never `database`.`table`.`column`). "
+            "For CLOB/text columns use CAST(alias.column AS STRING) before =, !=, IN, LIKE, or BETWEEN."
         )
 
 

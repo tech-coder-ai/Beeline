@@ -25,6 +25,8 @@ public class CatalogTable extends BaseEntity {
   @Column(name = "database_id")
   private String databaseId;
   private String name;
+  @Column(name = "canonical_name")
+  private String canonicalName;
   @Column(name = "table_type")
   private String tableType = "TABLE";
   private String description;

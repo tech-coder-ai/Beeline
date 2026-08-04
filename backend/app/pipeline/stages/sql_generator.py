@@ -82,11 +82,26 @@ class SQLGenerator:
         except Exception as exc:  # noqa: BLE001
             logger.warning("SQL LLM failed (%s); using deterministic builder", exc)
 
-        ctx.sql = self.build_deterministic(plan)
+        ctx.sql = self.build_deterministic(plan, self._column_types(ctx))
 
     @staticmethod
-    def build_deterministic(plan: ExecutionPlan) -> str:
+    def _column_types(ctx: PipelineContext) -> dict[str, str]:
+        types: dict[str, str] = {}
+        for table in ctx.resolved_tables:
+            for col in table.columns:
+                name = str(col.get("name", ""))
+                data_type = str(col.get("data_type", ""))
+                if not name or not data_type:
+                    continue
+                qualified = f"{table.qualified_name}.{name}".lower()
+                types[qualified] = data_type
+                types[name.lower()] = data_type
+        return types
+
+    @staticmethod
+    def build_deterministic(plan: ExecutionPlan, column_types: dict[str, str] | None = None) -> str:
         """Assemble SQL directly from the plan - no LLM involved."""
+        column_types = column_types or {}
         def qident(qualified: str) -> str:
             return ".".join(f"`{p}`" for p in qualified.split("."))
 
@@ -122,22 +137,26 @@ class SQLGenerator:
         conditions = []
         for f in plan.filters:
             column = col_ref(f.column)
+            column_type = _resolve_column_type(f.column, column_types)
+            compare_column = _comparison_column_ref(column, column_type)
             op = f.operator.lower()
             value = f.value
             if isinstance(value, str) and value in _RELATIVE_HIVE:
-                conditions.append(f"{column} >= {_RELATIVE_HIVE[value]}")
+                conditions.append(f"{compare_column} >= {_RELATIVE_HIVE[value]}")
             elif op in ("is_null", "is_not_null"):
-                conditions.append(f"{column} IS {'NOT ' if op == 'is_not_null' else ''}NULL")
+                conditions.append(f"{compare_column} IS {'NOT ' if op == 'is_not_null' else ''}NULL")
             elif op in ("in", "not_in") and isinstance(value, list):
-                rendered = ", ".join(_lit(v) for v in value)
-                conditions.append(f"{column} {'NOT IN' if op == 'not_in' else 'IN'} ({rendered})")
+                rendered = ", ".join(_lit(v, column_type) for v in value)
+                conditions.append(f"{compare_column} {'NOT IN' if op == 'not_in' else 'IN'} ({rendered})")
             elif op == "between" and isinstance(value, list) and len(value) == 2:
-                conditions.append(f"{column} BETWEEN {_lit(value[0])} AND {_lit(value[1])}")
+                conditions.append(
+                    f"{compare_column} BETWEEN {_lit(value[0], column_type)} AND {_lit(value[1], column_type)}"
+                )
             elif op == "like":
-                conditions.append(f"{column} LIKE {_lit(value)}")
+                conditions.append(f"{compare_column} LIKE {_lit(value, column_type)}")
             else:
                 sql_op = {"=": "=", "!=": "<>", ">": ">", ">=": ">=", "<": "<", "<=": "<="}.get(op, "=")
-                conditions.append(f"{column} {sql_op} {_lit(value)}")
+                conditions.append(f"{compare_column} {sql_op} {_lit(value, column_type)}")
         if conditions:
             sql += "\nWHERE " + "\n  AND ".join(conditions)
 
@@ -155,12 +174,51 @@ class SQLGenerator:
         return sql
 
 
-def _lit(value) -> str:
+def _lit(value, column_type: str | None = None) -> str:
     if value is None:
         return "NULL"
+    if _is_boolean_type(column_type):
+        if isinstance(value, bool):
+            return "1" if value else "0"
+        if isinstance(value, (int, float)):
+            return "1" if value else "0"
+        if isinstance(value, str) and value.strip().lower() in {"true", "yes", "false", "no"}:
+            return "1" if value.strip().lower() in {"true", "yes"} else "0"
     if isinstance(value, bool):
-        return "TRUE" if value else "FALSE"
+        return "1" if value else "0"
     if isinstance(value, (int, float)):
         return str(value)
     escaped = str(value).replace("'", "''")
     return f"'{escaped}'"
+
+
+def _resolve_column_type(column: str, column_types: dict[str, str]) -> str | None:
+    if not column:
+        return None
+    key = column.lower()
+    if key in column_types:
+        return column_types[key]
+    if "." in column:
+        short_key = column.rsplit(".", 1)[-1].lower()
+        return column_types.get(short_key)
+    return None
+
+
+def _comparison_column_ref(column: str, column_type: str | None) -> str:
+    if _is_clob_type(column_type):
+        return f"CAST({column} AS STRING)"
+    return column
+
+
+def _is_clob_type(data_type: str | None) -> bool:
+    if not data_type:
+        return False
+    lowered = data_type.lower()
+    return "clob" in lowered or "nclob" in lowered or "longvarchar" in lowered or lowered == "text"
+
+
+def _is_boolean_type(data_type: str | None) -> bool:
+    if not data_type:
+        return False
+    lowered = data_type.lower()
+    return "boolean" in lowered or lowered == "bool"

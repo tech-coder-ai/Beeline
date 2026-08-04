@@ -36,7 +36,9 @@ class QueryRefiner:
         ).scalars().all()
 
         lines = [f"{syn} => {term}" for syn, term in synonym_rows[:200]]
-        lines.extend(f"{a.abbreviation} => {a.canonical}" for a in abbrev_rows[:200])
+        lines.extend(
+            f"{a.abbreviation} => entity {a.entity}, value {a.value}" for a in abbrev_rows[:200]
+        )
         hint_block = "\n".join(lines)
 
         try:

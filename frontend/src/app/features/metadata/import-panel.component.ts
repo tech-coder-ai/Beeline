@@ -29,7 +29,7 @@ const IMPORT_HINTS: Record<ImportType, string> = {
   metadata: 'database, table, column, description, glossary, owner, tags, classification',
   synonyms: 'canonical, synonym (or canonical, synonyms with comma-separated values)',
   business_terms: 'term, entity, column_name, value',
-  abbreviations: 'abbreviation, canonical (optional: description)',
+  abbreviations: 'abbreviation, entity, value (optional: description)',
 };
 
 @Component({

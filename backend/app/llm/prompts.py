@@ -69,6 +69,8 @@ single {dialect} SELECT statement. Rules:
 - When GROUP BY is present, ORDER BY must use SELECT column aliases (not raw table.column refs).
 - Backtick-quoted identifiers must always be paired. Function calls such as trunc(col, 'MM')
   are plain expressions - never add a stray trailing backtick after GROUP BY items.
+- Boolean columns are stored as 0/1; compare with numeric literals, not TRUE/FALSE.
+- CLOB/text columns must be cast before comparison: CAST(alias.column AS STRING) = 'value'.
 - {dialect_hints}
 Return JSON: {{"sql": "SELECT ...", "explanation": "one-paragraph business explanation of the query"}}"""
 

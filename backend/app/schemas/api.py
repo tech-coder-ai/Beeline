@@ -16,6 +16,7 @@ class ChatRequest(BaseModel):
     connector_id: str | None = None
     clarification_answer: str | None = None      # answer to a pending clarification
     execute_preview_id: str | None = None        # confirm a previewed execution
+    execute_preview_sql: str | None = None     # optional edited SQL for preview execution
 
 
 class ChatSessionOut(BaseModel):
@@ -79,6 +80,7 @@ class ColumnOut(BaseModel):
 class TableOut(BaseModel):
     id: str
     name: str
+    canonical_name: str | None = None
     table_type: str
     description: str | None
     owner: str | None
@@ -107,6 +109,7 @@ class TableUpdate(BaseModel):
     steward: str | None = None
     tags: list[str] | None = None
     classification: str | None = None
+    canonical_name: str | None = None
 
 
 class GlossaryHintIn(BaseModel):
@@ -209,7 +212,8 @@ class BusinessTermOut(BusinessTermIn):
 
 class AbbreviationIn(BaseModel):
     abbreviation: str
-    canonical: str
+    entity: str
+    value: str
     description: str | None = None
 
 

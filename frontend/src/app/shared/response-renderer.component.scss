@@ -106,10 +106,32 @@
     flex-shrink: 0;
     display: flex;
     gap: 10px;
+    align-items: center;
     padding: 12px 16px;
     border-top: 1px solid var(--bl-border);
     background: var(--bl-surface, rgba(255, 255, 255, 0.02));
+
+    .executed-note {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      mat-icon { font-size: 18px; width: 18px; height: 18px; color: var(--bl-good, #2e7d32); }
+    }
   }
+}
+
+.empty-result {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(183, 121, 31, 0.1);
+  color: var(--bl-warn);
+  font-size: 13.5px;
+
+  mat-icon { font-size: 20px; width: 20px; height: 20px; flex-shrink: 0; }
 }
 
 .chart-grid {

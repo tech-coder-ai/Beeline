@@ -16,8 +16,11 @@
     </div>
     @if (editorResult(); as result) {
       <div class="result-block">
+        @if ((result.row_count ?? result.table?.rows?.length ?? 0) === 0 && !result.charts.length) {
+          <div class="empty-result muted">Query completed successfully but returned no rows.</div>
+        }
         @if (result.charts.length) { <bl-chart [spec]="result.charts[0]" /> }
-        @if (result.table) { <bl-data-grid [table]="result.table" [showActions]="false" /> }
+        @if (result.table?.rows?.length) { <bl-data-grid [table]="result.table" [showActions]="false" /> }
       </div>
     }
   </div>
@@ -55,8 +58,11 @@
   @if (result(); as r) {
     <div class="result-panel glass-card">
       <div class="section-label">Result</div>
+      @if ((r.row_count ?? r.table?.rows?.length ?? 0) === 0 && !r.charts.length) {
+        <div class="empty-result muted">Query completed successfully but returned no rows.</div>
+      }
       @if (r.charts.length) { <bl-chart [spec]="r.charts[0]" /> }
-      @if (r.table) { <bl-data-grid [table]="r.table" /> }
+      @if (r.table?.rows?.length) { <bl-data-grid [table]="r.table" /> }
     </div>
   }
 </div>

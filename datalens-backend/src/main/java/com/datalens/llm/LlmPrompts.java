@@ -58,6 +58,8 @@ public final class LlmPrompts {
       - Never write a filter value that isn't a real, concrete date/number/string from the plan.
         If the plan's own filter value looks like placeholder text (e.g. "specified period", "TBD"),
         drop that filter rather than copying it into the WHERE clause verbatim.
+      - Boolean columns are stored as 0/1; compare with numeric literals, not TRUE/FALSE.
+      - CLOB/text columns must be cast before comparison: CAST(alias.column AS STRING) = 'value'.
       - %s
       Return JSON: {"sql": "SELECT ...", "explanation": "one-paragraph business explanation"}""";
 

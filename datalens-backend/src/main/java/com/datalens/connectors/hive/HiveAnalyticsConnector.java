@@ -184,6 +184,7 @@ public class HiveAnalyticsConnector implements AnalyticsConnector {
           - Date filters: date_sub, add_months, trunc; never T-SQL/PostgreSQL functions.
           - When GROUP BY is present, ORDER BY must use SELECT aliases, not raw table.column.
           - Prefer explicit JOIN ... ON; filter partition columns when available.
+          - For CLOB/text columns, wrap the column with CAST(alias.col AS STRING) before =, !=, IN, LIKE, or BETWEEN.
           - No CTE writes, no semicolons, no comments.""";
     }
   }

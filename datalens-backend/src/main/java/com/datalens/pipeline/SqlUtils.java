@@ -331,6 +331,10 @@ public final class SqlUtils {
   }
 
   public static String buildDeterministic(ExecutionPlanModel plan) {
+    return buildDeterministic(plan, java.util.Map.of());
+  }
+
+  public static String buildDeterministic(ExecutionPlanModel plan, java.util.Map<String, String> columnTypes) {
     if (plan == null || plan.getTables().isEmpty()) {
       throw new ValidationFailed(
           "I couldn't map your question to any known tables. Try mentioning the dataset explicitly.");
@@ -389,7 +393,7 @@ public final class SqlUtils {
 
     List<String> conditions = new ArrayList<>();
     for (PlanFilter f : plan.getFilters()) {
-      conditions.add(renderFilter(f, tableAliases));
+      conditions.add(renderFilter(f, tableAliases, columnTypes));
     }
     if (!conditions.isEmpty()) sql.append("\nWHERE ").append(String.join("\n  AND ", conditions));
 
@@ -459,24 +463,32 @@ public final class SqlUtils {
     return qident(qualified);
   }
 
-  private static String renderFilter(PlanFilter f, java.util.Map<String, String> aliases) {
+  private static String renderFilter(
+      PlanFilter f, java.util.Map<String, String> aliases, java.util.Map<String, String> columnTypes) {
     String column = hiveColRef(f.getColumn(), aliases);
+    String columnType = resolveColumnType(f.getColumn(), columnTypes);
+    String compareColumn = comparisonColumnExpr(column, columnType);
     String op = f.getOperator() != null ? f.getOperator().toLowerCase(Locale.ROOT) : "=";
     Object value = f.getValue();
     if (value instanceof String s && RELATIVE_HIVE.containsKey(s)) {
       return column + " >= " + RELATIVE_HIVE.get(s);
     }
     if ("is_null".equals(op) || "is_not_null".equals(op)) {
-      return column + " IS " + ("is_not_null".equals(op) ? "NOT NULL" : "NULL");
+      return compareColumn + " IS " + ("is_not_null".equals(op) ? "NOT NULL" : "NULL");
     }
     if (("in".equals(op) || "not_in".equals(op)) && value instanceof List<?> list) {
-      String rendered = list.stream().map(SqlUtils::literal).reduce((a, b) -> a + ", " + b).orElse("");
-      return column + ("not_in".equals(op) ? " NOT IN (" : " IN (") + rendered + ")";
+      String rendered =
+          list.stream().map(v -> literal(v, columnType)).reduce((a, b) -> a + ", " + b).orElse("");
+      return compareColumn + ("not_in".equals(op) ? " NOT IN (" : " IN (") + rendered + ")";
     }
     if ("between".equals(op) && value instanceof List<?> list && list.size() == 2) {
-      return column + " BETWEEN " + literal(list.get(0)) + " AND " + literal(list.get(1));
+      return compareColumn
+          + " BETWEEN "
+          + literal(list.get(0), columnType)
+          + " AND "
+          + literal(list.get(1), columnType);
     }
-    if ("like".equals(op)) return column + " LIKE " + literal(value);
+    if ("like".equals(op)) return compareColumn + " LIKE " + literal(value, columnType);
     String sqlOp =
         switch (op) {
           case "!=", "<>" -> "<>";
@@ -486,7 +498,52 @@ public final class SqlUtils {
           case "<=" -> "<=";
           default -> "=";
         };
-    return column + " " + sqlOp + " " + literal(value);
+    return compareColumn + " " + sqlOp + " " + literal(value, columnType);
+  }
+
+  private static String resolveColumnType(String column, java.util.Map<String, String> columnTypes) {
+    if (column == null || columnTypes == null || columnTypes.isEmpty()) return null;
+    String key = column.toLowerCase(Locale.ROOT);
+    if (columnTypes.containsKey(key)) return columnTypes.get(key);
+    if (column.contains(".")) {
+      String shortKey = column.substring(column.lastIndexOf('.') + 1).toLowerCase(Locale.ROOT);
+      if (columnTypes.containsKey(shortKey)) return columnTypes.get(shortKey);
+    }
+    return null;
+  }
+
+  private static boolean isBooleanColumnType(String dataType) {
+    if (dataType == null) return false;
+    String dt = dataType.toLowerCase(Locale.ROOT);
+    return dt.contains("boolean") || dt.equals("bool");
+  }
+
+  private static boolean isClobColumnType(String dataType) {
+    if (dataType == null) return false;
+    String dt = dataType.toLowerCase(Locale.ROOT);
+    return dt.contains("clob")
+        || dt.contains("nclob")
+        || dt.contains("longvarchar")
+        || dt.equals("text");
+  }
+
+  /** Hive/Spark cannot compare CLOB-like columns directly; cast to STRING first. */
+  private static String comparisonColumnExpr(String column, String columnType) {
+    if (isClobColumnType(columnType)) {
+      return "CAST(" + column + " AS STRING)";
+    }
+    return column;
+  }
+
+  private static Object coerceBooleanValue(Object value) {
+    if (value instanceof Boolean b) return b ? 1 : 0;
+    if (value instanceof Number n) return n.intValue() != 0 ? 1 : 0;
+    if (value instanceof String s) {
+      String lowered = s.trim().toLowerCase(Locale.ROOT);
+      if ("true".equals(lowered) || "yes".equals(lowered)) return 1;
+      if ("false".equals(lowered) || "no".equals(lowered)) return 0;
+    }
+    return value;
   }
 
   private static String shortName(String qualified) {
@@ -504,9 +561,17 @@ public final class SqlUtils {
   }
 
   private static String literal(Object value) {
+    return literal(value, null);
+  }
+
+  private static String literal(Object value, String columnType) {
     if (value == null) return "NULL";
+    if (isBooleanColumnType(columnType)) {
+      Object coerced = coerceBooleanValue(value);
+      if (coerced instanceof Number n) return String.valueOf(n.intValue());
+    }
     if (value instanceof Number) return String.valueOf(value);
-    if (value instanceof Boolean b) return b ? "TRUE" : "FALSE";
+    if (value instanceof Boolean b) return b ? "1" : "0";
     return "'" + String.valueOf(value).replace("'", "''") + "'";
   }
 }

@@ -5,8 +5,8 @@
 -- Creates the full application metadata schema (catalog, chat, governance,
 -- semantic layer, dashboards, etc.) for Oracle 19c+.
 --
--- Schema revision: d4e5f6a7b8c9 (Alembic head — includes business_terms,
--- abbreviations, and extended catalog_relationships columns).
+-- Schema revision: e5f6a7b8c9d0 (Alembic head — abbreviations entity/value,
+-- catalog_tables.canonical_name, extended catalog_relationships).
 --
 -- Identifier style: quoted lowercase names match SQLite/PostgreSQL and JPA
 -- @Table(name = "...") annotations used by Spring Boot and SQLAlchemy.
@@ -67,6 +67,58 @@ BEGIN
   END LOOP;
 END;
 /
+*/
+
+
+-- =============================================================================
+-- SECTION 2b — Upgrade existing DB from d4e5f6a7b8c9 → e5f6a7b8c9d0 (run once)
+-- =============================================================================
+-- Skip this section on fresh installs (Section 3 already creates the final schema).
+/*
+-- Abbreviations: replace canonical with entity + value
+BEGIN
+  EXECUTE IMMEDIATE 'ALTER TABLE "abbreviations" ADD ("entity" VARCHAR2(512))';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1430 THEN RAISE; END IF;
+END;
+/
+BEGIN
+  EXECUTE IMMEDIATE 'ALTER TABLE "abbreviations" ADD ("value" CLOB)';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1430 THEN RAISE; END IF;
+END;
+/
+UPDATE "abbreviations"
+   SET "entity" = "canonical",
+       "value"  = "canonical"
+ WHERE "canonical" IS NOT NULL
+   AND ("entity" IS NULL OR "value" IS NULL);
+ALTER TABLE "abbreviations" MODIFY ("entity" NOT NULL);
+ALTER TABLE "abbreviations" MODIFY ("value" NOT NULL);
+BEGIN
+  EXECUTE IMMEDIATE 'ALTER TABLE "abbreviations" DROP COLUMN "canonical"';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -904 THEN RAISE; END IF;
+END;
+/
+
+-- Catalog tables: user-facing canonical name
+BEGIN
+  EXECUTE IMMEDIATE 'ALTER TABLE "catalog_tables" ADD ("canonical_name" VARCHAR2(255))';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1430 THEN RAISE; END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE 'CREATE INDEX "ix_abbreviations_entity" ON "abbreviations" ("entity")';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -955 THEN RAISE; END IF;
+END;
+/
+BEGIN
+  EXECUTE IMMEDIATE 'CREATE INDEX "ix_catalog_tables_canonical_name" ON "catalog_tables" ("canonical_name")';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -955 THEN RAISE; END IF;
+END;
+/
+
+UPDATE "alembic_version" SET "version_num" = 'e5f6a7b8c9d0';
+COMMIT;
 */
 
 
@@ -361,7 +413,8 @@ CREATE INDEX "ix_sync_runs_connector_id" ON "sync_runs" ("connector_id");
 CREATE TABLE "abbreviations" (
   "id"           VARCHAR2(32) NOT NULL,
   "abbreviation" VARCHAR2(64) NOT NULL,
-  "canonical"    VARCHAR2(255) NOT NULL,
+  "entity"       VARCHAR2(512) NOT NULL,
+  "value"        CLOB NOT NULL,
   "description"  CLOB,
   "status"       VARCHAR2(16) DEFAULT 'approved' NOT NULL,
   "source"       VARCHAR2(16) DEFAULT 'manual' NOT NULL,
@@ -371,6 +424,7 @@ CREATE TABLE "abbreviations" (
 );
 
 CREATE INDEX "ix_abbreviations_abbreviation" ON "abbreviations" ("abbreviation");
+CREATE INDEX "ix_abbreviations_entity"       ON "abbreviations" ("entity");
 
 
 -- =============================================================================
@@ -381,6 +435,7 @@ CREATE TABLE "catalog_tables" (
   "id"                 VARCHAR2(32)  NOT NULL,
   "database_id"        VARCHAR2(32)  NOT NULL,
   "name"               VARCHAR2(255) NOT NULL,
+  "canonical_name"     VARCHAR2(255),
   "table_type"         VARCHAR2(32)  DEFAULT 'TABLE' NOT NULL,
   "description"        CLOB,
   "technical_comment"  CLOB,
@@ -405,8 +460,9 @@ CREATE TABLE "catalog_tables" (
   CONSTRAINT "ck_catalog_tables_is_active" CHECK ("is_active" IN (0, 1))
 );
 
-CREATE INDEX "ix_catalog_tables_database_id" ON "catalog_tables" ("database_id");
+CREATE INDEX "ix_catalog_tables_database_id"   ON "catalog_tables" ("database_id");
 CREATE INDEX "ix_catalog_tables_name"         ON "catalog_tables" ("name");
+CREATE INDEX "ix_catalog_tables_canonical_name" ON "catalog_tables" ("canonical_name");
 
 CREATE TABLE "catalog_columns" (
   "id"                     VARCHAR2(32)  NOT NULL,
@@ -579,7 +635,7 @@ CREATE TABLE "alembic_version" (
   CONSTRAINT "pk_alembic_version" PRIMARY KEY ("version_num")
 );
 
-INSERT INTO "alembic_version" ("version_num") VALUES ('d4e5f6a7b8c9');
+INSERT INTO "alembic_version" ("version_num") VALUES ('e5f6a7b8c9d0');
 
 COMMIT;
 

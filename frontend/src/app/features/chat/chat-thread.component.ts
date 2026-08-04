@@ -93,9 +93,9 @@ export class ChatThreadComponent implements OnDestroy {
     this.state.send(label, { clarification_answer: value });
   }
 
-  onExecutePreview(executionId: string | null | undefined): void {
+  onExecutePreview(executionId: string | null | undefined, sql?: string): void {
     if (!executionId) return;
-    this.state.send('', { execute_preview_id: executionId });
+    this.state.send('', { execute_preview_id: executionId, execute_preview_sql: sql?.trim() || undefined });
   }
 
   onFollowUp(question: string): void {
