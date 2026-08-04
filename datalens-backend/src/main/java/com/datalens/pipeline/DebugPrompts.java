@@ -21,6 +21,7 @@ public final class DebugPrompts {
       trace.setModel(stringValue(call.get("model")));
       trace.setSystemPrompt(stringValue(call.get("system_prompt")));
       trace.setUserMessage(stringValue(call.get("user_message")));
+      trace.setResponse(stringValue(call.get("response")));
       if (call.get("prompt_tokens") instanceof Number n) trace.setPromptTokens(n.intValue());
       if (call.get("completion_tokens") instanceof Number n) trace.setCompletionTokens(n.intValue());
       traces.add(trace);

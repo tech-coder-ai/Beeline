@@ -123,6 +123,7 @@ class LlmPromptTrace(BaseModel):
     model: str = ""
     system_prompt: str = ""
     user_message: str = ""
+    response: str = ""
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
 

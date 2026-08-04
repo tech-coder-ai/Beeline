@@ -108,6 +108,7 @@ export interface LlmPromptTrace {
   model?: string;
   system_prompt?: string;
   user_message?: string;
+  response?: string;
   prompt_tokens?: number | null;
   completion_tokens?: number | null;
 }

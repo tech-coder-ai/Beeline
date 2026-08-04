@@ -75,6 +75,12 @@
                       <span class="label">User</span>
                       <pre>{{ p.user_message }}</pre>
                     </div>
+                    @if (p.response) {
+                      <div class="prompt-block">
+                        <span class="label">Response</span>
+                        <pre>{{ p.response }}</pre>
+                      </div>
+                    }
                   </div>
                 }
               </article>

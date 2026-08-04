@@ -18,6 +18,7 @@ def attach_debug_prompts(ctx: PipelineContext, response: BeelineResponse) -> Non
             model=str(c.get("model") or ""),
             system_prompt=str(c.get("system_prompt") or ""),
             user_message=str(c.get("user_message") or ""),
+            response=str(c.get("response") or ""),
             prompt_tokens=c.get("prompt_tokens"),
             completion_tokens=c.get("completion_tokens"),
         )

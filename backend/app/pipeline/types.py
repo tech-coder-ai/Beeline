@@ -162,6 +162,9 @@ class PipelineContext:
             call["system_prompt"] = system_prompt
         if user_message is not None:
             call["user_message"] = user_message
+        response_text = getattr(result, "text", None)
+        if response_text:
+            call["response"] = response_text
         self.llm_calls.append(call)
 
     @property

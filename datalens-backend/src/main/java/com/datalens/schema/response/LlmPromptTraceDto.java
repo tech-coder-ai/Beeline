@@ -12,6 +12,7 @@ public class LlmPromptTraceDto {
   private String model = "";
   private String systemPrompt = "";
   private String userMessage = "";
+  private String response = "";
   private Integer promptTokens;
   private Integer completionTokens;
 }

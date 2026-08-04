@@ -62,6 +62,7 @@ public class PipelineContext {
     call.put("completion_tokens", result.getCompletionTokens());
     if (systemPrompt != null) call.put("system_prompt", systemPrompt);
     if (userMessage != null) call.put("user_message", userMessage);
+    if (result.getText() != null && !result.getText().isBlank()) call.put("response", result.getText());
     llmCalls.add(call);
   }
 }
