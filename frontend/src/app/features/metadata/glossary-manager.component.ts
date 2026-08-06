@@ -2,7 +2,7 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { ApiService } from '../../core/api.service';
-import { Abbreviation, BusinessTerm, GlossaryTerm } from '../../core/models';
+import { Abbreviation, BusinessRule, BusinessTerm, GlossaryTerm } from '../../core/models';
 
 const EMPTY_TERM: GlossaryTerm = {
   term: '', definition: '', business_meaning: '', examples: [], owner: '', tags: [], synonyms: [],
@@ -14,6 +14,10 @@ const EMPTY_BUSINESS_TERM: BusinessTerm = {
 
 const EMPTY_ABBREVIATION: Abbreviation = {
   abbreviation: '', entity: '', value: '', description: '',
+};
+
+const EMPTY_BUSINESS_RULE: BusinessRule = {
+  name: '', scope: 'global', entity: '', column_name: '', rule_type: '', statement: '',
 };
 
 @Component({
@@ -28,11 +32,13 @@ export class GlossaryManagerComponent implements OnInit {
   readonly terms = signal<GlossaryTerm[]>([]);
   readonly businessTerms = signal<BusinessTerm[]>([]);
   readonly abbreviations = signal<Abbreviation[]>([]);
+  readonly businessRules = signal<BusinessRule[]>([]);
   readonly search = signal('');
   readonly editing = signal<GlossaryTerm | null>(null);
   readonly editingBusiness = signal<BusinessTerm | null>(null);
   readonly editingAbbreviation = signal<Abbreviation | null>(null);
-  readonly activeSection = signal<'definitions' | 'bindings' | 'abbreviations'>('definitions');
+  readonly editingRule = signal<BusinessRule | null>(null);
+  readonly activeSection = signal<'definitions' | 'bindings' | 'abbreviations' | 'rules'>('definitions');
   synonymsText = '';
   tagsText = '';
 
@@ -40,6 +46,7 @@ export class GlossaryManagerComponent implements OnInit {
     { id: 'definitions' as const, label: 'Definitions', count: () => this.terms().length },
     { id: 'bindings' as const, label: 'Bindings', count: () => this.businessTerms().length },
     { id: 'abbreviations' as const, label: 'Abbreviations', count: () => this.abbreviations().length },
+    { id: 'rules' as const, label: 'Business rules', count: () => this.businessRules().length },
   ];
 
   ngOnInit(): void {
@@ -51,6 +58,7 @@ export class GlossaryManagerComponent implements OnInit {
     this.api.listGlossary(q).subscribe((terms) => this.terms.set(terms));
     this.api.listBusinessTerms(q).subscribe((terms) => this.businessTerms.set(terms));
     this.api.listAbbreviations(q).subscribe((rows) => this.abbreviations.set(rows));
+    this.api.listBusinessRules(q).subscribe((rows) => this.businessRules.set(rows));
   }
 
   onSearch(value: string): void {
@@ -150,5 +158,33 @@ export class GlossaryManagerComponent implements OnInit {
   removeAbbreviation(row: Abbreviation): void {
     if (!row.id) return;
     this.api.deleteAbbreviation(row.id).subscribe(() => this.reloadAll());
+  }
+
+  startNewRule(): void {
+    this.editingRule.set({ ...EMPTY_BUSINESS_RULE });
+  }
+
+  startEditRule(rule: BusinessRule): void {
+    this.editingRule.set({ ...rule });
+  }
+
+  cancelRule(): void {
+    this.editingRule.set(null);
+  }
+
+  saveRule(): void {
+    const rule = this.editingRule();
+    if (!rule || !rule.name.trim() || !rule.statement.trim()) return;
+    if (rule.scope !== 'global' && !rule.entity?.trim()) return;
+    const request = rule.id ? this.api.updateBusinessRule(rule.id, rule) : this.api.createBusinessRule(rule);
+    request.subscribe(() => {
+      this.editingRule.set(null);
+      this.reloadAll();
+    });
+  }
+
+  removeRule(rule: BusinessRule): void {
+    if (!rule.id) return;
+    this.api.deleteBusinessRule(rule.id).subscribe(() => this.reloadAll());
   }
 }

@@ -56,7 +56,7 @@ BEGIN
     FROM user_tables
     WHERE table_name IN (
       'ABBREVIATIONS','API_ACTIONS','APPROVAL_ITEMS','AUDIT_LOGS','BUSINESS_METRICS',
-      'BUSINESS_TERMS','CATALOG_COLUMNS','CATALOG_DATABASES','CATALOG_RELATIONSHIPS',
+      'BUSINESS_RULES','BUSINESS_TERMS','CATALOG_COLUMNS','CATALOG_DATABASES','CATALOG_RELATIONSHIPS',
       'CATALOG_TABLES','CHAT_MESSAGES','CHAT_SESSIONS','CONFIG_OVERRIDES','DASHBOARDS',
       'DASHBOARD_WIDGETS','EXECUTION_HISTORY','FEEDBACK','GLOSSARY_TERMS',
       'METADATA_VERSIONS','PROMPT_TEMPLATES','QUERY_LIBRARY','SAVED_QUERIES',
@@ -544,6 +544,24 @@ CREATE TABLE "business_terms" (
 
 CREATE INDEX "ix_business_terms_term"   ON "business_terms" ("term");
 CREATE INDEX "ix_business_terms_entity" ON "business_terms" ("entity");
+
+CREATE TABLE "business_rules" (
+  "id"          VARCHAR2(32)  NOT NULL,
+  "name"        VARCHAR2(255) NOT NULL,
+  "scope"       VARCHAR2(16)  DEFAULT 'global' NOT NULL,
+  "entity"      VARCHAR2(512),
+  "column_name" VARCHAR2(255),
+  "rule_type"   VARCHAR2(32),
+  "statement"   CLOB          NOT NULL,
+  "status"      VARCHAR2(16)  DEFAULT 'approved' NOT NULL,
+  "source"      VARCHAR2(16)  DEFAULT 'manual' NOT NULL,
+  "created_at"  TIMESTAMP(6) WITH TIME ZONE NOT NULL,
+  "updated_at"  TIMESTAMP(6) WITH TIME ZONE NOT NULL,
+  CONSTRAINT "pk_business_rules" PRIMARY KEY ("id")
+);
+
+CREATE INDEX "ix_business_rules_scope"  ON "business_rules" ("scope");
+CREATE INDEX "ix_business_rules_entity" ON "business_rules" ("entity");
 
 
 -- =============================================================================

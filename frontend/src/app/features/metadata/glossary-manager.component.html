@@ -22,6 +22,9 @@
       @case ('abbreviations') {
         <button class="primary-btn" (click)="startNewAbbreviation()"><mat-icon>add</mat-icon> New abbreviation</button>
       }
+      @case ('rules') {
+        <button class="primary-btn" (click)="startNewRule()"><mat-icon>add</mat-icon> New rule</button>
+      }
     }
   </div>
 
@@ -199,6 +202,88 @@
               </div>
             } @empty {
               <p class="muted empty-copy">No abbreviations yet.</p>
+            }
+          </div>
+        </section>
+      }
+
+      @case ('rules') {
+        <section class="section-block">
+          <div class="section-header">
+            <h3>Business rules</h3>
+            <p class="muted">
+              Steward-authored policy or conditional logic the assistant should apply when it isn't a
+              simple term definition or value binding - exclusions, classifications, calculation
+              definitions. Global rules apply to every question; table/column rules apply only when
+              that table is part of the answer.
+            </p>
+          </div>
+
+          @if (editingRule(); as rule) {
+            <div class="editor glass-card">
+              <div class="editor-grid">
+                <label>
+                  <span class="muted">Name</span>
+                  <input class="text-input" [(ngModel)]="rule.name" placeholder="e.g. Exclude test accounts" />
+                </label>
+                <label>
+                  <span class="muted">Scope</span>
+                  <select class="text-input" [(ngModel)]="rule.scope">
+                    <option value="global">Global (always applied)</option>
+                    <option value="table">Table</option>
+                    <option value="column">Column</option>
+                  </select>
+                </label>
+              </div>
+              @if (rule.scope !== 'global') {
+                <div class="editor-grid">
+                  <label>
+                    <span class="muted">Entity (qualified table name)</span>
+                    <input class="text-input" [(ngModel)]="rule.entity" placeholder="e.g. analytics.customers" />
+                  </label>
+                  @if (rule.scope === 'column') {
+                    <label>
+                      <span class="muted">Column name</span>
+                      <input class="text-input" [(ngModel)]="rule.column_name" placeholder="e.g. status" />
+                    </label>
+                  }
+                </div>
+              }
+              <label>
+                <span class="muted">Rule type (optional tag)</span>
+                <input class="text-input" [(ngModel)]="rule.rule_type" placeholder="e.g. filter, calculation, governance" />
+              </label>
+              <label>
+                <span class="muted">Statement</span>
+                <textarea
+                  class="text-input"
+                  rows="3"
+                  [(ngModel)]="rule.statement"
+                  placeholder="e.g. A churned customer has no transaction in the trailing 90 days and status != 'closed'."
+                ></textarea>
+              </label>
+              <div class="editor-actions">
+                <button class="primary-btn" (click)="saveRule()">Save</button>
+                <button class="ghost-btn" (click)="cancelRule()">Cancel</button>
+              </div>
+            </div>
+          }
+
+          <div class="scroll-list">
+            @for (rule of businessRules(); track rule.id) {
+              <div class="binding-card glass-card">
+                <div class="term-header">
+                  <span class="term-name">{{ rule.name }}</span>
+                  <span class="chip neutral">{{ rule.scope }}</span>
+                  @if (rule.entity) { <span class="muted mono">{{ rule.entity }}{{ rule.column_name ? '.' + rule.column_name : '' }}</span> }
+                  <span class="spacer"></span>
+                  <button class="icon-btn" (click)="startEditRule(rule)"><mat-icon>edit</mat-icon></button>
+                  <button class="icon-btn" (click)="removeRule(rule)"><mat-icon>delete</mat-icon></button>
+                </div>
+                <p class="binding-expr">{{ rule.statement }}</p>
+              </div>
+            } @empty {
+              <p class="muted empty-copy">No business rules yet.</p>
             }
           </div>
         </section>

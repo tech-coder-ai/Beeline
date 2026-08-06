@@ -6,12 +6,14 @@ import com.datalens.model.entity.ApprovalItem;
 import com.datalens.model.entity.CatalogColumn;
 import com.datalens.model.entity.CatalogDatabase;
 import com.datalens.model.entity.CatalogTable;
+import com.datalens.model.entity.BusinessRule;
 import com.datalens.model.entity.BusinessTerm;
 import com.datalens.model.entity.GlossaryTerm;
 import com.datalens.model.entity.MetadataVersion;
 import com.datalens.model.entity.Synonym;
 import com.datalens.model.repository.AbbreviationRepository;
 import com.datalens.model.repository.BusinessMetricRepository;
+import com.datalens.model.repository.BusinessRuleRepository;
 import com.datalens.model.repository.BusinessTermRepository;
 import com.datalens.model.repository.CatalogColumnRepository;
 import com.datalens.model.repository.CatalogDatabaseRepository;
@@ -25,6 +27,8 @@ import com.datalens.schema.api.ApprovalOut;
 import com.datalens.schema.api.BulkApprovalDecision;
 import com.datalens.schema.api.ColumnOut;
 import com.datalens.schema.api.ColumnUpdate;
+import com.datalens.schema.api.BusinessRuleIn;
+import com.datalens.schema.api.BusinessRuleOut;
 import com.datalens.schema.api.BusinessTermIn;
 import com.datalens.schema.api.BusinessTermOut;
 import com.datalens.schema.api.GlossaryTermIn;
@@ -70,6 +74,7 @@ public class MetadataController {
   private final EnrichmentService enrichment;
   private final CatalogRelationshipService relationships;
   private final BusinessTermRepository businessTerms;
+  private final BusinessRuleRepository businessRules;
   private final AbbreviationRepository abbreviationRepo;
 
   public MetadataController(
@@ -85,6 +90,7 @@ public class MetadataController {
       EnrichmentService enrichment,
       CatalogRelationshipService relationships,
       BusinessTermRepository businessTerms,
+      BusinessRuleRepository businessRules,
       AbbreviationRepository abbreviationRepo) {
     this.databases = databases;
     this.tables = tables;
@@ -98,6 +104,7 @@ public class MetadataController {
     this.enrichment = enrichment;
     this.relationships = relationships;
     this.businessTerms = businessTerms;
+    this.businessRules = businessRules;
     this.abbreviationRepo = abbreviationRepo;
   }
 
@@ -404,6 +411,54 @@ public class MetadataController {
     return Map.of("deleted", termId);
   }
 
+  @GetMapping("/business-rules")
+  public List<BusinessRuleOut> listBusinessRules(
+      @RequestParam(required = false) String search, @RequestParam(required = false) String scope) {
+    return businessRules.findAll().stream()
+        .filter(r -> search == null || r.getName().toLowerCase().contains(search.toLowerCase()))
+        .filter(r -> scope == null || scope.equalsIgnoreCase(r.getScope()))
+        .sorted(java.util.Comparator.comparing(BusinessRule::getName))
+        .map(this::toBusinessRuleOut)
+        .toList();
+  }
+
+  @PostMapping("/business-rules")
+  public BusinessRuleOut createBusinessRule(@RequestBody BusinessRuleIn in) {
+    BusinessRule row = new BusinessRule();
+    row.setName(in.name().trim());
+    row.setScope(in.scope() == null || in.scope().isBlank() ? "global" : in.scope().trim());
+    row.setEntity(in.entity() != null && !in.entity().isBlank() ? in.entity().trim() : null);
+    row.setColumnName(in.columnName() != null && !in.columnName().isBlank() ? in.columnName().trim() : null);
+    row.setRuleType(in.ruleType() != null && !in.ruleType().isBlank() ? in.ruleType().trim() : null);
+    row.setStatement(in.statement().trim());
+    row.setSource("manual");
+    row.setStatus("approved");
+    businessRules.save(row);
+    audit.audit("default", "business_rule.create", "business_rule", row.getId(), Map.of("name", row.getName()), "info");
+    return toBusinessRuleOut(row);
+  }
+
+  @org.springframework.web.bind.annotation.PutMapping("/business-rules/{ruleId}")
+  public BusinessRuleOut updateBusinessRule(@PathVariable String ruleId, @RequestBody BusinessRuleIn in) {
+    BusinessRule row = businessRules.findById(ruleId).orElseThrow(() -> new NotFound("Business rule not found"));
+    row.setName(in.name().trim());
+    row.setScope(in.scope() == null || in.scope().isBlank() ? "global" : in.scope().trim());
+    row.setEntity(in.entity() != null && !in.entity().isBlank() ? in.entity().trim() : null);
+    row.setColumnName(in.columnName() != null && !in.columnName().isBlank() ? in.columnName().trim() : null);
+    row.setRuleType(in.ruleType() != null && !in.ruleType().isBlank() ? in.ruleType().trim() : null);
+    row.setStatement(in.statement().trim());
+    businessRules.save(row);
+    audit.audit("default", "business_rule.update", "business_rule", ruleId, Map.of(), "info");
+    return toBusinessRuleOut(row);
+  }
+
+  @org.springframework.web.bind.annotation.DeleteMapping("/business-rules/{ruleId}")
+  public Map<String, String> deleteBusinessRule(@PathVariable String ruleId) {
+    businessRules.deleteById(ruleId);
+    audit.audit("default", "business_rule.delete", "business_rule", ruleId, Map.of(), "info");
+    return Map.of("deleted", ruleId);
+  }
+
   @GetMapping("/abbreviations")
   public List<AbbreviationOut> listAbbreviations(@RequestParam(required = false) String search) {
     return abbreviationRepo.findAll().stream()
@@ -562,6 +617,21 @@ public class MetadataController {
         row.getColumnName(),
         row.getValue(),
         row.getTableId(),
+        row.getStatus(),
+        row.getSource(),
+        row.getCreatedAt(),
+        row.getUpdatedAt());
+  }
+
+  private BusinessRuleOut toBusinessRuleOut(BusinessRule row) {
+    return new BusinessRuleOut(
+        row.getId(),
+        row.getName(),
+        row.getScope(),
+        row.getEntity(),
+        row.getColumnName(),
+        row.getRuleType(),
+        row.getStatement(),
         row.getStatus(),
         row.getSource(),
         row.getCreatedAt(),
