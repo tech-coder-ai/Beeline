@@ -15,6 +15,7 @@ import {
   DashboardWidget,
   ExecutionLog,
   BusinessTerm,
+  BusinessRule,
   Abbreviation,
   GlossaryTerm,
   SavedQuery,
@@ -248,6 +249,25 @@ export class ApiService {
 
   deleteAbbreviation(id: string): Observable<unknown> {
     return this.http.delete(`${API}/abbreviations/${id}`);
+  }
+
+  listBusinessRules(search?: string, scope?: string): Observable<BusinessRule[]> {
+    const params: Record<string, string> = {};
+    if (search) params['search'] = search;
+    if (scope) params['scope'] = scope;
+    return this.http.get<BusinessRule[]>(`${API}/business-rules`, { params });
+  }
+
+  createBusinessRule(rule: BusinessRule): Observable<BusinessRule> {
+    return this.http.post<BusinessRule>(`${API}/business-rules`, rule);
+  }
+
+  updateBusinessRule(id: string, rule: BusinessRule): Observable<BusinessRule> {
+    return this.http.put<BusinessRule>(`${API}/business-rules/${id}`, rule);
+  }
+
+  deleteBusinessRule(id: string): Observable<unknown> {
+    return this.http.delete(`${API}/business-rules/${id}`);
   }
 
   // ------------------------------------------------------------- sql & queries

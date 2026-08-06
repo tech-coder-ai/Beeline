@@ -96,6 +96,15 @@ pipeline:
   query_library:
     enabled: true
     reuse_similarity_threshold: 0.82
+  retrieval:
+    # Tuned for catalog scale, not business meaning - business/functional knowledge lives in the
+    # catalog's glossary/synonym/business_term/business_rule tables, not here.
+    max_tables: 6                     # tables kept after ranking, regardless of catalog size
+    max_columns_per_table: 40         # columns kept per resolved table on wide tables
+    candidate_shortlist_size: 30      # tables kept after the cheap name/description pass,
+                                       # before the (costlier) column-level rescoring pass
+    usage_bonus_cap: 1000             # usage_count above this contributes no further ranking bonus
+    usage_bonus_weight: 0.0002        # per-usage-count ranking bonus (max bonus = cap * weight)
 
 # ------------------------------------------------------------
 # Guard rails - read-only, always on, not user-disableable

@@ -30,6 +30,9 @@ public final class LlmPrompts {
         required, and only join on columns listed in the schema.
       - Select only the columns needed to answer the question (dimensions being grouped, metrics
         being aggregated, columns the user asked to see). Never request every column.
+      - Columns tagged [PII] or with a classification of confidential/restricted must never be
+        included incidentally - only select them when the question specifically asks for that
+        data. Prefer an aggregated or filtered result that avoids exposing them when possible.
       - Use the conversation context to interpret follow-ups; when modifying a previous plan keep
         everything not mentioned by the new message unchanged.
       - If the schema cannot answer the question, return an empty tables list and explain why in
@@ -39,7 +42,11 @@ public final class LlmPrompts {
         NOT a valid filter value; it becomes a real WHERE clause that matches nothing. If a needed
         value (e.g. "growth" implies comparing two periods, but which ones?) is missing from the
         question, leave that filter out entirely and note the missing detail in rationale - do not
-        guess and do not fabricate a literal.""";
+        guess and do not fabricate a literal.
+      - When "Business rules" are provided, apply each one that is relevant to this question exactly
+        as stated (e.g. a standing exclusion filter, a definition of a business condition such as
+        "churned customer") even though the user did not repeat it - these are steward-approved
+        policy, not optional context. Note in rationale which rule(s) were applied.""";
 
   public static final String SQL_GENERATOR_SYSTEM = """
       You are the SQL generation stage for %s. Convert the execution plan into a single SELECT statement. Rules:

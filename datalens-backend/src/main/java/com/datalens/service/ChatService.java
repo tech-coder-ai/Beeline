@@ -168,7 +168,17 @@ public class ChatService {
     if (h.getTokenUsage() instanceof Map<?, ?> usage) {
       DebugPrompts.restoreCalls(ctx, (Map<String, Object>) usage);
     }
-    DataLensResponseDto response = orchestrator.executeAndRespond(ctx, h);
+    DataLensResponseDto response;
+    try {
+      response = orchestrator.executeAndRespond(ctx, h);
+    } catch (com.datalens.core.exception.DataLensError e) {
+      throw e;
+    } catch (Exception e) {
+      h.setStatus("failed");
+      h.setError(e.getMessage());
+      history.save(h);
+      throw new com.datalens.core.exception.DataLensError("Failed to execute query: " + e.getMessage());
+    }
     response.setExecutionId(h.getId());
     history.save(h);
     markPreviewMessagesExecuted(h.getSessionId(), h.getId());

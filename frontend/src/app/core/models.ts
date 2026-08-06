@@ -273,6 +273,20 @@ export interface Abbreviation {
   updated_at?: string;
 }
 
+export interface BusinessRule {
+  id?: string;
+  name: string;
+  scope: 'global' | 'table' | 'column';
+  entity?: string | null;
+  column_name?: string | null;
+  rule_type?: string | null;
+  statement: string;
+  status?: string;
+  source?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface ApprovalItem {
   id: string;
   entity_type: string;

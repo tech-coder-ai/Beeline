@@ -13,6 +13,9 @@ public class ResolvedTableModel {
   private String name;
   private String description;
   private Integer rowCount;
+  private String classification;
+  private String owner;
+  private String steward;
   private List<String> partitionColumns = new ArrayList<>();
   private List<Map<String, Object>> columns = new ArrayList<>();
   private double score;
