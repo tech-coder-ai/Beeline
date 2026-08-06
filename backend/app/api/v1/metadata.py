@@ -82,13 +82,15 @@ async def list_tables(database_id: str | None = None, search: str | None = None,
     if search:
         pattern = f"%{search}%"
         stmt = stmt.where(
-            CatalogTable.name.ilike(pattern) | CatalogTable.description.ilike(pattern)
+            CatalogTable.name.ilike(pattern)
+            | CatalogTable.description.ilike(pattern)
+            | CatalogTable.canonical_name.ilike(pattern)
         )
     rows = (await db.execute(stmt)).all()
     return [
         TableOut(**{
             **{c: getattr(t, c) for c in (
-                "id", "name", "table_type", "description", "owner", "steward", "tags",
+                "id", "name", "canonical_name", "table_type", "description", "owner", "steward", "tags",
                 "classification", "row_count", "size_bytes", "storage_format",
                 "partition_columns", "last_synced_at", "usage_count",
             )},
@@ -111,7 +113,7 @@ async def get_table(table_id: str, db: AsyncSession = Depends(get_db)):
         raise NotFound("Table not found")
     return TableDetailOut(
         **{c: getattr(table, c) for c in (
-            "id", "name", "table_type", "description", "owner", "steward", "tags",
+            "id", "name", "canonical_name", "table_type", "description", "owner", "steward", "tags",
             "classification", "row_count", "size_bytes", "storage_format",
             "partition_columns", "last_synced_at", "usage_count",
         )},

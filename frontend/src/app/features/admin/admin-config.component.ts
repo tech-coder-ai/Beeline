@@ -48,7 +48,7 @@ export class AdminConfigComponent implements OnInit {
     return (this.guardrails['blocked_keywords'] as string[]) ?? [];
   }
   get flagKeys(): string[] {
-    return ['dashboards', 'metadata_manager', 'saved_queries', 'approvals', 'csv_import', 'explain_sql', 'feedback'];
+    return Object.keys(this.featureFlags).sort();
   }
 
   update(key: string, value: unknown): void {

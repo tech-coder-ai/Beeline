@@ -208,7 +208,7 @@ class MetadataSyncService:
         table.storage_format = harvested.storage_format
         table.partition_columns = harvested.partition_columns
         table.technical_comment = harvested.comment
-        table.owner = harvested.owner
+        table.owner = table.owner or harvested.owner
         table.last_synced_at = datetime.now(timezone.utc)
         await db.flush()
         return {

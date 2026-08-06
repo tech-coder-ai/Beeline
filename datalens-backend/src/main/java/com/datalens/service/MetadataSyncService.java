@@ -124,7 +124,9 @@ public class MetadataSyncService {
             });
         table.setTableType(harvested.getTableType());
         table.setTechnicalComment(harvested.getComment());
-        table.setOwner(harvested.getOwner());
+        if (table.getOwner() == null || table.getOwner().isBlank()) {
+          table.setOwner(harvested.getOwner());
+        }
         table.setRowCount(harvested.getRowCount());
         table.setSizeBytes(harvested.getSizeBytes());
         table.setStorageFormat(harvested.getStorageFormat());
@@ -132,17 +134,32 @@ public class MetadataSyncService {
         table.setLastSyncedAt(now);
         table.setIsActive(true);
         tables.save(table);
-        columns.deleteByTableId(table.getId());
-        for (HarvestedColumn col : harvested.getColumns()) {
-          CatalogColumn c = new CatalogColumn();
-          c.setTableId(table.getId());
-          c.setName(col.getName());
-          c.setDataType(col.getDataType());
-          c.setTechnicalComment(col.getComment());
-          c.setPosition(col.getPosition());
-          c.setIsPartition(col.isPartition());
-          columns.save(c);
+
+        List<CatalogColumn> existingCols = columns.findByTableIdOrderByPositionAsc(table.getId());
+        Map<String, CatalogColumn> existingByName = new HashMap<>();
+        for (CatalogColumn existingCol : existingCols) {
+          existingByName.put(existingCol.getName(), existingCol);
+        }
+        Set<String> harvestedNames = new HashSet<>();
+        for (HarvestedColumn hcol : harvested.getColumns()) {
+          harvestedNames.add(hcol.getName());
+          CatalogColumn col = existingByName.get(hcol.getName());
+          if (col == null) {
+            col = new CatalogColumn();
+            col.setTableId(table.getId());
+            col.setName(hcol.getName());
+          }
+          col.setPosition(hcol.getPosition());
+          col.setDataType(hcol.getDataType());
+          col.setTechnicalComment(hcol.getComment());
+          col.setIsPartition(hcol.isPartition());
+          columns.save(col);
           columnsSynced++;
+        }
+        for (CatalogColumn stale : existingCols) {
+          if (!harvestedNames.contains(stale.getName())) {
+            columns.delete(stale);
+          }
         }
         tablesSynced++;
       }
@@ -175,7 +192,9 @@ public class MetadataSyncService {
     table.setStorageFormat(harvested.getStorageFormat());
     table.setPartitionColumns(harvested.getPartitionColumns());
     table.setTechnicalComment(harvested.getComment());
-    table.setOwner(harvested.getOwner());
+    if (table.getOwner() == null || table.getOwner().isBlank()) {
+      table.setOwner(harvested.getOwner());
+    }
     table.setLastSyncedAt(Instant.now());
     tables.save(table);
 

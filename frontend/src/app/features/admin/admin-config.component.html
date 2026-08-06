@@ -27,7 +27,7 @@
     <div class="flag-grid">
       @for (key of flagKeys; track key) {
         <div class="flag-row glass-card">
-          <span>{{ key.replace('_', ' ') }}</span>
+          <span>{{ key.replaceAll('_', ' ') }}</span>
           <mat-slide-toggle
             [checked]="!!featureFlags[key]"
             (change)="toggleFlag(key, featureFlags[key])"
