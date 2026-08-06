@@ -17,6 +17,17 @@
       <mat-icon>{{ r.kind === 'error' ? 'error_outline' : 'speed' }}</mat-icon>
       <span>{{ r.summary }}</span>
     </div>
+    @if (r.kind === 'error' && errorDetail()) {
+      <div class="error-detail-panel">
+        <button type="button" class="error-detail-toggle" (click)="toggleErrorDetails()">
+          <mat-icon>{{ showErrorDetails() ? 'expand_less' : 'expand_more' }}</mat-icon>
+          {{ showErrorDetails() ? 'Hide technical details' : 'Show technical details' }}
+        </button>
+        @if (showErrorDetails()) {
+          <pre class="error-detail-body">{{ errorDetail() }}</pre>
+        }
+      </div>
+    }
     @if (r.recommendations.length) {
       <ul class="suggestion-list">
         @for (s of r.recommendations; track s) { <li>{{ s }}</li> }
@@ -92,8 +103,12 @@
         @if (r.preview_executed) {
           <span class="muted executed-note"><mat-icon>check_circle</mat-icon> Query executed</span>
         } @else {
-          <button class="primary-btn" (click)="emitExecutePreview()">
-            <mat-icon>play_arrow</mat-icon> Execute
+          <button class="primary-btn" [disabled]="state.sending()" (click)="emitExecutePreview()">
+            @if (state.sending()) {
+              <span class="bl-spinner light"></span> Executing…
+            } @else {
+              <mat-icon>play_arrow</mat-icon> Execute
+            }
           </button>
         }
         <button class="ghost-btn" (click)="refineQuestion.emit()">Refine question</button>

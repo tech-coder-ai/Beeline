@@ -132,5 +132,37 @@
   margin: -6px 0 12px;
 }
 
+.sync-runs-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.sync-runs-summary {
+  font-size: 12px;
+}
+
+.sync-runs-scroll {
+  max-height: 360px;
+  overflow: auto;
+  border: 1px solid var(--bl-border);
+  border-radius: 10px;
+  background: var(--bl-surface);
+
+  .bl-table {
+    margin: 0;
+
+    thead th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: var(--bl-surface);
+      box-shadow: 0 1px 0 var(--bl-border);
+    }
+  }
+}
+
 .bl-table { font-size: 12px; }
 .error-cell { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

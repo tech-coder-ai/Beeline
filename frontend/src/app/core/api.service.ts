@@ -21,6 +21,7 @@ import {
   SqlExplanation,
   SqlResult,
   SyncRun,
+  SyncRunsPage,
 } from './models';
 
 const API = '/api/v1';
@@ -350,8 +351,11 @@ export class ApiService {
     return this.http.post(`${API}/admin/sync`, { mode, connector_id: connectorId ?? null });
   }
 
-  listSyncRuns(): Observable<SyncRun[]> {
-    return this.http.get<SyncRun[]>(`${API}/admin/sync/runs`);
+  listSyncRuns(options: { all?: boolean; limit?: number } = {}): Observable<SyncRunsPage> {
+    const params: Record<string, string> = {};
+    if (options.all) params['all'] = 'true';
+    if (options.limit !== undefined) params['limit'] = String(options.limit);
+    return this.http.get<SyncRunsPage>(`${API}/admin/sync/runs`, { params });
   }
 
   triggerEnrichment(tableIds: string[] = [], batchSize?: number): Observable<{ enriched: number; proposals: number; batch_size?: number }> {

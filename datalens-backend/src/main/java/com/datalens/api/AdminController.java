@@ -35,6 +35,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -154,8 +155,22 @@ public class AdminController {
   }
 
   @GetMapping("/sync/runs")
-  public List<Map<String, Object>> syncRuns() {
-    return syncRuns.findTop30ByOrderByCreatedAtDesc().stream().map(this::syncRunMap).toList();
+  public Map<String, Object> syncRuns(
+      @RequestParam(defaultValue = "false") boolean all,
+      @RequestParam(defaultValue = "100") int limit) {
+    int effectiveLimit = Math.min(Math.max(limit, 1), 500);
+    Sort sort = Sort.by(Sort.Direction.DESC, "createdAt");
+    List<SyncRun> runs =
+        all
+            ? syncRuns.findAll(sort)
+            : syncRuns.findAll(PageRequest.of(0, effectiveLimit, sort)).getContent();
+    long total = syncRuns.count();
+    Map<String, Object> out = new LinkedHashMap<>();
+    out.put("runs", runs.stream().map(this::syncRunMap).toList());
+    out.put("total", total);
+    out.put("limit", all ? null : effectiveLimit);
+    out.put("showing_all", all);
+    return out;
   }
 
   @PostMapping("/enrich")

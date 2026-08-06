@@ -200,29 +200,46 @@
       <p class="enrich-notice">{{ enrichNotice() }}</p>
     }
 
-    <table class="bl-table">
-      <thead>
-        <tr><th>Started</th><th>Connector</th><th>Mode</th><th>Status</th><th>Tables</th><th>Columns</th><th>Error</th></tr>
-      </thead>
-      <tbody>
-        @for (run of syncRuns(); track run.id) {
-          <tr>
-            <td>{{ run.created_at | date: 'short' }}</td>
-            <td>{{ run.connector_id || 'default' }}</td>
-            <td>{{ run.mode }}</td>
-            <td>
-              <span class="chip" [class.good]="run.status === 'success'" [class.bad]="run.status === 'failed'" [class.warn]="run.status === 'running'">
-                {{ run.status }}
-              </span>
-            </td>
-            <td>{{ run.tables_synced }}</td>
-            <td>{{ run.columns_synced }}</td>
-            <td class="muted error-cell">{{ run.error || '-' }}</td>
-          </tr>
-        } @empty {
-          <tr><td colspan="7" class="muted">No sync runs yet.</td></tr>
-        }
-      </tbody>
-    </table>
+    <div class="sync-runs-header">
+      <span class="muted sync-runs-summary">{{ syncRunsSummary() }}</span>
+      @if (syncRunsTotal() > 100 || syncRunsShowingAll()) {
+        <button class="ghost-btn small" [disabled]="syncRunsLoading()" (click)="toggleSyncRunsView()">
+          @if (syncRunsLoading()) {
+            <span class="bl-spinner"></span> Loading…
+          } @else if (syncRunsShowingAll()) {
+            <mat-icon>filter_list</mat-icon> Show latest 100
+          } @else {
+            <mat-icon>unfold_more</mat-icon> Show all ({{ syncRunsTotal() }})
+          }
+        </button>
+      }
+    </div>
+
+    <div class="sync-runs-scroll">
+      <table class="bl-table">
+        <thead>
+          <tr><th>Started</th><th>Connector</th><th>Mode</th><th>Status</th><th>Tables</th><th>Columns</th><th>Error</th></tr>
+        </thead>
+        <tbody>
+          @for (run of syncRuns(); track run.id) {
+            <tr>
+              <td>{{ run.created_at | date: 'short' }}</td>
+              <td>{{ run.connector_id || 'default' }}</td>
+              <td>{{ run.mode }}</td>
+              <td>
+                <span class="chip" [class.good]="run.status === 'success'" [class.bad]="run.status === 'failed'" [class.warn]="run.status === 'running'">
+                  {{ run.status }}
+                </span>
+              </td>
+              <td>{{ run.tables_synced }}</td>
+              <td>{{ run.columns_synced }}</td>
+              <td class="muted error-cell" [title]="run.error || ''">{{ run.error || '-' }}</td>
+            </tr>
+          } @empty {
+            <tr><td colspan="7" class="muted">No sync runs yet.</td></tr>
+          }
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>

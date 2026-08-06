@@ -1,9 +1,10 @@
 import { DecimalPipe } from '@angular/common';
-import { Component, effect, inject, input, output } from '@angular/core';
+import { Component, effect, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { ApiService } from '../core/api.service';
+import { ChatStateService } from '../core/chat-state.service';
 import { ConnectorService } from '../core/connector.service';
 import { FeatureFlagService } from '../core/feature-flags.service';
 import { DataLensResponse, ClarificationOption, SqlExplanation } from '../core/models';
@@ -41,10 +42,12 @@ export class ResponseRendererComponent {
 
   private api = inject(ApiService);
   private connectors = inject(ConnectorService);
+  readonly state = inject(ChatStateService);
   readonly flags = inject(FeatureFlagService);
   feedbackGiven: 'up' | 'down' | null = null;
   showSql = false;
   showExplain = false;
+  showErrorDetails = signal(false);
   explainLoading = false;
   loadedExplanation: SqlExplanation | null = null;
   clarificationText = '';
@@ -55,6 +58,19 @@ export class ResponseRendererComponent {
       const sql = this.response().sql ?? '';
       this.previewSql = sql;
     });
+    effect(() => {
+      this.response();
+      this.showErrorDetails.set(false);
+    });
+  }
+
+  errorDetail(): string | null {
+    const detail = this.response().metadata?.['error_detail'];
+    return typeof detail === 'string' && detail.trim() ? detail : null;
+  }
+
+  toggleErrorDetails(): void {
+    this.showErrorDetails.update((open) => !open);
   }
 
   vote(rating: 'up' | 'down'): void {
@@ -108,6 +124,7 @@ export class ResponseRendererComponent {
   }
 
   emitExecutePreview(): void {
+    if (this.state.sending()) return;
     const sql = this.previewSql.trim() || this.response().sql || '';
     this.executePreview.emit(sql);
   }

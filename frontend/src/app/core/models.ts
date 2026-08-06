@@ -352,6 +352,13 @@ export interface SyncRun {
   finished_at?: string | null;
 }
 
+export interface SyncRunsPage {
+  runs: SyncRun[];
+  total: number;
+  limit: number | null;
+  showing_all: boolean;
+}
+
 export interface ExecutionLog {
   id: string;
   prompt: string;

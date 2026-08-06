@@ -42,6 +42,9 @@ export class AdminConnectorsComponent implements OnInit {
   readonly testResults = signal<Record<string, { ok: boolean; message: string; latency_ms: number }>>({});
   readonly testing = signal<string | null>(null);
   readonly syncRuns = signal<SyncRun[]>([]);
+  readonly syncRunsTotal = signal(0);
+  readonly syncRunsShowingAll = signal(false);
+  readonly syncRunsLoading = signal(false);
   readonly syncing = signal(false);
   readonly syncNotice = signal<string | null>(null);
   readonly enriching = signal(false);
@@ -96,8 +99,33 @@ export class AdminConnectorsComponent implements OnInit {
     });
   }
 
-  loadRuns(): void {
-    this.api.listSyncRuns().subscribe((runs) => this.syncRuns.set(runs));
+  loadRuns(showAll = this.syncRunsShowingAll()): void {
+    this.syncRunsLoading.set(true);
+    this.api.listSyncRuns({ all: showAll, limit: 100 }).subscribe({
+      next: (page) => {
+        this.syncRuns.set(page.runs);
+        this.syncRunsTotal.set(page.total);
+        this.syncRunsShowingAll.set(page.showing_all);
+        this.syncRunsLoading.set(false);
+      },
+      error: () => this.syncRunsLoading.set(false),
+    });
+  }
+
+  toggleSyncRunsView(): void {
+    this.loadRuns(!this.syncRunsShowingAll());
+  }
+
+  syncRunsSummary(): string {
+    const shown = this.syncRuns().length;
+    const total = this.syncRunsTotal();
+    if (this.syncRunsShowingAll()) {
+      return `Showing all ${shown} run${shown === 1 ? '' : 's'}`;
+    }
+    if (total > shown) {
+      return `Showing latest ${shown} of ${total} runs`;
+    }
+    return `${shown} run${shown === 1 ? '' : 's'}`;
   }
 
   openNewForm(): void {

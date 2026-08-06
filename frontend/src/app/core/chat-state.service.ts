@@ -2,6 +2,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { ApiService } from './api.service';
 import { ConnectorService } from './connector.service';
 import { DataLensResponse, ChatMessage, ChatSession } from './models';
+import { parseHttpError } from './http-error.util';
 
 /** Signal-based chat store: sessions, active thread, pipeline call state. */
 @Injectable({ providedIn: 'root' })
@@ -181,22 +182,26 @@ export class ChatStateService {
         },
         error: (err) => {
           this.sending.set(false);
-          const detail = err?.error?.message ?? 'Request failed - is the backend running?';
+          const parsed = parseHttpError(err);
           this.messages.update((msgs) => [
             ...msgs,
             {
               id: `err-${Date.now()}`,
               role: 'assistant',
-              content: detail,
+              content: parsed.summary,
               response_payload: {
                 kind: 'error',
-                summary: detail,
+                summary: parsed.summary,
                 confidence: { business: 0, metadata: 0, sql: 0, overall: 0 },
                 visualization: 'text',
                 cards: [], charts: [], insights: [], recommendations: [],
                 follow_up_questions: [], tables_used: [], filters_used: [],
-                metrics_used: [], warnings: [], actions: [], metadata: {},
-                error: detail,
+                metrics_used: [], warnings: [], actions: [], metadata: {
+                  error_detail: parsed.detail,
+                  error_code: parsed.code ?? null,
+                  http_status: parsed.status ?? null,
+                },
+                error: parsed.summary,
               } as DataLensResponse,
               created_at: new Date().toISOString(),
             },

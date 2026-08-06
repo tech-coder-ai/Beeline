@@ -168,12 +168,7 @@ public class ChatService {
     if (h.getTokenUsage() instanceof Map<?, ?> usage) {
       DebugPrompts.restoreCalls(ctx, (Map<String, Object>) usage);
     }
-    DataLensResponseDto response;
-    try {
-      response = orchestrator.executeAndRespond(ctx, h);
-    } catch (Exception e) {
-      throw new RuntimeException(e);
-    }
+    DataLensResponseDto response = orchestrator.executeAndRespond(ctx, h);
     response.setExecutionId(h.getId());
     history.save(h);
     markPreviewMessagesExecuted(h.getSessionId(), h.getId());

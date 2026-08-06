@@ -137,17 +137,26 @@ _background_tasks: set[asyncio.Task] = set()
 
 
 @router.get("/sync/runs")
-async def sync_runs(db: AsyncSession = Depends(get_db)):
-    runs = (
-        await db.execute(select(SyncRun).order_by(SyncRun.created_at.desc()).limit(30))
-    ).scalars().all()
-    return [
-        {c: getattr(r, c) for c in (
-            "id", "connector_id", "mode", "status", "tables_synced",
-            "columns_synced", "error", "created_at", "finished_at",
-        )}
-        for r in runs
-    ]
+async def sync_runs(all: bool = False, limit: int = 100, db: AsyncSession = Depends(get_db)):
+    """Return sync run history. Default: latest 100 runs; pass all=true for full history."""
+    total = (await db.execute(select(func.count()).select_from(SyncRun))).scalar_one()
+    effective_limit = None if all else min(max(limit, 1), 500)
+    stmt = select(SyncRun).order_by(SyncRun.created_at.desc())
+    if effective_limit is not None:
+        stmt = stmt.limit(effective_limit)
+    runs = (await db.execute(stmt)).scalars().all()
+    return {
+        "runs": [
+            {c: getattr(r, c) for c in (
+                "id", "connector_id", "mode", "status", "tables_synced",
+                "columns_synced", "error", "created_at", "finished_at",
+            )}
+            for r in runs
+        ],
+        "total": total,
+        "limit": effective_limit,
+        "showing_all": all,
+    }
 
 
 @router.post("/enrich")
