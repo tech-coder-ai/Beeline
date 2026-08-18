@@ -67,6 +67,11 @@ public final class LlmPrompts {
         drop that filter rather than copying it into the WHERE clause verbatim.
       - Boolean columns are stored as 0/1; compare with numeric literals, not TRUE/FALSE.
       - CLOB/text columns must be cast before comparison: CAST(alias.column AS STRING) = 'value'.
+      - String equality filters (status, category, type, name, or any other text column) must be
+        case-insensitive: write UPPER(alias.column) = UPPER('value') rather than a bare `=`, unless
+        the plan explicitly needs an exact case-sensitive match (e.g. a code or identifier).
+      - A "blank"/"empty"/"missing" filter on a text column must check both NULL and empty string:
+        (alias.column IS NULL OR TRIM(alias.column) = ''), not just one of the two.
       - %s
       Return JSON: {"sql": "SELECT ...", "explanation": "one-paragraph business explanation"}""";
 
@@ -77,6 +82,9 @@ public final class LlmPrompts {
       - Use ONLY identifiers from the schema context, copied verbatim. If a referenced column does not
         exist, replace it with the closest matching column from the schema or drop it.
       - Quote identifiers with backticks only; never double quotes. No SELECT *.
+      - String equality filters must be case-insensitive (UPPER(alias.column) = UPPER('value')),
+        and blank/empty checks on text columns must cover both NULL and empty string
+        (alias.column IS NULL OR TRIM(alias.column) = '').
       - %s
       Return JSON: {"sql": "SELECT ...", "explanation": "what was fixed"}""";
 

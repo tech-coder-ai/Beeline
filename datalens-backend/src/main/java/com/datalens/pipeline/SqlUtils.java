@@ -474,12 +474,23 @@ public final class SqlUtils {
       return column + " >= " + RELATIVE_HIVE.get(s);
     }
     if ("is_null".equals(op) || "is_not_null".equals(op)) {
-      return compareColumn + " IS " + ("is_not_null".equals(op) ? "NOT NULL" : "NULL");
+      boolean notNull = "is_not_null".equals(op);
+      if (isTextColumnType(columnType)) {
+        return notNull
+            ? "(" + compareColumn + " IS NOT NULL AND TRIM(" + compareColumn + ") <> '')"
+            : "(" + compareColumn + " IS NULL OR TRIM(" + compareColumn + ") = '')";
+      }
+      return compareColumn + " IS " + (notNull ? "NOT NULL" : "NULL");
     }
     if (("in".equals(op) || "not_in".equals(op)) && value instanceof List<?> list) {
+      boolean textual = list.stream().anyMatch(v -> v instanceof String);
       String rendered =
-          list.stream().map(v -> literal(v, columnType)).reduce((a, b) -> a + ", " + b).orElse("");
-      return compareColumn + ("not_in".equals(op) ? " NOT IN (" : " IN (") + rendered + ")";
+          list.stream()
+              .map(v -> caseInsensitiveLiteral(v, columnType))
+              .reduce((a, b) -> a + ", " + b)
+              .orElse("");
+      String col = textual ? "UPPER(" + compareColumn + ")" : compareColumn;
+      return col + ("not_in".equals(op) ? " NOT IN (" : " IN (") + rendered + ")";
     }
     if ("between".equals(op) && value instanceof List<?> list && list.size() == 2) {
       return compareColumn
@@ -488,7 +499,9 @@ public final class SqlUtils {
           + " AND "
           + literal(list.get(1), columnType);
     }
-    if ("like".equals(op)) return compareColumn + " LIKE " + literal(value, columnType);
+    if ("like".equals(op)) {
+      return "UPPER(" + compareColumn + ") LIKE " + caseInsensitiveLiteral(value, columnType);
+    }
     String sqlOp =
         switch (op) {
           case "!=", "<>" -> "<>";
@@ -498,7 +511,16 @@ public final class SqlUtils {
           case "<=" -> "<=";
           default -> "=";
         };
+    if (value instanceof String) {
+      return "UPPER(" + compareColumn + ") " + sqlOp + " " + caseInsensitiveLiteral(value, columnType);
+    }
     return compareColumn + " " + sqlOp + " " + literal(value, columnType);
+  }
+
+  /** Wraps a string literal in UPPER(...) so it matches the UPPER(column) side of a comparison. */
+  private static String caseInsensitiveLiteral(Object value, String columnType) {
+    String rendered = literal(value, columnType);
+    return value instanceof String ? "UPPER(" + rendered + ")" : rendered;
   }
 
   private static String resolveColumnType(String column, java.util.Map<String, String> columnTypes) {
@@ -525,6 +547,13 @@ public final class SqlUtils {
         || dt.contains("nclob")
         || dt.contains("longvarchar")
         || dt.equals("text");
+  }
+
+  /** True for string-ish column types, where a blank filter should also match empty string. */
+  private static boolean isTextColumnType(String dataType) {
+    if (dataType == null) return false;
+    String dt = dataType.toLowerCase(Locale.ROOT);
+    return dt.contains("char") || dt.contains("string") || isClobColumnType(dataType);
   }
 
   /** Hive/Spark cannot compare CLOB-like columns directly; cast to STRING first. */
