@@ -83,11 +83,18 @@ class ResolvedTable:
     row_count: int | None
     partition_columns: list[str]
     columns: list[dict]                     # {name, data_type, description, sample_values, is_partition}
+    sample_records: list[dict] = field(default_factory=list)  # up to N distinct sample rows
     score: float = 0.0
 
     @property
     def qualified_name(self) -> str:
         return f"{self.database}.{self.name}"
+
+    def sample_rows_text(self) -> str:
+        """Renders harvested sample rows as compact JSON lines for LLM prompts."""
+        import json
+
+        return "\n".join(json.dumps(row, default=str, ensure_ascii=False) for row in self.sample_records)
 
 
 @dataclass

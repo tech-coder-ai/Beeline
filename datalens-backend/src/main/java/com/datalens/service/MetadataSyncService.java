@@ -5,6 +5,7 @@ import com.datalens.connectors.AnalyticsConnector;
 import com.datalens.connectors.ConnectorRegistry;
 import com.datalens.connectors.HarvestedColumn;
 import com.datalens.connectors.HarvestedTable;
+import com.datalens.connectors.QueryResult;
 import com.datalens.core.exception.NotFound;
 import com.datalens.model.entity.CatalogColumn;
 import com.datalens.model.entity.CatalogDatabase;
@@ -15,8 +16,10 @@ import com.datalens.model.repository.CatalogDatabaseRepository;
 import com.datalens.model.repository.CatalogTableRepository;
 import com.datalens.model.repository.SyncRunRepository;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -134,6 +137,7 @@ public class MetadataSyncService {
         table.setLastSyncedAt(now);
         table.setIsActive(true);
         tables.save(table);
+        collectSampleRecords(connector, table, dbName);
 
         List<CatalogColumn> existingCols = columns.findByTableIdOrderByPositionAsc(table.getId());
         Map<String, CatalogColumn> existingByName = new HashMap<>();
@@ -165,6 +169,36 @@ public class MetadataSyncService {
       }
     }
     return Map.of("tables", tablesSynced, "columns", columnsSynced);
+  }
+
+  /**
+   * Harvests up to N distinct whole rows so the LLM sees real value shapes and cross-column
+   * patterns, not just per-column samples, when generating SQL. Best-effort: sampling failures
+   * never fail the sync.
+   */
+  private void collectSampleRecords(AnalyticsConnector connector, CatalogTable table, String dbName) {
+    if (!Boolean.TRUE.equals(settings.get("metadata_sync.collect_sample_records", true))) return;
+    int limit = ((Number) settings.get("metadata_sync.sample_records_per_table", 10)).intValue();
+    if (limit <= 0) return;
+    int timeoutSeconds =
+        ((Number) settings.get("metadata_sync.sample_records_timeout_seconds", 20)).intValue();
+    try {
+      String qualified =
+          connector.dialect().quoteIdentifier(dbName) + "." + connector.dialect().quoteIdentifier(table.getName());
+      QueryResult result = connector.execute("SELECT DISTINCT * FROM " + qualified + " LIMIT " + limit, limit, timeoutSeconds);
+      List<Map<String, Object>> records = new ArrayList<>();
+      for (List<Object> row : result.getRows()) {
+        Map<String, Object> record = new LinkedHashMap<>();
+        for (int i = 0; i < result.getColumns().size() && i < row.size(); i++) {
+          record.put(result.getColumns().get(i), row.get(i));
+        }
+        records.add(record);
+      }
+      table.setSampleRecords(records);
+      tables.save(table);
+    } catch (Exception e) {
+      log.debug("sample records skipped for {}: {}", table.getName(), e.getMessage());
+    }
   }
 
   @Scheduled(fixedDelayString = "${datalens.metadata-sync-interval-ms:3600000}", initialDelay = 30000)

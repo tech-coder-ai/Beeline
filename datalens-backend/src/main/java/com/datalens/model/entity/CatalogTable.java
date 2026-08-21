@@ -57,6 +57,9 @@ public class CatalogTable extends BaseEntity {
   private Boolean isActive = true;
   @Column(name = "is_enabled")
   private Boolean isEnabled = true;
+  @Convert(converter = JsonAttributeConverter.class)
+  @Column(name = "sample_records")
+  private Object sampleRecords;
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "database_id", insertable = false, updatable = false)
   private CatalogDatabase database;

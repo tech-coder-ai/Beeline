@@ -53,6 +53,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -992,6 +993,17 @@ public class PipelineStages {
       colMaps.add(colMap);
     }
     rt.setColumns(colMaps);
+    if (table.getSampleRecords() instanceof List<?> records) {
+      List<Map<String, Object>> sampleRows = new ArrayList<>();
+      for (Object record : records) {
+        if (record instanceof Map<?, ?> m) {
+          Map<String, Object> row = new LinkedHashMap<>();
+          m.forEach((k, v) -> row.put(String.valueOf(k), v));
+          sampleRows.add(row);
+        }
+      }
+      rt.setSampleRecords(sampleRows);
+    }
     return rt;
   }
 
@@ -1320,6 +1332,16 @@ public class PipelineStages {
           sb.append(": ").append(col.get("description"));
         }
         sb.append("\n");
+      }
+      if (t.getSampleRecords() != null && !t.getSampleRecords().isEmpty()) {
+        sb.append("  Sample rows:\n");
+        for (Map<String, Object> row : t.getSampleRecords()) {
+          try {
+            sb.append("  ").append(mapper.writeValueAsString(row)).append("\n");
+          } catch (Exception e) {
+            // best-effort prompt enrichment; skip a row that fails to serialize
+          }
+        }
       }
       sb.append("\n");
     }

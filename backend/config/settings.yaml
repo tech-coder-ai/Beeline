@@ -159,6 +159,9 @@ metadata_sync:
   collect_distinct_counts: true
   collect_null_percentages: true
   max_tables_per_run: 500
+  collect_sample_records: true      # harvest distinct sample rows for LLM grounding
+  sample_records_per_table: 10
+  sample_records_timeout_seconds: 20
 
 # ------------------------------------------------------------
 # LLM metadata enrichment

@@ -23,4 +23,5 @@ public record TableDetailOut(
     boolean isEnabled,
     String databaseName,
     int columnCount,
-    java.util.List<ColumnOut> columns) {}
+    java.util.List<ColumnOut> columns,
+    Object sampleRecords) {}

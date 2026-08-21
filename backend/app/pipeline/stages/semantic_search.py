@@ -173,6 +173,7 @@ class SemanticSearch:
                     }
                     for c in t.columns[:MAX_COLUMNS_PER_TABLE]
                 ],
+                sample_records=t.sample_records or [],
                 score=round(min(score, 1.0), 3),
             )
             for score, t in scored[:MAX_TABLES]

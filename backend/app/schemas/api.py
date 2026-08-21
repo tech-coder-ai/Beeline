@@ -102,6 +102,7 @@ class TableOut(BaseModel):
 
 class TableDetailOut(TableOut):
     columns: list[ColumnOut] = Field(default_factory=list)
+    sample_records: list[dict] = Field(default_factory=list)
 
 
 class TableUpdate(BaseModel):

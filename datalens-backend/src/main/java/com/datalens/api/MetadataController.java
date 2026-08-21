@@ -167,7 +167,8 @@ public class MetadataController {
         !Boolean.FALSE.equals(table.getIsEnabled()),
         dbName,
         cols.size(),
-        cols);
+        cols,
+        table.getSampleRecords());
   }
 
   @PatchMapping("/metadata/tables/{tableId}")

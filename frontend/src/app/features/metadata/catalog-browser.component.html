@@ -369,6 +369,35 @@
           </tbody>
         </table>
       </div>
+
+      @if (table.sample_records?.length) {
+        <div class="drawer-section">
+          <div class="section-label">Sample records ({{ table.sample_records?.length }})</div>
+          <p class="enrich-help muted">
+            Distinct rows harvested during metadata sync, used to ground the AI when generating SQL.
+          </p>
+          <div class="sample-table-scroll">
+            <table class="bl-table mono">
+              <thead>
+                <tr>
+                  @for (col of sampleRecordColumns(table); track col) {
+                    <th>{{ col }}</th>
+                  }
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of table.sample_records; track $index) {
+                  <tr>
+                    @for (col of sampleRecordColumns(table); track col) {
+                      <td>{{ formatCellValue(row[col]) }}</td>
+                    }
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      }
     </div>
   }
 </div>

@@ -51,6 +51,7 @@ class CatalogTable(Base, IdMixin, TimestampMixin):
     usage_count: Mapped[int] = mapped_column(Integer, default=0)     # popularity for ranking
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)   # false when dropped upstream
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)  # user opt-out from SQL-gen context
+    sample_records: Mapped[list | None] = mapped_column(JSON, default=list)  # up to N distinct sample rows
 
     database: Mapped[CatalogDatabase] = relationship(back_populates="tables")
     columns: Mapped[list["CatalogColumn"]] = relationship(

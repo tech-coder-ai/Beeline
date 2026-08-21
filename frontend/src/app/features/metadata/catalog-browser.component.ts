@@ -417,6 +417,16 @@ export class CatalogBrowserComponent implements OnInit {
       });
   }
 
+  sampleRecordColumns(table: CatalogTable): string[] {
+    const rows = table.sample_records;
+    return rows?.length ? Object.keys(rows[0]) : [];
+  }
+
+  formatCellValue(value: unknown): string {
+    if (value === null || value === undefined) return '-';
+    return typeof value === 'object' ? JSON.stringify(value) : String(value);
+  }
+
   formatBytes(bytes?: number | null): string {
     if (!bytes) return '-';
     const units = ['B', 'KB', 'MB', 'GB', 'TB'];

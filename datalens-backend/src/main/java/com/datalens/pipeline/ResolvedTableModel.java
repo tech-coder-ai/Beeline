@@ -18,6 +18,7 @@ public class ResolvedTableModel {
   private String steward;
   private List<String> partitionColumns = new ArrayList<>();
   private List<Map<String, Object>> columns = new ArrayList<>();
+  private List<Map<String, Object>> sampleRecords = new ArrayList<>();
   private double score;
 
   public String qualifiedName() {

@@ -78,10 +78,14 @@ class QueryPlanner:
                 for c in table.columns
             )
             row_info = f", ~{table.row_count:,} rows" if table.row_count else ""
+            sample_block = (
+                f"\n  Sample rows:\n{table.sample_rows_text()}" if table.sample_records else ""
+            )
             blocks.append(
                 f"TABLE {table.qualified_name}{row_info}"
                 + (f" - {table.description}" if table.description else "")
                 + f"\n{cols}"
+                + sample_block
             )
         return "\n\n".join(blocks)
 

@@ -213,6 +213,7 @@ export interface CatalogTable {
   database_name?: string;
   column_count: number;
   columns?: CatalogColumn[];
+  sample_records?: Record<string, unknown>[] | null;
 }
 
 export interface CatalogRelationship {

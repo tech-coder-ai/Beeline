@@ -60,6 +60,7 @@ class SQLGenerator:
                     + (f": {c['description']}" if c.get("description") else "")
                     for c in t.columns
                 )
+                + (f"\n  Sample rows:\n{t.sample_rows_text()}" if t.sample_records else "")
                 for t in ctx.resolved_tables
             )
             user_message = (
