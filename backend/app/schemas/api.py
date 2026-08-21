@@ -93,6 +93,7 @@ class TableOut(BaseModel):
     partition_columns: list | None
     last_synced_at: datetime | None
     usage_count: int
+    is_enabled: bool = True
     database_name: str | None = None
     column_count: int = 0
 
@@ -110,6 +111,7 @@ class TableUpdate(BaseModel):
     tags: list[str] | None = None
     classification: str | None = None
     canonical_name: str | None = None
+    is_enabled: bool | None = None
 
 
 class GlossaryHintIn(BaseModel):

@@ -20,6 +20,7 @@ public record TableDetailOut(
     Object partitionColumns,
     java.time.Instant lastSyncedAt,
     int usageCount,
+    boolean isEnabled,
     String databaseName,
     int columnCount,
     java.util.List<ColumnOut> columns) {}

@@ -128,7 +128,7 @@ class SemanticSearch:
             await db.execute(
                 select(CatalogTable)
                 .options(selectinload(CatalogTable.columns), selectinload(CatalogTable.database))
-                .where(CatalogTable.is_active.is_(True))
+                .where(CatalogTable.is_active.is_(True), CatalogTable.is_enabled.is_(True))
             )
         ).scalars().all()
 

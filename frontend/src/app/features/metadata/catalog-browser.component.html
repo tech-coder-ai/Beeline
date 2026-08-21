@@ -20,7 +20,7 @@
 
     <div class="table-grid">
       @for (table of filteredTables(); track table.id) {
-        <div class="table-card glass-card" (click)="openTable(table)">
+        <div class="table-card glass-card" [class.disabled-entity]="!table.is_enabled" (click)="openTable(table)">
           <div class="table-card-header">
             <mat-icon>table_chart</mat-icon>
             <span class="table-name">{{ table.canonical_name || table.name }}</span>
@@ -32,6 +32,14 @@
                 {{ table.classification }}
               </span>
             }
+            <button
+              class="icon-btn eye-toggle"
+              [class.active]="table.is_enabled"
+              [matTooltip]="table.is_enabled ? 'Included in SQL generation — click to exclude' : 'Excluded from SQL generation — click to include'"
+              (click)="toggleEnabled(table, $event)"
+            >
+              <mat-icon>{{ table.is_enabled ? 'visibility' : 'visibility_off' }}</mat-icon>
+            </button>
           </div>
           <p class="table-desc muted">{{ table.description || 'No description yet' }}</p>
           <div class="table-meta">
@@ -62,8 +70,19 @@
           }
           <span class="chip neutral">{{ table.table_type }}</span>
           @if (table.classification) { <span class="chip">{{ table.classification }}</span> }
+          @if (!table.is_enabled) { <span class="chip bad">Excluded from SQL generation</span> }
         </div>
-        <button class="icon-btn" (click)="closeDrawer()"><mat-icon>close</mat-icon></button>
+        <div class="drawer-header-actions">
+          <button
+            class="icon-btn eye-toggle"
+            [class.active]="table.is_enabled"
+            [matTooltip]="table.is_enabled ? 'Included in SQL generation — click to exclude' : 'Excluded from SQL generation — click to include'"
+            (click)="toggleEnabled(table, $event)"
+          >
+            <mat-icon>{{ table.is_enabled ? 'visibility' : 'visibility_off' }}</mat-icon>
+          </button>
+          <button class="icon-btn" (click)="closeDrawer()"><mat-icon>close</mat-icon></button>
+        </div>
       </div>
 
       <div class="drawer-section">

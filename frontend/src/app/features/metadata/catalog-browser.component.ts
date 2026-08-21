@@ -289,6 +289,26 @@ export class CatalogBrowserComponent implements OnInit {
       });
   }
 
+  toggleEnabled(table: CatalogTable, event: Event): void {
+    event.stopPropagation();
+    const nextEnabled = !table.is_enabled;
+    this.api.updateTable(table.id, { is_enabled: nextEnabled }).subscribe({
+      next: () => {
+        const patch = (t: CatalogTable) => (t.id === table.id ? { ...t, is_enabled: nextEnabled } : t);
+        this.tables.set(this.tables().map(patch));
+        this.allTables.set(this.allTables().map(patch));
+        const selected = this.selectedTable();
+        if (selected?.id === table.id) {
+          this.selectedTable.set({ ...selected, is_enabled: nextEnabled });
+        }
+        this.notifications.success(
+          nextEnabled ? 'Table included in SQL generation' : 'Table excluded from SQL generation',
+          `${table.database_name}.${table.name}`,
+        );
+      },
+    });
+  }
+
   startColumnEdit(column: CatalogColumn): void {
     this.editingColumnId.set(column.id);
     this.columnDraft = {

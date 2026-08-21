@@ -164,6 +164,7 @@ public class MetadataController {
         table.getPartitionColumns(),
         table.getLastSyncedAt(),
         table.getUsageCount() != null ? table.getUsageCount() : 0,
+        !Boolean.FALSE.equals(table.getIsEnabled()),
         dbName,
         cols.size(),
         cols);
@@ -178,6 +179,7 @@ public class MetadataController {
     if (update.tags() != null) table.setTags(update.tags());
     if (update.classification() != null) table.setClassification(update.classification());
     if (update.canonicalName() != null) table.setCanonicalName(update.canonicalName().isBlank() ? null : update.canonicalName().trim());
+    if (update.isEnabled() != null) table.setIsEnabled(update.isEnabled());
     tables.save(table);
     audit.audit("default", "metadata.edit", "table", tableId, Map.of(), "info");
     return Map.of("updated", tableId);
@@ -547,6 +549,7 @@ public class MetadataController {
         t.getPartitionColumns(),
         t.getLastSyncedAt(),
         t.getUsageCount() != null ? t.getUsageCount() : 0,
+        !Boolean.FALSE.equals(t.getIsEnabled()),
         dbName,
         columnCount);
   }

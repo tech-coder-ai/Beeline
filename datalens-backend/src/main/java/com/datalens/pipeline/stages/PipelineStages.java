@@ -624,7 +624,9 @@ public class PipelineStages {
       Map<String, String> dbNames = new HashMap<>();
       for (CatalogDatabase db : databases.findAll()) dbNames.put(db.getId(), db.getName());
       for (CatalogTable table :
-          tables.findByIsActiveTrueOrderByUsageCountDescNameAsc().stream().limit(5).toList()) {
+          tables.findByIsActiveTrueAndIsEnabledTrueOrderByUsageCountDescNameAsc().stream()
+              .limit(5)
+              .toList()) {
         String dbName = dbNames.getOrDefault(table.getDatabaseId(), "");
         ClarificationOptionDto opt = new ClarificationOptionDto();
         opt.setLabel(dbName + "." + table.getName());
@@ -643,7 +645,7 @@ public class PipelineStages {
   public Set<String> knownTables() {
     Set<String> out = new HashSet<>();
     for (CatalogDatabase db : databases.findAll()) {
-      for (CatalogTable t : tables.findByDatabaseIdAndIsActiveTrue(db.getId())) {
+      for (CatalogTable t : tables.findByDatabaseIdAndIsActiveTrueAndIsEnabledTrue(db.getId())) {
         out.add((db.getName() + "." + t.getName()).toLowerCase(Locale.ROOT));
       }
     }
@@ -651,7 +653,8 @@ public class PipelineStages {
   }
 
   public boolean catalogHasTables() {
-    return tables.findAll().stream().anyMatch(t -> Boolean.TRUE.equals(t.getIsActive()));
+    return tables.findAll().stream()
+        .anyMatch(t -> Boolean.TRUE.equals(t.getIsActive()) && !Boolean.FALSE.equals(t.getIsEnabled()));
   }
 
   public String buildMetadataSummary(PipelineContext ctx) {
@@ -717,7 +720,7 @@ public class PipelineStages {
     Map<String, String> dbNames = new HashMap<>();
     for (CatalogDatabase db : databases.findAll()) dbNames.put(db.getId(), db.getName());
     List<ResolvedTableModel> out = new ArrayList<>();
-    for (CatalogTable table : tables.findByIsActiveTrueOrderByUsageCountDescNameAsc()) {
+    for (CatalogTable table : tables.findByIsActiveTrueAndIsEnabledTrueOrderByUsageCountDescNameAsc()) {
       out.add(toResolvedTable(table, dbNames.getOrDefault(table.getDatabaseId(), ""), 1.0));
     }
     out.sort(
@@ -850,7 +853,7 @@ public class PipelineStages {
     for (CatalogDatabase db : databases.findAll()) dbNames.put(db.getId(), db.getName());
 
     List<Map.Entry<Double, CatalogTable>> coarse = new ArrayList<>();
-    for (CatalogTable table : tables.findByIsActiveTrueOrderByUsageCountDescNameAsc()) {
+    for (CatalogTable table : tables.findByIsActiveTrueAndIsEnabledTrueOrderByUsageCountDescNameAsc()) {
       String dbName = dbNames.getOrDefault(table.getDatabaseId(), "");
       String candidate =
           table.getName()
@@ -921,11 +924,13 @@ public class PipelineStages {
           tables.findByDatabaseIdAndName(db.getId(), parts[1])
               .orElseGet(
                   () ->
-                      tables.findByDatabaseIdAndIsActiveTrue(db.getId()).stream()
+                      tables.findByDatabaseIdAndIsActiveTrueAndIsEnabledTrue(db.getId()).stream()
                           .filter(t -> t.getName().equalsIgnoreCase(parts[1]))
                           .findFirst()
                           .orElse(null));
-      if (table != null && !Boolean.FALSE.equals(table.getIsActive())) {
+      if (table != null
+          && !Boolean.FALSE.equals(table.getIsActive())
+          && !Boolean.FALSE.equals(table.getIsEnabled())) {
         ResolvedTableModel selected = toResolvedTable(table, db.getName(), 1.0);
         List<ResolvedTableModel> next = new ArrayList<>();
         next.add(selected);

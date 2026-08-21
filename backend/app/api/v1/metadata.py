@@ -92,7 +92,7 @@ async def list_tables(database_id: str | None = None, search: str | None = None,
             **{c: getattr(t, c) for c in (
                 "id", "name", "canonical_name", "table_type", "description", "owner", "steward", "tags",
                 "classification", "row_count", "size_bytes", "storage_format",
-                "partition_columns", "last_synced_at", "usage_count",
+                "partition_columns", "last_synced_at", "usage_count", "is_enabled",
             )},
             "database_name": db_name, "column_count": col_count,
         })
@@ -115,7 +115,7 @@ async def get_table(table_id: str, db: AsyncSession = Depends(get_db)):
         **{c: getattr(table, c) for c in (
             "id", "name", "canonical_name", "table_type", "description", "owner", "steward", "tags",
             "classification", "row_count", "size_bytes", "storage_format",
-            "partition_columns", "last_synced_at", "usage_count",
+            "partition_columns", "last_synced_at", "usage_count", "is_enabled",
         )},
         database_name=table.database.name,
         column_count=len(table.columns),

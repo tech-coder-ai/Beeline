@@ -50,6 +50,7 @@ class CatalogTable(Base, IdMixin, TimestampMixin):
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     usage_count: Mapped[int] = mapped_column(Integer, default=0)     # popularity for ranking
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)   # false when dropped upstream
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)  # user opt-out from SQL-gen context
 
     database: Mapped[CatalogDatabase] = relationship(back_populates="tables")
     columns: Mapped[list["CatalogColumn"]] = relationship(

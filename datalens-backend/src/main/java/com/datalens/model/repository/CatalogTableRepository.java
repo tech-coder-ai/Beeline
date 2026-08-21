@@ -7,7 +7,11 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface CatalogTableRepository extends JpaRepository<CatalogTable, String> {
   java.util.List<CatalogTable> findByDatabaseIdAndIsActiveTrue(String databaseId);
 
+  java.util.List<CatalogTable> findByDatabaseIdAndIsActiveTrueAndIsEnabledTrue(String databaseId);
+
   java.util.List<CatalogTable> findByIsActiveTrueOrderByUsageCountDescNameAsc();
+
+  java.util.List<CatalogTable> findByIsActiveTrueAndIsEnabledTrueOrderByUsageCountDescNameAsc();
 
   Optional<CatalogTable> findByDatabaseIdAndName(String databaseId, String name);
 }

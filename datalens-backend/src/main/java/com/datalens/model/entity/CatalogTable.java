@@ -55,6 +55,8 @@ public class CatalogTable extends BaseEntity {
   private Integer usageCount = 0;
   @Column(name = "is_active")
   private Boolean isActive = true;
+  @Column(name = "is_enabled")
+  private Boolean isEnabled = true;
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "database_id", insertable = false, updatable = false)
   private CatalogDatabase database;

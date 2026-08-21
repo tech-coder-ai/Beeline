@@ -82,6 +82,24 @@
   .table-name { font-weight: 600; font-size: 13.5px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
 
+.table-card.disabled-entity {
+  opacity: 0.55;
+}
+
+.eye-toggle {
+  flex-shrink: 0;
+
+  &.active { color: var(--bl-accent); }
+  &:not(.active) { color: var(--bl-text-muted); }
+}
+
+.drawer-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
 .table-desc {
   font-size: 12px;
   margin: 0;

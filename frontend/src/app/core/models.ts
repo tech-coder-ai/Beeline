@@ -209,6 +209,7 @@ export interface CatalogTable {
   partition_columns?: string[] | null;
   last_synced_at?: string | null;
   usage_count: number;
+  is_enabled: boolean;
   database_name?: string;
   column_count: number;
   columns?: CatalogColumn[];

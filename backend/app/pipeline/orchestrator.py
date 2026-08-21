@@ -375,7 +375,11 @@ class Orchestrator:
 
     async def _catalog_has_tables(self, db: AsyncSession) -> bool:
         row = (
-            await db.execute(select(CatalogTable.id).where(CatalogTable.is_active.is_(True)).limit(1))
+            await db.execute(
+                select(CatalogTable.id)
+                .where(CatalogTable.is_active.is_(True), CatalogTable.is_enabled.is_(True))
+                .limit(1)
+            )
         ).first()
         return row is not None
 
@@ -384,7 +388,7 @@ class Orchestrator:
             await db.execute(
                 select(CatalogDatabase.name, CatalogTable.name)
                 .join(CatalogTable, CatalogTable.database_id == CatalogDatabase.id)
-                .where(CatalogTable.is_active.is_(True))
+                .where(CatalogTable.is_active.is_(True), CatalogTable.is_enabled.is_(True))
             )
         ).all()
         return {f"{d}.{t}".lower() for d, t in rows}
