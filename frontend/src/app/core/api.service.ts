@@ -5,6 +5,7 @@ import {
   ApprovalItem,
   AuditLogEntry,
   DataLensResponse,
+  CalculatedField,
   CatalogDatabase,
   CatalogRelationship,
   CatalogTable,
@@ -151,6 +152,32 @@ export class ApiService {
 
   deleteRelationship(relationshipId: string): Observable<{ deleted: string }> {
     return this.http.delete<{ deleted: string }>(`${API}/metadata/relationships/${relationshipId}`);
+  }
+
+  listCalculatedFields(tableId: string): Observable<CalculatedField[]> {
+    return this.http.get<CalculatedField[]>(`${API}/metadata/calculated-fields`, {
+      params: { table_id: tableId },
+    });
+  }
+
+  createCalculatedField(body: {
+    table_id: string;
+    name: string;
+    expression: string;
+    description?: string | null;
+  }): Observable<CalculatedField> {
+    return this.http.post<CalculatedField>(`${API}/metadata/calculated-fields`, body);
+  }
+
+  updateCalculatedField(
+    fieldId: string,
+    body: Partial<{ name: string; expression: string; description: string | null; is_active: boolean }>,
+  ): Observable<CalculatedField> {
+    return this.http.patch<CalculatedField>(`${API}/metadata/calculated-fields/${fieldId}`, body);
+  }
+
+  deleteCalculatedField(fieldId: string): Observable<{ deleted: string }> {
+    return this.http.delete<{ deleted: string }>(`${API}/metadata/calculated-fields/${fieldId}`);
   }
 
   // ------------------------------------------------------------- approvals

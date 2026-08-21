@@ -22,6 +22,7 @@ import com.datalens.model.repository.AbbreviationRepository;
 import com.datalens.model.repository.BusinessMetricRepository;
 import com.datalens.model.repository.BusinessRuleRepository;
 import com.datalens.model.repository.BusinessTermRepository;
+import com.datalens.model.repository.CalculatedFieldRepository;
 import com.datalens.model.repository.CatalogColumnRepository;
 import com.datalens.model.repository.CatalogDatabaseRepository;
 import com.datalens.model.repository.CatalogRelationshipRepository;
@@ -92,6 +93,7 @@ class LargeCatalogRetrievalTest {
   @Autowired private BusinessMetricRepository metrics;
   @Autowired private QueryLibraryEntryRepository library;
   @Autowired private CatalogRelationshipRepository relationships;
+  @Autowired private CalculatedFieldRepository calculatedFields;
 
   private DataLensSettings settings;
   private PipelineStages stages;
@@ -354,6 +356,7 @@ class LargeCatalogRetrievalTest {
             library,
             relationships,
             null,
+            calculatedFields,
             null);
   }
 
@@ -560,6 +563,7 @@ class LargeCatalogRetrievalTest {
             library,
             relationships,
             null,
+            calculatedFields,
             null);
 
     PipelineContext ctx = new PipelineContext();

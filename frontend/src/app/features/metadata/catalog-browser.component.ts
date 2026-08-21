@@ -5,7 +5,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { ApiService } from '../../core/api.service';
 import { NotificationService } from '../../core/notification.service';
-import { CatalogColumn, CatalogDatabase, CatalogRelationship, CatalogTable } from '../../core/models';
+import { CalculatedField, CatalogColumn, CatalogDatabase, CatalogRelationship, CatalogTable } from '../../core/models';
 
 interface GlossaryHintDraft {
   term: string;
@@ -58,6 +58,9 @@ export class CatalogBrowserComponent implements OnInit {
   readonly showRelForm = signal(false);
   readonly savingRel = signal(false);
   readonly targetTable = signal<CatalogTable | null>(null);
+  readonly calculatedFields = signal<CalculatedField[]>([]);
+  readonly showCalcFieldForm = signal(false);
+  readonly savingCalcField = signal(false);
 
   descriptionDraft = '';
   canonicalNameDraft = '';
@@ -74,6 +77,9 @@ export class CatalogBrowserComponent implements OnInit {
   relType = 'many_to_one';
   relJoinType = 'inner';
   relDescription = '';
+  calcFieldName = '';
+  calcFieldExpression = '';
+  calcFieldDescription = '';
 
   readonly filteredTables = computed(() => this.tables());
 
@@ -114,6 +120,7 @@ export class CatalogBrowserComponent implements OnInit {
       this.editingColumnId.set(null);
       this.showRelForm.set(false);
       this.loadRelationships(full.id);
+      this.loadCalculatedFields(full.id);
     });
   }
 
@@ -124,6 +131,8 @@ export class CatalogBrowserComponent implements OnInit {
     this.editingTable.set(false);
     this.showRelForm.set(false);
     this.relationships.set([]);
+    this.showCalcFieldForm.set(false);
+    this.calculatedFields.set([]);
   }
 
   loadRelationships(tableId: string): void {
@@ -210,6 +219,57 @@ export class CatalogBrowserComponent implements OnInit {
       next: () => {
         this.loadRelationships(table.id);
         this.notifications.success('Relationship deleted');
+      },
+    });
+  }
+
+  loadCalculatedFields(tableId: string): void {
+    this.api.listCalculatedFields(tableId).subscribe({
+      next: (rows) => this.calculatedFields.set(rows),
+      error: () => this.calculatedFields.set([]),
+    });
+  }
+
+  startCalcFieldForm(): void {
+    this.showCalcFieldForm.set(true);
+    this.calcFieldName = '';
+    this.calcFieldExpression = '';
+    this.calcFieldDescription = '';
+  }
+
+  cancelCalcFieldForm(): void {
+    this.showCalcFieldForm.set(false);
+  }
+
+  saveCalcField(): void {
+    const table = this.selectedTable();
+    if (!table || this.savingCalcField() || !this.calcFieldName.trim() || !this.calcFieldExpression.trim()) return;
+    this.savingCalcField.set(true);
+    this.api
+      .createCalculatedField({
+        table_id: table.id,
+        name: this.calcFieldName.trim(),
+        expression: this.calcFieldExpression.trim(),
+        description: this.calcFieldDescription.trim() || null,
+      })
+      .subscribe({
+        next: () => {
+          this.savingCalcField.set(false);
+          this.showCalcFieldForm.set(false);
+          this.loadCalculatedFields(table.id);
+          this.notifications.success('Calculated field saved', this.calcFieldName.trim());
+        },
+        error: () => this.savingCalcField.set(false),
+      });
+  }
+
+  deleteCalcField(field: CalculatedField): void {
+    const table = this.selectedTable();
+    if (!table || !confirm(`Delete calculated field "${field.name}"?`)) return;
+    this.api.deleteCalculatedField(field.id).subscribe({
+      next: () => {
+        this.loadCalculatedFields(table.id);
+        this.notifications.success('Calculated field deleted', field.name);
       },
     });
   }

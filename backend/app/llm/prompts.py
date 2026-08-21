@@ -56,7 +56,10 @@ Return JSON:
   "confidence": 0.0-1.0
 }
 Prefer partition columns for date filters when available. Use joins only via the provided
-relationships or matching key columns."""
+relationships or matching key columns. A table may list CALCULATED FIELDS below its columns -
+these are virtual, not real columns in the source system; you may reference them as
+db.table.field_name in columns/filters/group_by/aggregations exactly like a real column, their
+SQL expression is substituted automatically downstream."""
 
 SQL_SYSTEM = """You are the SQL generation stage of Beeline. Convert the execution plan into a
 single {dialect} SELECT statement. Rules:
@@ -71,6 +74,9 @@ single {dialect} SELECT statement. Rules:
   are plain expressions - never add a stray trailing backtick after GROUP BY items.
 - Boolean columns are stored as 0/1; compare with numeric literals, not TRUE/FALSE.
 - CLOB/text columns must be cast before comparison: CAST(alias.column AS STRING) = 'value'.
+- If a table lists CALCULATED FIELDS, they are NOT real columns - inline their SQL expression
+  directly (wrapped in parentheses) wherever referenced, aliased AS <field_name> when selected.
+  Never emit the field name as a bare identifier.
 - {dialect_hints}
 Return JSON: {{"sql": "SELECT ...", "explanation": "one-paragraph business explanation of the query"}}"""
 

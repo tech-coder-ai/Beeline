@@ -13,6 +13,7 @@ import com.datalens.llm.LlmProviderRegistry;
 import com.datalens.model.entity.BusinessMetric;
 import com.datalens.model.entity.BusinessRule;
 import com.datalens.model.entity.BusinessTerm;
+import com.datalens.model.entity.CalculatedField;
 import com.datalens.model.entity.CatalogColumn;
 import com.datalens.model.entity.CatalogDatabase;
 import com.datalens.model.entity.CatalogTable;
@@ -22,6 +23,7 @@ import com.datalens.model.entity.Synonym;
 import com.datalens.model.repository.BusinessMetricRepository;
 import com.datalens.model.repository.BusinessRuleRepository;
 import com.datalens.model.repository.BusinessTermRepository;
+import com.datalens.model.repository.CalculatedFieldRepository;
 import com.datalens.model.repository.CatalogColumnRepository;
 import com.datalens.model.repository.CatalogDatabaseRepository;
 import com.datalens.model.repository.CatalogRelationshipRepository;
@@ -89,6 +91,7 @@ public class PipelineStages {
   private final QueryLibraryEntryRepository library;
   private final CatalogRelationshipRepository relationships;
   private final CatalogRelationshipService relationshipService;
+  private final CalculatedFieldRepository calculatedFields;
   private final VisualizationPlanner visualizationPlanner;
   private final JaroWinklerSimilarity similarity = new JaroWinklerSimilarity();
 
@@ -112,6 +115,7 @@ public class PipelineStages {
       QueryLibraryEntryRepository library,
       CatalogRelationshipRepository relationships,
       CatalogRelationshipService relationshipService,
+      CalculatedFieldRepository calculatedFields,
       VisualizationPlanner visualizationPlanner) {
     this.settings = settings;
     this.llm = llm;
@@ -132,6 +136,7 @@ public class PipelineStages {
     this.library = library;
     this.relationships = relationships;
     this.relationshipService = relationshipService;
+    this.calculatedFields = calculatedFields;
     this.visualizationPlanner = visualizationPlanner;
   }
 
@@ -394,7 +399,8 @@ public class PipelineStages {
     } catch (Exception e) {
       ctx.getWarnings().add("LLM SQL generation failed; using deterministic builder: " + e.getMessage());
     }
-    ctx.setSql(SqlUtils.buildDeterministic(plan, columnTypesForPlan(ctx, plan)));
+    ctx.setSql(
+        SqlUtils.buildDeterministic(plan, columnTypesForPlan(ctx, plan), calculatedFieldExpressions(ctx)));
     ctx.setSqlFromDeterministicBuilder(true);
     ctx.getConfidence().put("sql", Math.max(ctx.getConfidence().getOrDefault("sql", 0.0), 0.5));
   }
@@ -432,6 +438,21 @@ public class PipelineStages {
     return types;
   }
 
+  private java.util.Map<String, String> calculatedFieldExpressions(PipelineContext ctx) {
+    java.util.Map<String, String> expressions = new java.util.HashMap<>();
+    for (ResolvedTableModel table : ctx.getResolvedTables()) {
+      if (table.getCalculatedFields() == null) continue;
+      for (Map<String, Object> field : table.getCalculatedFields()) {
+        Object name = field.get("name");
+        Object expression = field.get("expression");
+        if (name == null || expression == null) continue;
+        expressions.put((table.qualifiedName() + "." + name).toLowerCase(Locale.ROOT), String.valueOf(expression));
+        expressions.put(String.valueOf(name).toLowerCase(Locale.ROOT), String.valueOf(expression));
+      }
+    }
+    return expressions;
+  }
+
   /**
    * Sanitize, validate guardrails, optimize, Hive EXPLAIN dry-run, and estimate cost. On rejection the
    * pipeline first asks the LLM to repair the query using the exact error, then falls back to the
@@ -447,7 +468,9 @@ public class PipelineStages {
       if (ctx.isSqlFromDeterministicBuilder() || ctx.getPlan() == null) throw e;
       if (tryLlmRepair(ctx, connector, dialect, known, e.getMessage())) return;
       ctx.getWarnings().add("Regenerated SQL from the structured plan after Hive rejected the AI-generated query.");
-      ctx.setSql(SqlUtils.buildDeterministic(ctx.getPlan(), columnTypesForPlan(ctx, ctx.getPlan())));
+      ctx.setSql(
+          SqlUtils.buildDeterministic(
+              ctx.getPlan(), columnTypesForPlan(ctx, ctx.getPlan()), calculatedFieldExpressions(ctx)));
       ctx.setSqlFromDeterministicBuilder(true);
       applySqlChecks(ctx, connector, dialect, known);
     }
@@ -1004,6 +1027,16 @@ public class PipelineStages {
       }
       rt.setSampleRecords(sampleRows);
     }
+    List<Map<String, Object>> calcMaps = new ArrayList<>();
+    for (CalculatedField field : calculatedFields.findByTableIdOrderByCreatedAtDesc(table.getId())) {
+      if (Boolean.FALSE.equals(field.getIsActive())) continue;
+      Map<String, Object> calcMap = new HashMap<>();
+      calcMap.put("name", field.getName());
+      calcMap.put("expression", field.getExpression());
+      calcMap.put("description", field.getDescription());
+      calcMaps.add(calcMap);
+    }
+    rt.setCalculatedFields(calcMaps);
     return rt;
   }
 
@@ -1152,6 +1185,9 @@ public class PipelineStages {
       // The resolved model may be pruned for prompt size; accept any real catalog column.
       for (CatalogColumn col : columns.findByTableIdOrderByPositionAsc(table.getId())) {
         knownColumns.add((table.qualifiedName() + "." + col.getName()).toLowerCase(Locale.ROOT));
+      }
+      for (Map<String, Object> field : table.getCalculatedFields()) {
+        knownColumns.add((table.qualifiedName() + "." + field.get("name")).toLowerCase(Locale.ROOT));
       }
     }
 
@@ -1341,6 +1377,17 @@ public class PipelineStages {
           } catch (Exception e) {
             // best-effort prompt enrichment; skip a row that fails to serialize
           }
+        }
+      }
+      if (t.getCalculatedFields() != null && !t.getCalculatedFields().isEmpty()) {
+        sb.append("  Calculated fields (NOT real columns - inline the SQL expression directly,")
+            .append(" wrapped in parentheses, aliased AS <name> when selected):\n");
+        for (Map<String, Object> field : t.getCalculatedFields()) {
+          sb.append("    - ").append(field.get("name")).append(": ").append(field.get("expression"));
+          if (field.get("description") != null && !String.valueOf(field.get("description")).isBlank()) {
+            sb.append("  -- ").append(field.get("description"));
+          }
+          sb.append("\n");
         }
       }
       sb.append("\n");

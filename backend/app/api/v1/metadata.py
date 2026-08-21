@@ -20,6 +20,9 @@ from app.schemas.api import (
     BulkApprovalDecision,
     BusinessTermIn,
     BusinessTermOut,
+    CalculatedFieldIn,
+    CalculatedFieldOut,
+    CalculatedFieldUpdate,
     ColumnUpdate,
     GlossaryTermIn,
     GlossaryTermOut,
@@ -33,6 +36,10 @@ from app.schemas.api import (
 )
 from app.services.approval import approval_service
 from app.services.audit import audit
+from app.services.calculated_fields import create as create_calculated_field
+from app.services.calculated_fields import delete as delete_calculated_field
+from app.services.calculated_fields import list_for_table as list_calculated_fields
+from app.services.calculated_fields import update as update_calculated_field
 from app.services.catalog_relationships import create as create_relationship
 from app.services.catalog_relationships import delete as delete_relationship
 from app.services.catalog_relationships import list_for_table as list_relationships
@@ -190,6 +197,40 @@ async def remove_table_relationship(relationship_id: str, db: AsyncSession = Dep
     await audit(db, "default", "metadata.relationship.delete", entity_type="relationship", entity_id=relationship_id)
     await db.commit()
     return {"deleted": relationship_id}
+
+
+@router.get("/calculated-fields", response_model=list[CalculatedFieldOut])
+async def list_table_calculated_fields(table_id: str, db: AsyncSession = Depends(get_db)):
+    return await list_calculated_fields(db, table_id)
+
+
+@router.post("/calculated-fields", response_model=CalculatedFieldOut)
+async def create_table_calculated_field(body: CalculatedFieldIn, db: AsyncSession = Depends(get_db)):
+    out = await create_calculated_field(db, body)
+    await audit(
+        db, "default", "metadata.calculated_field.create",
+        entity_type="calculated_field", entity_id=out.id, detail={"table_id": out.table_id},
+    )
+    await db.commit()
+    return out
+
+
+@router.patch("/calculated-fields/{field_id}", response_model=CalculatedFieldOut)
+async def patch_table_calculated_field(
+    field_id: str, body: CalculatedFieldUpdate, db: AsyncSession = Depends(get_db)
+):
+    out = await update_calculated_field(db, field_id, body)
+    await audit(db, "default", "metadata.calculated_field.update", entity_type="calculated_field", entity_id=field_id)
+    await db.commit()
+    return out
+
+
+@router.delete("/calculated-fields/{field_id}")
+async def remove_table_calculated_field(field_id: str, db: AsyncSession = Depends(get_db)):
+    await delete_calculated_field(db, field_id)
+    await audit(db, "default", "metadata.calculated_field.delete", entity_type="calculated_field", entity_id=field_id)
+    await db.commit()
+    return {"deleted": field_id}
 
 
 @router.patch("/columns/{column_id}")

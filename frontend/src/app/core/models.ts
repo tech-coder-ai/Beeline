@@ -236,6 +236,18 @@ export interface CatalogRelationship {
   updated_at?: string;
 }
 
+export interface CalculatedField {
+  id: string;
+  table_id: string;
+  name: string;
+  expression: string;
+  description?: string | null;
+  is_active: boolean;
+  source: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface GlossaryTerm {
   id?: string;
   term: string;

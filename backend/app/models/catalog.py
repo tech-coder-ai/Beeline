@@ -57,6 +57,9 @@ class CatalogTable(Base, IdMixin, TimestampMixin):
     columns: Mapped[list["CatalogColumn"]] = relationship(
         back_populates="table", cascade="all, delete-orphan", order_by="CatalogColumn.position"
     )
+    calculated_fields: Mapped[list["CalculatedField"]] = relationship(
+        back_populates="table", cascade="all, delete-orphan"
+    )
 
     @property
     def qualified_name(self) -> str:
@@ -88,6 +91,25 @@ class CatalogColumn(Base, IdMixin, TimestampMixin):
     top_values: Mapped[list | None] = mapped_column(JSON, default=list)
 
     table: Mapped[CatalogTable] = relationship(back_populates="columns")
+
+
+class CalculatedField(Base, IdMixin, TimestampMixin):
+    """User-defined virtual column for a table, e.g. profit_margin = (revenue - cost) / revenue.
+
+    Not a real column in the source system - expression is inlined into generated SQL
+    wherever the field is referenced.
+    """
+
+    __tablename__ = "calculated_fields"
+
+    table_id: Mapped[str] = mapped_column(ForeignKey("catalog_tables.id"), index=True)
+    name: Mapped[str] = mapped_column(String(255))
+    expression: Mapped[str] = mapped_column(Text)          # partial SQL, e.g. "revenue - cost"
+    description: Mapped[str | None] = mapped_column(Text)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    source: Mapped[str] = mapped_column(String(16), default="manual")
+
+    table: Mapped[CatalogTable] = relationship(back_populates="calculated_fields")
 
 
 class CatalogRelationship(Base, IdMixin, TimestampMixin):

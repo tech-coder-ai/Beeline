@@ -115,6 +115,34 @@ class TableUpdate(BaseModel):
     is_enabled: bool | None = None
 
 
+class CalculatedFieldIn(BaseModel):
+    table_id: str
+    name: str
+    expression: str
+    description: str | None = None
+
+
+class CalculatedFieldUpdate(BaseModel):
+    name: str | None = None
+    expression: str | None = None
+    description: str | None = None
+    is_active: bool | None = None
+
+
+class CalculatedFieldOut(BaseModel):
+    id: str
+    table_id: str
+    name: str
+    expression: str
+    description: str | None
+    is_active: bool
+    source: str
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class GlossaryHintIn(BaseModel):
     term: str
     definition: str | None = None

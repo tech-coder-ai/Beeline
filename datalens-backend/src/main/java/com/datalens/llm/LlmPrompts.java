@@ -46,7 +46,11 @@ public final class LlmPrompts {
       - When "Business rules" are provided, apply each one that is relevant to this question exactly
         as stated (e.g. a standing exclusion filter, a definition of a business condition such as
         "churned customer") even though the user did not repeat it - these are steward-approved
-        policy, not optional context. Note in rationale which rule(s) were applied.""";
+        policy, not optional context. Note in rationale which rule(s) were applied.
+      - A table may list Calculated fields below its columns - these are virtual, not real columns
+        in the source system; reference them as database.table.field_name in columns/filters/
+        group_by/aggregations exactly like a real column, their SQL expression is substituted
+        automatically downstream.""";
 
   public static final String SQL_GENERATOR_SYSTEM = """
       You are the SQL generation stage for %s. Convert the execution plan into a single SELECT statement. Rules:
@@ -72,6 +76,9 @@ public final class LlmPrompts {
         the plan explicitly needs an exact case-sensitive match (e.g. a code or identifier).
       - A "blank"/"empty"/"missing" filter on a text column must check both NULL and empty string:
         (alias.column IS NULL OR TRIM(alias.column) = ''), not just one of the two.
+      - If the schema context lists Calculated fields for a table, they are NOT real columns -
+        inline their SQL expression directly (wrapped in parentheses) wherever referenced, aliased
+        AS <field_name> when selected. Never emit the field name as a bare identifier.
       - %s
       Return JSON: {"sql": "SELECT ...", "explanation": "one-paragraph business explanation"}""";
 

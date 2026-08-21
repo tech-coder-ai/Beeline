@@ -25,6 +25,9 @@ import com.datalens.schema.api.AbbreviationOut;
 import com.datalens.schema.api.ApprovalDecision;
 import com.datalens.schema.api.ApprovalOut;
 import com.datalens.schema.api.BulkApprovalDecision;
+import com.datalens.schema.api.CalculatedFieldIn;
+import com.datalens.schema.api.CalculatedFieldOut;
+import com.datalens.schema.api.CalculatedFieldUpdate;
 import com.datalens.schema.api.ColumnOut;
 import com.datalens.schema.api.ColumnUpdate;
 import com.datalens.schema.api.BusinessRuleIn;
@@ -42,6 +45,7 @@ import com.datalens.schema.api.TableOut;
 import com.datalens.schema.api.TableUpdate;
 import com.datalens.service.ApprovalService;
 import com.datalens.service.AuditService;
+import com.datalens.service.CalculatedFieldService;
 import com.datalens.service.CatalogRelationshipService;
 import com.datalens.service.EnrichmentService;
 import com.datalens.service.SemanticImportService;
@@ -73,6 +77,7 @@ public class MetadataController {
   private final BusinessMetricRepository metrics;
   private final EnrichmentService enrichment;
   private final CatalogRelationshipService relationships;
+  private final CalculatedFieldService calculatedFields;
   private final BusinessTermRepository businessTerms;
   private final BusinessRuleRepository businessRules;
   private final AbbreviationRepository abbreviationRepo;
@@ -89,6 +94,7 @@ public class MetadataController {
       BusinessMetricRepository metrics,
       EnrichmentService enrichment,
       CatalogRelationshipService relationships,
+      CalculatedFieldService calculatedFields,
       BusinessTermRepository businessTerms,
       BusinessRuleRepository businessRules,
       AbbreviationRepository abbreviationRepo) {
@@ -103,6 +109,7 @@ public class MetadataController {
     this.metrics = metrics;
     this.enrichment = enrichment;
     this.relationships = relationships;
+    this.calculatedFields = calculatedFields;
     this.businessTerms = businessTerms;
     this.businessRules = businessRules;
     this.abbreviationRepo = abbreviationRepo;
@@ -229,6 +236,39 @@ public class MetadataController {
     relationships.delete(relationshipId);
     audit.audit("default", "metadata.relationship.delete", "relationship", relationshipId, Map.of(), "info");
     return Map.of("deleted", relationshipId);
+  }
+
+  @GetMapping("/metadata/calculated-fields")
+  public List<CalculatedFieldOut> listCalculatedFields(@RequestParam String tableId) {
+    return calculatedFields.listForTable(tableId);
+  }
+
+  @PostMapping("/metadata/calculated-fields")
+  public CalculatedFieldOut createCalculatedField(@RequestBody CalculatedFieldIn body) {
+    CalculatedFieldOut out = calculatedFields.create(body);
+    audit.audit(
+        "default",
+        "metadata.calculated_field.create",
+        "calculated_field",
+        out.id(),
+        Map.of("table_id", out.tableId()),
+        "info");
+    return out;
+  }
+
+  @PatchMapping("/metadata/calculated-fields/{fieldId}")
+  public CalculatedFieldOut updateCalculatedField(
+      @PathVariable String fieldId, @RequestBody CalculatedFieldUpdate body) {
+    CalculatedFieldOut out = calculatedFields.update(fieldId, body);
+    audit.audit("default", "metadata.calculated_field.update", "calculated_field", fieldId, Map.of(), "info");
+    return out;
+  }
+
+  @org.springframework.web.bind.annotation.DeleteMapping("/metadata/calculated-fields/{fieldId}")
+  public Map<String, String> deleteCalculatedField(@PathVariable String fieldId) {
+    calculatedFields.delete(fieldId);
+    audit.audit("default", "metadata.calculated_field.delete", "calculated_field", fieldId, Map.of(), "info");
+    return Map.of("deleted", fieldId);
   }
 
   @PatchMapping("/metadata/columns/{columnId}")

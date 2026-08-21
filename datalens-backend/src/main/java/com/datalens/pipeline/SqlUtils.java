@@ -331,24 +331,32 @@ public final class SqlUtils {
   }
 
   public static String buildDeterministic(ExecutionPlanModel plan) {
-    return buildDeterministic(plan, java.util.Map.of());
+    return buildDeterministic(plan, java.util.Map.of(), java.util.Map.of());
   }
 
   public static String buildDeterministic(ExecutionPlanModel plan, java.util.Map<String, String> columnTypes) {
+    return buildDeterministic(plan, columnTypes, java.util.Map.of());
+  }
+
+  public static String buildDeterministic(
+      ExecutionPlanModel plan,
+      java.util.Map<String, String> columnTypes,
+      java.util.Map<String, String> calculatedFields) {
     if (plan == null || plan.getTables().isEmpty()) {
       throw new ValidationFailed(
           "I couldn't map your question to any known tables. Try mentioning the dataset explicitly.");
     }
+    java.util.Map<String, String> calcFields = calculatedFields != null ? calculatedFields : java.util.Map.of();
 
     java.util.Map<String, String> tableAliases = aliasMap(plan.getTables());
     List<String> selectParts = new ArrayList<>();
     for (String col : plan.getColumns()) {
-      selectParts.add(hiveColRef(col, tableAliases) + " AS `" + shortName(col) + "`");
+      selectParts.add(hiveColRef(col, tableAliases, calcFields) + " AS `" + shortName(col) + "`");
     }
     for (PlanAggregation agg : plan.getAggregations()) {
       String fn = agg.getFunction() != null ? agg.getFunction().toLowerCase(Locale.ROOT) : "sum";
       String template = AGG_SQL.getOrDefault(fn, "SUM({c})");
-      String target = "*".equals(agg.getColumn()) ? "*" : hiveColRef(agg.getColumn(), tableAliases);
+      String target = "*".equals(agg.getColumn()) ? "*" : hiveColRef(agg.getColumn(), tableAliases, calcFields);
       String alias =
           agg.getAlias() != null && !agg.getAlias().isBlank()
               ? agg.getAlias()
@@ -386,20 +394,22 @@ public final class SqlUtils {
           .append(" ")
           .append(hiveTableRef(target, tableAliases.get(normalizeTableRef(target))))
           .append(" ON ")
-          .append(hiveColRef(join.getLeftTable() + "." + join.getLeftColumn(), tableAliases))
+          .append(hiveColRef(join.getLeftTable() + "." + join.getLeftColumn(), tableAliases, calcFields))
           .append(" = ")
-          .append(hiveColRef(join.getRightTable() + "." + join.getRightColumn(), tableAliases));
+          .append(hiveColRef(join.getRightTable() + "." + join.getRightColumn(), tableAliases, calcFields));
     }
 
     List<String> conditions = new ArrayList<>();
     for (PlanFilter f : plan.getFilters()) {
-      conditions.add(renderFilter(f, tableAliases, columnTypes));
+      conditions.add(renderFilter(f, tableAliases, columnTypes, calcFields));
     }
     if (!conditions.isEmpty()) sql.append("\nWHERE ").append(String.join("\n  AND ", conditions));
 
     if (!plan.getGroupBy().isEmpty()) {
       sql.append("\nGROUP BY ")
-          .append(String.join(", ", plan.getGroupBy().stream().map(c -> hiveColRef(c, tableAliases)).toList()));
+          .append(
+              String.join(
+                  ", ", plan.getGroupBy().stream().map(c -> hiveColRef(c, tableAliases, calcFields)).toList()));
     }
     if (plan.getOrderBy() != null && !plan.getOrderBy().isEmpty()) {
       List<String> orderParts = new ArrayList<>();
@@ -407,7 +417,7 @@ public final class SqlUtils {
         Object col = o.get("column");
         if (col == null) continue;
         String direction = String.valueOf(o.getOrDefault("direction", "desc"));
-        String orderExpr = hiveColRef(String.valueOf(col), tableAliases);
+        String orderExpr = hiveColRef(String.valueOf(col), tableAliases, calcFields);
         for (PlanAggregation agg : plan.getAggregations()) {
           if (agg.getAlias() != null && agg.getAlias().equalsIgnoreCase(String.valueOf(col))) {
             orderExpr = "`" + agg.getAlias() + "`";
@@ -447,8 +457,12 @@ public final class SqlUtils {
     return qident(qualified) + (alias != null && !alias.isBlank() ? " " + alias : "");
   }
 
-  private static String hiveColRef(String qualified, java.util.Map<String, String> aliases) {
+  private static String hiveColRef(
+      String qualified, java.util.Map<String, String> aliases, java.util.Map<String, String> calculatedFields) {
     if (qualified == null || qualified.isBlank()) return "`*`";
+    String expression =
+        calculatedFields != null ? calculatedFields.get(qualified.toLowerCase(Locale.ROOT)) : null;
+    if (expression != null) return "(" + expression + ")";
     if (!qualified.contains(".")) return "`" + qualified + "`";
     String[] parts = qualified.split("\\.");
     if (parts.length >= 3) {
@@ -464,8 +478,11 @@ public final class SqlUtils {
   }
 
   private static String renderFilter(
-      PlanFilter f, java.util.Map<String, String> aliases, java.util.Map<String, String> columnTypes) {
-    String column = hiveColRef(f.getColumn(), aliases);
+      PlanFilter f,
+      java.util.Map<String, String> aliases,
+      java.util.Map<String, String> columnTypes,
+      java.util.Map<String, String> calculatedFields) {
+    String column = hiveColRef(f.getColumn(), aliases, calculatedFields);
     String columnType = resolveColumnType(f.getColumn(), columnTypes);
     String compareColumn = comparisonColumnExpr(column, columnType);
     String op = f.getOperator() != null ? f.getOperator().toLowerCase(Locale.ROOT) : "=";

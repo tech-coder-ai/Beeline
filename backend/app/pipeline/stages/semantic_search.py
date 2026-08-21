@@ -127,7 +127,11 @@ class SemanticSearch:
         tables = (
             await db.execute(
                 select(CatalogTable)
-                .options(selectinload(CatalogTable.columns), selectinload(CatalogTable.database))
+                .options(
+                    selectinload(CatalogTable.columns),
+                    selectinload(CatalogTable.database),
+                    selectinload(CatalogTable.calculated_fields),
+                )
                 .where(CatalogTable.is_active.is_(True), CatalogTable.is_enabled.is_(True))
             )
         ).scalars().all()
@@ -174,6 +178,11 @@ class SemanticSearch:
                     for c in t.columns[:MAX_COLUMNS_PER_TABLE]
                 ],
                 sample_records=t.sample_records or [],
+                calculated_fields=[
+                    {"name": f.name, "expression": f.expression, "description": f.description}
+                    for f in t.calculated_fields
+                    if f.is_active
+                ],
                 score=round(min(score, 1.0), 3),
             )
             for score, t in scored[:MAX_TABLES]
