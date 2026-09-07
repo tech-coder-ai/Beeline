@@ -40,8 +40,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import javax.sql.DataSource;
-import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
@@ -55,8 +56,12 @@ import org.springframework.test.context.TestPropertySource;
  * realistic glossary/synonym/business-term/abbreviation/business-rule/relationship data) instead
  * of the small local dev catalog, which is too small to reveal ranking or performance problems.
  * Uses a throwaway SQLite file with the schema generated from the JPA entities (create-drop) -
- * isolated from the real dev database.
+ * isolated from the real dev database. Seeded once for the whole class (PER_CLASS + @BeforeAll,
+ * not @BeforeEach): every test here only reads the catalog, and reseeding per-method without
+ * clearing prior data would accumulate duplicate tables across test methods (there's no
+ * @Transactional rollback in play), silently changing retrieval ranking as more tests are added.
  */
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @SpringBootTest(classes = LargeCatalogRetrievalTest.TestConfig.class)
 @TestPropertySource(
     properties = {
@@ -268,7 +273,7 @@ class LargeCatalogRetrievalTest {
   private String customer360CustomersId;
   private String analyticsLoansId;
 
-  @BeforeEach
+  @BeforeAll
   void seedLargeCatalog() throws Exception {
     settings = new DataLensSettings(new DataLensProperties("../backend/config/settings.yaml", "/api/v1"));
 
@@ -300,6 +305,8 @@ class LargeCatalogRetrievalTest {
           };
           if (variant.isEmpty() && dbName.equals(CANONICAL_DB.get(entity.name()))) usage = 800;
           table.setUsageCount(usage);
+          // Legacy copies are deprecated and taken out of active use, like the variant note says.
+          table.setIsActive(!"_legacy".equals(variant));
           table = tables.save(table);
           tableCount++;
 
@@ -323,6 +330,9 @@ class LargeCatalogRetrievalTest {
               col.setIsPii(true);
               col.setClassification("restricted");
             }
+            // Every entity's first column is its primary business key - a realistic Critical
+            // Data Element candidate, tagged the way an enterprise governance program would.
+            if (col.getPosition() == 0) col.setClassification("critical");
             cols.add(col);
           }
           columns.saveAll(cols);
@@ -369,6 +379,7 @@ class LargeCatalogRetrievalTest {
     syn.setSynonym("sales");
     synonyms.save(syn);
 
+    abbreviation("CDE", "governance", "Critical Data Element");
     abbreviation("NPL", "analytics.loans", "Non-Performing Loan");
     abbreviation("KYC", "customer360.customers", "Know Your Customer");
     abbreviation("AUM", "finance.positions", "Assets Under Management");
@@ -575,5 +586,38 @@ class LargeCatalogRetrievalTest {
     assertThat(userMessage)
         .as("Unrelated synonyms (e.g. 'sales' -> Revenue) should not be dumped in when the question never mentions them")
         .doesNotContain("sales => Revenue");
+  }
+
+  @Test
+  void governanceQuestionAboutCdeActivePercentageIsAnsweredFromCatalogMetadataNotFakeSql() {
+    PipelineContext ctx = new PipelineContext();
+    ctx.setPrompt("What % of CDE are active?");
+
+    var response = stages.answerGovernanceQuestion(ctx);
+
+    assertThat(response)
+        .as("CDE is a catalog classification (the primary key of every table here), not a real "
+            + "table/column in the warehouse - this must be answered from catalog metadata directly, "
+            + "never by asking the LLM to invent SQL against a nonexistent 'cde' table")
+        .isNotNull();
+    assertThat(response.getKind()).isEqualTo("answer");
+    assertThat(response.getSql()).isNull();
+    assertThat(response.getCards()).isNotEmpty();
+    assertThat(response.getCards().get(0).getRawValue()).isNotNull();
+    // 150 tables, 1 in 3 variants (_legacy) marked inactive -> 100 of 150 critical-classified
+    // primary keys are on active tables = 66.7%.
+    assertThat(response.getCards().get(0).getRawValue()).isCloseTo(66.7, org.assertj.core.data.Offset.offset(0.5));
+    assertThat(response.getTable()).isNotNull();
+    assertThat(response.getTable().getRows()).isNotEmpty();
+    assertThat(response.getWarnings())
+        .anyMatch(w -> w.contains("catalog metadata") && w.contains("classification"));
+  }
+
+  @Test
+  void governanceQuestionWithNoMatchingClassificationReturnsNullSoCallerCanFallBack() {
+    PipelineContext ctx = new PipelineContext();
+    ctx.setPrompt("What % of flibbertigibbets are active?");
+
+    assertThat(stages.answerGovernanceQuestion(ctx)).isNull();
   }
 }
