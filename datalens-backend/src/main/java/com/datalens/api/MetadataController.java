@@ -523,6 +523,10 @@ public class MetadataController {
     row.setEntity(in.entity().trim());
     row.setValue(in.value().trim());
     row.setDescription(in.description());
+    row.setMapsToClassification(
+        in.mapsToClassification() != null && !in.mapsToClassification().isBlank()
+            ? in.mapsToClassification().trim()
+            : null);
     row.setSource("manual");
     row.setStatus("approved");
     abbreviationRepo.save(row);
@@ -539,6 +543,10 @@ public class MetadataController {
     row.setEntity(in.entity().trim());
     row.setValue(in.value().trim());
     row.setDescription(in.description());
+    row.setMapsToClassification(
+        in.mapsToClassification() != null && !in.mapsToClassification().isBlank()
+            ? in.mapsToClassification().trim()
+            : null);
     abbreviationRepo.save(row);
     audit.audit("default", "abbreviation.update", "abbreviation", abbreviationId, Map.of(), "info");
     return toAbbreviationOut(row);
@@ -689,6 +697,7 @@ public class MetadataController {
         row.getEntity(),
         row.getValue(),
         row.getDescription(),
+        row.getMapsToClassification(),
         row.getStatus(),
         row.getSource(),
         row.getCreatedAt(),

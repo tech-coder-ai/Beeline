@@ -8,6 +8,7 @@ public record AbbreviationOut(
     String entity,
     String value,
     String description,
+    String mapsToClassification,
     String status,
     String source,
     Instant createdAt,

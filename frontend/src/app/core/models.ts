@@ -281,6 +281,10 @@ export interface Abbreviation {
   entity: string;
   value: string;
   description?: string | null;
+  /** When set, this abbreviation refers to a catalog classification (e.g. CDE -> "critical") for
+   * governance questions like "what % of CDE are active", answered from catalog metadata directly
+   * instead of fuzzy-matching `value` against whatever classification strings happen to exist. */
+  maps_to_classification?: string | null;
   status?: string;
   source?: string;
   created_at?: string;

@@ -411,15 +411,16 @@ CREATE TABLE "sync_runs" (
 CREATE INDEX "ix_sync_runs_connector_id" ON "sync_runs" ("connector_id");
 
 CREATE TABLE "abbreviations" (
-  "id"           VARCHAR2(32) NOT NULL,
-  "abbreviation" VARCHAR2(64) NOT NULL,
-  "entity"       VARCHAR2(512) NOT NULL,
-  "value"        CLOB NOT NULL,
-  "description"  CLOB,
-  "status"       VARCHAR2(16) DEFAULT 'approved' NOT NULL,
-  "source"       VARCHAR2(16) DEFAULT 'manual' NOT NULL,
-  "created_at"   TIMESTAMP(6) WITH TIME ZONE NOT NULL,
-  "updated_at"   TIMESTAMP(6) WITH TIME ZONE NOT NULL,
+  "id"                     VARCHAR2(32) NOT NULL,
+  "abbreviation"           VARCHAR2(64) NOT NULL,
+  "entity"                 VARCHAR2(512) NOT NULL,
+  "value"                  CLOB NOT NULL,
+  "description"            CLOB,
+  "maps_to_classification" VARCHAR2(255),
+  "status"                 VARCHAR2(16) DEFAULT 'approved' NOT NULL,
+  "source"                 VARCHAR2(16) DEFAULT 'manual' NOT NULL,
+  "created_at"             TIMESTAMP(6) WITH TIME ZONE NOT NULL,
+  "updated_at"             TIMESTAMP(6) WITH TIME ZONE NOT NULL,
   CONSTRAINT "pk_abbreviations" PRIMARY KEY ("id")
 );
 

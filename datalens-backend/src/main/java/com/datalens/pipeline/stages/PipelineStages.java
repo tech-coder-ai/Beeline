@@ -74,6 +74,7 @@ public class PipelineStages {
   private static final int DEFAULT_CANDIDATE_SHORTLIST_SIZE = 30;
   private static final int DEFAULT_USAGE_BONUS_CAP = 1000;
   private static final double DEFAULT_USAGE_BONUS_WEIGHT = 0.0002;
+  private static final double DEFAULT_DOCUMENTATION_BONUS_WEIGHT = 0.12;
 
   private final DataLensSettings settings;
   private final LlmProviderRegistry llm;
@@ -172,6 +173,37 @@ public class PipelineStages {
         ((Number) settings.get("pipeline.retrieval.usage_bonus_weight", DEFAULT_USAGE_BONUS_WEIGHT))
             .doubleValue();
     return Math.min(usageCount != null ? usageCount : 0, cap) * weight;
+  }
+
+  private double documentationBonusWeight() {
+    return ((Number)
+            settings.get("pipeline.retrieval.documentation_bonus_weight", DEFAULT_DOCUMENTATION_BONUS_WEIGHT))
+        .doubleValue();
+  }
+
+  /**
+   * With 150+ entities, many sparsely documented, lexical scoring alone can rank an undocumented
+   * table above a well-documented, more trustworthy one on a lucky name match. This rewards
+   * tables a steward has actually described/tagged/assigned an owner to, so documentation effort
+   * translates into better answers, not just a nicer-looking catalog browser.
+   */
+  private double documentationBonus(CatalogTable table) {
+    double completeness = 0;
+    if (table.getDescription() != null && !table.getDescription().isBlank()) completeness += 0.5;
+    String tags = tagsText(table.getTags());
+    if (tags != null && !tags.isBlank()) completeness += 0.25;
+    if (table.getSteward() != null && !table.getSteward().isBlank()) completeness += 0.25;
+    return completeness * documentationBonusWeight();
+  }
+
+  /** Same idea as {@link #documentationBonus}, but for the fraction of a table's own columns that carry a description. */
+  private double columnDocumentationBonus(List<CatalogColumn> columns) {
+    if (columns == null || columns.isEmpty()) return 0;
+    long documented =
+        columns.stream()
+            .filter(c -> c.getDescription() != null && !c.getDescription().isBlank())
+            .count();
+    return ((double) documented / columns.size()) * documentationBonusWeight();
   }
 
   /** Recent session turns rendered for LLM prompts so follow-up questions keep their context. */
@@ -736,10 +768,14 @@ public class PipelineStages {
 
     String conceptPhrase = null;
     String conceptLabel = null;
+    String explicitClassification = null;
     for (Abbreviation abbr : abbreviationRepo.findByStatusOrderByAbbreviationAsc("approved")) {
       if (mentionsAny(qTokens, abbr.getAbbreviation())) {
         conceptPhrase = abbr.getValue();
         conceptLabel = abbr.getAbbreviation() + " (" + abbr.getValue() + ")";
+        if (abbr.getMapsToClassification() != null && !abbr.getMapsToClassification().isBlank()) {
+          explicitClassification = abbr.getMapsToClassification();
+        }
         break;
       }
     }
@@ -757,7 +793,13 @@ public class PipelineStages {
     Set<String> conceptTokens = tokens(conceptPhrase);
     String matchedClassification = null;
     double bestScore = 0;
-    for (String candidate : classifications) {
+    // A steward-configured mapping (abbreviation.maps_to_classification) is authoritative - skip
+    // fuzzy text matching entirely when one is set, since it's exact by construction.
+    if (explicitClassification != null && classifications.contains(explicitClassification)) {
+      matchedClassification = explicitClassification;
+      bestScore = 1.0;
+    }
+    for (String candidate : matchedClassification != null ? List.<String>of() : classifications) {
       double s = score(conceptPhrase, conceptTokens, candidate);
       if (s > bestScore) {
         bestScore = s;
@@ -1010,6 +1052,7 @@ public class PipelineStages {
               + dbName;
       double s = score(search, qTokens, candidate);
       s += usageBonus(table.getUsageCount());
+      s += documentationBonus(table);
       if (s > 0.08) coarse.add(Map.entry(s, table));
     }
     coarse.sort(Comparator.comparingDouble((Map.Entry<Double, CatalogTable> e) -> e.getKey()).reversed());
@@ -1034,7 +1077,8 @@ public class PipelineStages {
               .reduce((a, b) -> a + " " + b)
               .orElse("");
       double columnScore = columnText.isBlank() ? 0.0 : score(search, qTokens, columnText);
-      double finalScore = Math.min(entry.getKey() * 0.6 + columnScore * 0.4, 1.0);
+      double finalScore =
+          Math.min(entry.getKey() * 0.6 + columnScore * 0.4 + columnDocumentationBonus(cols), 1.0);
       refined.add(Map.entry(finalScore, table));
     }
     refined.sort(Comparator.comparingDouble((Map.Entry<Double, CatalogTable> e) -> e.getKey()).reversed());
@@ -1178,6 +1222,7 @@ public class PipelineStages {
       for (String token : qTokens) {
         if (!desc.isEmpty() && desc.contains(token)) s += 1;
       }
+      if (!desc.isEmpty()) s += 0.3;
       if (Boolean.TRUE.equals(col.getIsPartition())) s += 3;
       if (name.equals("id") || name.endsWith("_id") || name.endsWith("_key") || name.endsWith("_date")
           || name.equals("name") || name.endsWith("_name")) {

@@ -179,6 +179,14 @@
                 <span class="muted">Description (optional)</span>
                 <input class="text-input" [(ngModel)]="abbr.description" placeholder="Optional notes" />
               </label>
+              <label>
+                <span class="muted">Maps to catalog classification (optional)</span>
+                <input
+                  class="text-input"
+                  [(ngModel)]="abbr.maps_to_classification"
+                  placeholder="e.g. critical — for governance questions like &quot;% of CDE active&quot;"
+                />
+              </label>
               <div class="editor-actions">
                 <button class="primary-btn" (click)="saveAbbreviation()">Save</button>
                 <button class="ghost-btn" (click)="cancelAbbreviation()">Cancel</button>
@@ -195,6 +203,11 @@
                   <span>{{ abbr.entity }}</span>
                   <span class="muted">=</span>
                   <span>{{ abbr.value }}</span>
+                  @if (abbr.maps_to_classification) {
+                    <span class="chip neutral" matTooltip="Governance classification for '% of X are active' style questions">
+                      classification: {{ abbr.maps_to_classification }}
+                    </span>
+                  }
                   <span class="spacer"></span>
                   <button class="icon-btn" (click)="startEditAbbreviation(abbr)"><mat-icon>edit</mat-icon></button>
                   <button class="icon-btn" (click)="removeAbbreviation(abbr)"><mat-icon>delete</mat-icon></button>

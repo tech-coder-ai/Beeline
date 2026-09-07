@@ -31,6 +31,7 @@ import com.datalens.model.repository.GlossaryTermRepository;
 import com.datalens.model.repository.QueryLibraryEntryRepository;
 import com.datalens.model.repository.SynonymRepository;
 import com.datalens.pipeline.PipelineContext;
+import com.datalens.pipeline.ResolvedTableModel;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zaxxer.hikari.HikariDataSource;
 import java.io.IOException;
@@ -379,7 +380,7 @@ class LargeCatalogRetrievalTest {
     syn.setSynonym("sales");
     synonyms.save(syn);
 
-    abbreviation("CDE", "governance", "Critical Data Element");
+    abbreviation("CDE", "governance", "Critical Data Element", "critical");
     abbreviation("NPL", "analytics.loans", "Non-Performing Loan");
     abbreviation("KYC", "customer360.customers", "Know Your Customer");
     abbreviation("AUM", "finance.positions", "Assets Under Management");
@@ -435,10 +436,15 @@ class LargeCatalogRetrievalTest {
   }
 
   private void abbreviation(String abbr, String entity, String value) {
+    abbreviation(abbr, entity, value, null);
+  }
+
+  private void abbreviation(String abbr, String entity, String value, String mapsToClassification) {
     Abbreviation a = new Abbreviation();
     a.setAbbreviation(abbr);
     a.setEntity(entity);
     a.setValue(value);
+    a.setMapsToClassification(mapsToClassification);
     a.setStatus("approved");
     a.setSource("manual");
     abbreviations.save(a);
@@ -500,6 +506,55 @@ class LargeCatalogRetrievalTest {
     assertThat(elapsedMs)
         .as("semanticSearch over 150+ tables should stay fast (two-stage funnel, no per-table column N+1)")
         .isLessThan(3000);
+  }
+
+  @Test
+  void wellDocumentedTableOutranksAnEquallyNamedButUndocumentedOne() {
+    CatalogDatabase db = new CatalogDatabase();
+    db.setName("docstest");
+    db = databases.save(db);
+
+    CatalogTable documented = new CatalogTable();
+    documented.setDatabaseId(db.getId());
+    documented.setName("widget_telemetry");
+    documented.setDescription("Sensor telemetry readings captured from field-deployed widgets.");
+    documented.setTags(List.of("iot", "telemetry"));
+    documented.setSteward("iot-team");
+    documented.setUsageCount(0);
+    documented = tables.save(documented);
+    columns.save(describedColumn(documented.getId(), "reading_value", "Sensor reading value at capture time."));
+
+    CatalogTable sparse = new CatalogTable();
+    sparse.setDatabaseId(db.getId());
+    sparse.setName("widget_telemetry_raw");
+    sparse.setUsageCount(0);
+    sparse = tables.save(sparse);
+    columns.save(describedColumn(sparse.getId(), "reading_value", null));
+
+    PipelineContext ctx = new PipelineContext();
+    ctx.setPrompt("Show widget telemetry readings");
+    stages.semanticSearch(ctx);
+
+    List<String> order = ctx.getResolvedTables().stream().map(ResolvedTableModel::getName).toList();
+    int documentedIndex = order.indexOf("widget_telemetry");
+    int sparseIndex = order.indexOf("widget_telemetry_raw");
+    assertThat(documentedIndex)
+        .as("Both tables match the question equally well on name/columns; the fully-described one "
+            + "should rank first purely on documentation completeness. Resolved order: " + order)
+        .isGreaterThanOrEqualTo(0);
+    if (sparseIndex >= 0) {
+      assertThat(documentedIndex).isLessThan(sparseIndex);
+    }
+  }
+
+  private static CatalogColumn describedColumn(String tableId, String name, String description) {
+    CatalogColumn col = new CatalogColumn();
+    col.setTableId(tableId);
+    col.setName(name);
+    col.setDataType("STRING");
+    col.setDescription(description);
+    col.setPosition(0);
+    return col;
   }
 
   @Test
@@ -611,6 +666,28 @@ class LargeCatalogRetrievalTest {
     assertThat(response.getTable().getRows()).isNotEmpty();
     assertThat(response.getWarnings())
         .anyMatch(w -> w.contains("catalog metadata") && w.contains("classification"));
+    assertThat(response.getConfidence().getOverall())
+        .as("CDE has an explicit abbreviation.maps_to_classification=\"critical\" mapping, so this "
+            + "should use it directly (confidence 1.0), not fuzzy-match the abbreviation's text")
+        .isEqualTo(1.0);
+  }
+
+  @Test
+  void governanceQuestionFallsBackToFuzzyMatchingWhenNoExplicitClassificationMappingIsSet() {
+    abbreviation("PII_FLAG", "governance", "Restricted Personal Data");
+
+    PipelineContext ctx = new PipelineContext();
+    ctx.setPrompt("What % of PII_FLAG are active?");
+
+    var response = stages.answerGovernanceQuestion(ctx);
+
+    assertThat(response)
+        .as("No maps_to_classification is set on PII_FLAG, so this must fall back to fuzzy-matching "
+            + "its expansion (\"Restricted Personal Data\") against the catalog's distinct "
+            + "classifications, matching \"restricted\"")
+        .isNotNull();
+    assertThat(response.getConfidence().getOverall()).isLessThan(1.0);
+    assertThat(response.getWarnings()).anyMatch(w -> w.contains("restricted"));
   }
 
   @Test

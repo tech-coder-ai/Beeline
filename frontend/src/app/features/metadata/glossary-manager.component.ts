@@ -1,6 +1,7 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { ApiService } from '../../core/api.service';
 import { Abbreviation, BusinessRule, BusinessTerm, GlossaryTerm } from '../../core/models';
 
@@ -13,7 +14,7 @@ const EMPTY_BUSINESS_TERM: BusinessTerm = {
 };
 
 const EMPTY_ABBREVIATION: Abbreviation = {
-  abbreviation: '', entity: '', value: '', description: '',
+  abbreviation: '', entity: '', value: '', description: '', maps_to_classification: '',
 };
 
 const EMPTY_BUSINESS_RULE: BusinessRule = {
@@ -22,7 +23,7 @@ const EMPTY_BUSINESS_RULE: BusinessRule = {
 
 @Component({
   selector: 'bl-glossary-manager',
-  imports: [FormsModule, MatIconModule],
+  imports: [FormsModule, MatIconModule, MatTooltipModule],
   templateUrl: './glossary-manager.component.html',
   styleUrl: './glossary-manager.component.scss',
 })
