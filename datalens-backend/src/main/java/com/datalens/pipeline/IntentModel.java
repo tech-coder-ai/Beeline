@@ -24,13 +24,4 @@ public class IntentModel {
   private boolean followUp;
   @JsonProperty("needs_data")
   private boolean needsData = true;
-  /**
-   * True when the question is about the catalog's own governance metadata (a count or
-   * percentage of tables/columns by classification, tag, or activity - e.g. "what % of Critical
-   * Data Elements are active") rather than about business data values. These are answered
-   * directly from catalog_tables/catalog_columns, not by generating SQL against the analytics
-   * connector, since the concept named (e.g. "CDE") usually isn't a real table or column there.
-   */
-  @JsonProperty("is_governance_question")
-  private boolean governanceQuestion;
 }

@@ -775,130 +775,6 @@ public class PipelineStages {
     return table;
   }
 
-  /**
-   * Answers a question about the catalog's own governance metadata (e.g. "what % of Critical Data
-   * Elements are active") directly from catalog_tables/catalog_columns, instead of routing it
-   * through the analytics-connector plan/SQL pipeline. The concept named in these questions (e.g.
-   * "CDE") is almost never a real table or column in the actual data warehouse - it's a
-   * classification/tag applied to columns in the catalog - so asking the LLM to write SQL against
-   * it produces nonsense. Returns null when no classification/tag can be confidently matched, so
-   * the caller can fall back to the normal pipeline.
-   */
-  public DataLensResponseDto answerGovernanceQuestion(PipelineContext ctx) {
-    String question = ctx.effectivePrompt();
-    Set<String> qTokens = tokens(question);
-
-    String conceptPhrase = null;
-    String conceptLabel = null;
-    String explicitClassification = null;
-    for (Abbreviation abbr : abbreviationRepo.findByStatusOrderByAbbreviationAsc("approved")) {
-      if (mentionsAny(qTokens, abbr.getAbbreviation())) {
-        conceptPhrase = abbr.getValue();
-        conceptLabel = abbr.getAbbreviation() + " (" + abbr.getValue() + ")";
-        if (abbr.getMapsToClassification() != null && !abbr.getMapsToClassification().isBlank()) {
-          explicitClassification = abbr.getMapsToClassification();
-        }
-        break;
-      }
-    }
-    if (conceptPhrase == null) {
-      for (GlossaryTerm term : glossary.findAll()) {
-        if (!"approved".equals(term.getStatus()) || !mentionsAny(qTokens, term.getTerm())) continue;
-        conceptPhrase = term.getTerm();
-        conceptLabel = term.getTerm();
-        break;
-      }
-    }
-    if (conceptPhrase == null || conceptPhrase.isBlank()) return null;
-
-    List<String> classifications = columns.findDistinctClassifications();
-    Set<String> conceptTokens = tokens(conceptPhrase);
-    String matchedClassification = null;
-    double bestScore = 0;
-    // A steward-configured mapping (abbreviation.maps_to_classification) is authoritative - skip
-    // fuzzy text matching entirely when one is set, since it's exact by construction.
-    if (explicitClassification != null && classifications.contains(explicitClassification)) {
-      matchedClassification = explicitClassification;
-      bestScore = 1.0;
-    }
-    for (String candidate : matchedClassification != null ? List.<String>of() : classifications) {
-      double s = score(conceptPhrase, conceptTokens, candidate);
-      if (s > bestScore) {
-        bestScore = s;
-        matchedClassification = candidate;
-      }
-    }
-
-    List<CatalogColumn> matched;
-    String matchedOn;
-    if (matchedClassification != null && bestScore > 0.35) {
-      matched = columns.findByClassification(matchedClassification);
-      matchedOn = "classification \"" + matchedClassification + "\"";
-    } else {
-      matched = new ArrayList<>();
-      String needle = conceptPhrase.toLowerCase(Locale.ROOT);
-      for (CatalogColumn c : columns.findAll()) {
-        if (tagsText(c.getTags()).toLowerCase(Locale.ROOT).contains(needle)) matched.add(c);
-      }
-      matchedOn = "tag \"" + conceptPhrase + "\"";
-    }
-    if (matched.isEmpty()) return null;
-
-    Map<String, CatalogTable> tableById = new HashMap<>();
-    Set<String> tableIds = new HashSet<>();
-    for (CatalogColumn c : matched) if (c.getTableId() != null) tableIds.add(c.getTableId());
-    for (CatalogTable t : tables.findAllById(tableIds)) tableById.put(t.getId(), t);
-
-    int total = matched.size();
-    int activeCount = 0;
-    List<Map<String, Object>> rows = new ArrayList<>();
-    for (CatalogColumn c : matched) {
-      CatalogTable t = tableById.get(c.getTableId());
-      boolean tableActive = t != null && !Boolean.FALSE.equals(t.getIsActive());
-      if (tableActive) activeCount++;
-      Map<String, Object> row = new HashMap<>();
-      row.put("table", t != null ? t.getName() : "—");
-      row.put("column", c.getName());
-      row.put("classification", c.getClassification() != null ? c.getClassification() : "—");
-      row.put("table_active", tableActive ? "yes" : "no");
-      rows.add(row);
-    }
-    double pct = total == 0 ? 0.0 : (activeCount * 100.0 / total);
-
-    DataLensResponseDto r = new DataLensResponseDto();
-    r.setKind("answer");
-    r.setSummary(
-        String.format(
-            "%.1f%% of data elements matching %s are on active tables (%d of %d), resolved from \"%s\" via the catalog's glossary/abbreviations.",
-            pct, matchedOn, activeCount, total, conceptLabel));
-    r.setVisualization("grid");
-    KpiCardDto card = new KpiCardDto();
-    card.setLabel("Active " + conceptLabel);
-    card.setValue(String.format("%.1f%%", pct));
-    card.setRawValue(pct);
-    card.setUnit("%");
-    r.getCards().add(card);
-    TableSpecDto table = new TableSpecDto();
-    table.getColumns().add(metadataColumn("table", "Table"));
-    table.getColumns().add(metadataColumn("column", "Column"));
-    table.getColumns().add(metadataColumn("classification", "Classification"));
-    table.getColumns().add(metadataColumn("table_active", "Table active"));
-    table.setRows(rows);
-    table.setTotalRows(rows.size());
-    r.setTable(table);
-    ConfidenceBreakdownDto confidence = new ConfidenceBreakdownDto();
-    confidence.setMetadata(bestScore > 0 ? bestScore : 0.5);
-    confidence.setOverall(bestScore > 0 ? bestScore : 0.5);
-    r.setConfidence(confidence);
-    r.getWarnings()
-        .add(
-            "Answered directly from catalog metadata ("
-                + matchedOn
-                + "), not from the analytics data source - \"active\" means the column's table is"
-                + " marked active in the catalog.");
-    return r;
-  }
-
   private static TableColumnDto metadataColumn(String field, String header) {
     TableColumnDto col = new TableColumnDto();
     col.setField(field);
@@ -1585,20 +1461,10 @@ public class PipelineStages {
     return sb.toString();
   }
 
-  private static final Pattern GOVERNANCE_HINT =
-      Pattern.compile(
-          "(?i)\\b(classified|classification|critical data element|\\bcde\\b|pii (?:columns|fields)"
-              + "|undocumented|percent(?:age)? of|% of|data element)\\b");
-
   private static IntentModel heuristicIntent(String text) {
     IntentModel intent = new IntentModel();
     String lowered = text.toLowerCase(Locale.ROOT);
-    if (GOVERNANCE_HINT.matcher(lowered).find()) {
-      intent.getIntentTypes().set(0, "catalog_governance");
-      intent.setGovernanceQuestion(true);
-      intent.setNeedsData(false);
-      intent.setConfidence(0.5);
-    } else if (lowered.contains("table") || lowered.contains("column") || lowered.contains("metadata")) {
+    if (lowered.contains("table") || lowered.contains("column") || lowered.contains("metadata")) {
       intent.getIntentTypes().set(0, "metadata_question");
       intent.setNeedsData(false);
       intent.setConfidence(0.55);

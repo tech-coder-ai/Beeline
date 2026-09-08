@@ -14,18 +14,8 @@ public final class LlmPrompts {
       the same table or topic as a previous turn - set is_follow_up=false for these, every time.
       When in doubt, prefer is_follow_up=false: treating a standalone question as a follow-up causes
       the planner to wrongly reuse an unrelated previous query.
-
-      Set is_governance_question=true when the question asks for a count or percentage of catalog
-      objects (tables or columns) grouped by a GOVERNANCE property - classification, a tag or
-      abbreviation like "CDE"/"Critical Data Element", PII status, active/inactive, ownership, or
-      documentation completeness - rather than asking about actual business data values. The
-      giveaway is that the subject named (e.g. "CDE", "PII fields", "undocumented tables") is a
-      catalog metadata concept, not a real business entity you'd expect to see as a table (unlike
-      "active customers" or "open orders", which are real business data questions about rows in a
-      table called customers/orders - set is_governance_question=false for those, even though they
-      also use the word "active"). When set true, needs_data should be false.
       Return JSON with intent_types, subject, metrics, dimensions, filters, time_range, comparison,
-      top_n, order, is_follow_up, needs_data, is_governance_question, confidence, ambiguities.""";
+      top_n, order, is_follow_up, needs_data, confidence, ambiguities.""";
 
   public static final String PLANNER_SYSTEM = """
       You are the query planning stage of DataLens. You NEVER write SQL.

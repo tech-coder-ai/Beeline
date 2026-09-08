@@ -53,6 +53,13 @@ connectors:
         backoff_seconds: 2
       session_settings:
         hive.auto.convert.join: "false"
+    catalog_store:
+      type: catalog_store
+      display_name: DataLens Catalog (governance metadata)
+      # No host/credentials - this connector reads DataLens's own catalog tables
+      # (classification, tags, activity, business rules, abbreviations, glossary) through a
+      # dedicated small connection pool onto the same database as metadata_repository.url.
+      # Registered in code by CatalogStoreConnectorConfig; this entry only makes it selectable.
 # stellar: custom local endpoint, POST {systemPrompt, userMessage}
 # ------------------------------------------------------------
 llm:

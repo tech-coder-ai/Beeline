@@ -684,58 +684,61 @@ class LargeCatalogRetrievalTest {
         .doesNotContain("sales => Revenue");
   }
 
+  /**
+   * Governance questions ("what % of CDE are active") are no longer answered by a special-cased
+   * Java method - they're expected to flow through the SAME retrieval->plan->generateSql pipeline
+   * as any business question, by registering DataLens's own catalog tables as an ordinary,
+   * well-documented, connector-scoped data source (see the real
+   * com.datalens.connectors.catalogstore package). This mirrors that shape at a smaller scale:
+   * a dedicated connector whose only table is a documented "catalog_columns" table, so a CDE
+   * question should resolve it through ordinary documentation-weighted retrieval - no bespoke
+   * governance code path involved.
+   */
   @Test
-  void governanceQuestionAboutCdeActivePercentageIsAnsweredFromCatalogMetadataNotFakeSql() {
+  void catalogGovernanceQuestionResolvesTheCatalogStoreTableThroughOrdinaryRetrieval() {
+    CatalogDatabase catalogStoreDb = new CatalogDatabase();
+    catalogStoreDb.setConnectorId("catalog_store_test");
+    catalogStoreDb.setName("datalens_catalog");
+    catalogStoreDb = databases.save(catalogStoreDb);
+
+    CatalogTable catalogColumnsTable = new CatalogTable();
+    catalogColumnsTable.setDatabaseId(catalogStoreDb.getId());
+    catalogColumnsTable.setName("catalog_columns");
+    catalogColumnsTable.setDescription(
+        "Registry of every column known to the DataLens catalog: data type, classification, "
+            + "PII flag, and documentation status, one row per column of every cataloged table.");
+    catalogColumnsTable.setSteward("datalens-governance");
+    catalogColumnsTable.setUsageCount(0);
+    catalogColumnsTable = tables.save(catalogColumnsTable);
+    columns.save(
+        describedColumn(
+            catalogColumnsTable.getId(),
+            "classification",
+            "Governance classification (e.g. public, internal, confidential, critical, restricted)."));
+    columns.save(describedColumn(catalogColumnsTable.getId(), "is_active", "Whether the column's table is active."));
+
     PipelineContext ctx = new PipelineContext();
+    ctx.setConnectorId("catalog_store_test");
     ctx.setPrompt("What % of CDE are active?");
+    stages.semanticSearch(ctx);
 
-    var response = stages.answerGovernanceQuestion(ctx);
-
-    assertThat(response)
-        .as("CDE is a catalog classification (the primary key of every table here), not a real "
-            + "table/column in the warehouse - this must be answered from catalog metadata directly, "
-            + "never by asking the LLM to invent SQL against a nonexistent 'cde' table")
-        .isNotNull();
-    assertThat(response.getKind()).isEqualTo("answer");
-    assertThat(response.getSql()).isNull();
-    assertThat(response.getCards()).isNotEmpty();
-    assertThat(response.getCards().get(0).getRawValue()).isNotNull();
-    // 150 tables, 1 in 3 variants (_legacy) marked inactive -> 100 of 150 critical-classified
-    // primary keys are on active tables = 66.7%.
-    assertThat(response.getCards().get(0).getRawValue()).isCloseTo(66.7, org.assertj.core.data.Offset.offset(0.5));
-    assertThat(response.getTable()).isNotNull();
-    assertThat(response.getTable().getRows()).isNotEmpty();
-    assertThat(response.getWarnings())
-        .anyMatch(w -> w.contains("catalog metadata") && w.contains("classification"));
-    assertThat(response.getConfidence().getOverall())
-        .as("CDE has an explicit abbreviation.maps_to_classification=\"critical\" mapping, so this "
-            + "should use it directly (confidence 1.0), not fuzzy-match the abbreviation's text")
-        .isEqualTo(1.0);
+    assertThat(ctx.getResolvedTables())
+        .as("CDE (seeded in the shared fixture as an approved abbreviation for \"Critical Data "
+            + "Element\") plus this table's own strong documentation should be enough for ordinary "
+            + "retrieval to surface catalog_columns - no special-cased governance intent needed")
+        .anyMatch(t -> t.getName().equals("catalog_columns"));
   }
 
   @Test
-  void governanceQuestionFallsBackToFuzzyMatchingWhenNoExplicitClassificationMappingIsSet() {
-    abbreviation("PII_FLAG", "governance", "Restricted Personal Data");
-
+  void catalogStoreTableNeverLeaksIntoABusinessConnectorSSession() {
     PipelineContext ctx = new PipelineContext();
-    ctx.setPrompt("What % of PII_FLAG are active?");
+    ctx.setConnectorId("analytics_business_connector_unrelated_to_catalog_store");
+    ctx.setPrompt("What % of CDE are active?");
+    stages.semanticSearch(ctx);
 
-    var response = stages.answerGovernanceQuestion(ctx);
-
-    assertThat(response)
-        .as("No maps_to_classification is set on PII_FLAG, so this must fall back to fuzzy-matching "
-            + "its expansion (\"Restricted Personal Data\") against the catalog's distinct "
-            + "classifications, matching \"restricted\"")
-        .isNotNull();
-    assertThat(response.getConfidence().getOverall()).isLessThan(1.0);
-    assertThat(response.getWarnings()).anyMatch(w -> w.contains("restricted"));
-  }
-
-  @Test
-  void governanceQuestionWithNoMatchingClassificationReturnsNullSoCallerCanFallBack() {
-    PipelineContext ctx = new PipelineContext();
-    ctx.setPrompt("What % of flibbertigibbets are active?");
-
-    assertThat(stages.answerGovernanceQuestion(ctx)).isNull();
+    assertThat(ctx.getResolvedTables())
+        .as("A connector that was never seeded with catalog_columns must never resolve it, even "
+            + "when the question strongly matches it by name/documentation elsewhere")
+        .noneMatch(t -> t.getName().equals("catalog_columns"));
   }
 }

@@ -219,12 +219,6 @@ public class Orchestrator {
     ctx.setConnectorId(connector.connectorId());
     stages.refine(ctx);
     stages.intent(ctx);
-
-    if (ctx.getIntent() != null && ctx.getIntent().isGovernanceQuestion()) {
-      DataLensResponseDto governanceAnswer = stages.answerGovernanceQuestion(ctx);
-      if (governanceAnswer != null) return governanceAnswer;
-    }
-
     stages.semanticSearch(ctx);
 
     if (ctx.getIntent() != null && !ctx.getIntent().isNeedsData()) {
