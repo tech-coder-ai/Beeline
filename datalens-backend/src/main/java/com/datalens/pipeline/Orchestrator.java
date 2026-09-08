@@ -213,6 +213,10 @@ public class Orchestrator {
 
   private DataLensResponseDto runPipeline(PipelineContext ctx, ExecutionHistory history) throws Exception {
     AnalyticsConnector connector = connectors.get(ctx.getConnectorId());
+    // The request may not have specified a connector (falls back to connectors.default); write
+    // the resolved id back so every downstream stage scopes catalog lookups to the connector this
+    // request is actually running against, not an unresolved null.
+    ctx.setConnectorId(connector.connectorId());
     stages.refine(ctx);
     stages.intent(ctx);
     stages.semanticSearch(ctx);
@@ -220,7 +224,7 @@ public class Orchestrator {
     if (ctx.getIntent() != null && !ctx.getIntent().isNeedsData()) {
       return metadataAnswer(ctx);
     }
-    if (ctx.getResolvedTables().isEmpty() && !stages.catalogHasTables()) {
+    if (ctx.getResolvedTables().isEmpty() && !stages.catalogHasTables(ctx.getConnectorId())) {
       history.setStatus("blocked");
       DataLensResponseDto r = new DataLensResponseDto();
       r.setKind("answer");
@@ -236,12 +240,13 @@ public class Orchestrator {
 
     double threshold = ((Number) settings.get("pipeline.confidence.clarification_threshold", 0.65)).doubleValue();
     double overall = overallConfidence(ctx, false);
-    boolean mustClarify =
-        ((ctx.getIntent() != null
-                && !ctx.getIntent().getAmbiguities().isEmpty()
-                && overall < threshold
-                && (ctx.getClarificationAnswer() == null || ctx.getClarificationAnswer().isBlank()))
-            || ctx.getResolvedTables().isEmpty());
+    // Confidence alone is enough to trigger clarification - it used to also require the intent
+    // LLM to have explicitly flagged an ambiguity, but a low-quality catalog match with no
+    // flagged ambiguity (the LLM confidently misjudging the question, or simply not having an
+    // ambiguity-detection signal for it) still went straight to planning and produced garbage SQL.
+    boolean lowConfidence =
+        overall < threshold && (ctx.getClarificationAnswer() == null || ctx.getClarificationAnswer().isBlank());
+    boolean mustClarify = lowConfidence || ctx.getResolvedTables().isEmpty();
     if (mustClarify) {
       history.setStatus("clarification");
       DataLensResponseDto r = new DataLensResponseDto();
@@ -413,7 +418,18 @@ public class Orchestrator {
     double business = ctx.getConfidence().getOrDefault("business", 0.0);
     double metadata = ctx.getConfidence().getOrDefault("metadata", 0.0);
     double sql = ctx.getConfidence().getOrDefault("sql", 0.0);
-    double overall = planningDone ? 0.3 * business + 0.3 * metadata + 0.4 * sql : 0.5 * business + 0.5 * metadata;
+    // Pre-planning, "business" is just the intent LLM's self-reported confidence in having
+    // understood the question shape - it says nothing about whether the catalog actually has a
+    // good match for it, and LLMs tend to report confidence even when the match is weak.
+    // "metadata" (retrieval score) is the real signal for whether we're about to build SQL
+    // against the right table, so it's weighted more heavily here to avoid a confidently-worded
+    // question masking a bad catalog match.
+    double preplanMetadataWeight =
+        ((Number) settings.get("pipeline.confidence.preplan_metadata_weight", 0.7)).doubleValue();
+    double overall =
+        planningDone
+            ? 0.3 * business + 0.3 * metadata + 0.4 * sql
+            : (1 - preplanMetadataWeight) * business + preplanMetadataWeight * metadata;
     if (ctx.getLibraryMatch() != null) overall = Math.max(overall, ctx.getLibraryMatch().getSimilarity());
     ctx.getConfidence().put("overall", overall);
     return overall;

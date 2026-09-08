@@ -60,6 +60,13 @@ class SQLGenerator:
                     + (f": {c['description']}" if c.get("description") else "")
                     for c in t.columns
                 )
+                + (f"\n  Sample rows:\n{t.sample_rows_text()}" if t.sample_records else "")
+                + (
+                    f"\n  Calculated fields (NOT real columns - inline the SQL expression directly,"
+                    f" wrapped in parentheses, aliased AS <name> when selected):\n"
+                    f"{t.calculated_fields_text()}"
+                    if t.calculated_fields else ""
+                )
                 for t in ctx.resolved_tables
             )
             user_message = (
@@ -80,7 +87,9 @@ class SQLGenerator:
         except Exception as exc:  # noqa: BLE001
             logger.warning("SQL LLM failed (%s); using deterministic builder", exc)
 
-        ctx.sql = self.build_deterministic(plan, self._column_types(ctx))
+        ctx.sql = self.build_deterministic(
+            plan, self._column_types(ctx), self._calculated_field_expressions(ctx)
+        )
 
     @staticmethod
     def _column_types(ctx: PipelineContext) -> dict[str, str]:
@@ -97,14 +106,37 @@ class SQLGenerator:
         return types
 
     @staticmethod
-    def build_deterministic(plan: ExecutionPlan, column_types: dict[str, str] | None = None) -> str:
+    def _calculated_field_expressions(ctx: PipelineContext) -> dict[str, str]:
+        expressions: dict[str, str] = {}
+        for table in ctx.resolved_tables:
+            for calc in table.calculated_fields:
+                name = str(calc.get("name", ""))
+                expression = str(calc.get("expression", ""))
+                if not name or not expression:
+                    continue
+                expressions[f"{table.qualified_name}.{name}".lower()] = expression
+                expressions[name.lower()] = expression
+        return expressions
+
+    @staticmethod
+    def build_deterministic(
+        plan: ExecutionPlan,
+        column_types: dict[str, str] | None = None,
+        calculated_fields: dict[str, str] | None = None,
+    ) -> str:
         """Assemble SQL directly from the plan - no LLM involved."""
         column_types = column_types or {}
+        calculated_fields = calculated_fields or {}
+
         def qident(qualified: str) -> str:
             return ".".join(f"`{p}`" for p in qualified.split("."))
 
         def col_ref(qualified: str) -> str:
-            # db.table.column -> `db`.`table`.`column`; bare aliases pass through
+            # calculated field -> inline its SQL expression; db.table.column -> `db`.`table`.`column`;
+            # bare aliases pass through
+            expression = calculated_fields.get(qualified.lower())
+            if expression:
+                return f"({expression})"
             return qident(qualified) if "." in qualified else f"`{qualified}`"
 
         select_parts: list[str] = [col_ref(c) + f" AS `{c.split('.')[-1]}`" for c in plan.columns]

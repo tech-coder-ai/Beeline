@@ -93,6 +93,7 @@ class TableOut(BaseModel):
     partition_columns: list | None
     last_synced_at: datetime | None
     usage_count: int
+    is_enabled: bool = True
     database_name: str | None = None
     column_count: int = 0
 
@@ -101,6 +102,7 @@ class TableOut(BaseModel):
 
 class TableDetailOut(TableOut):
     columns: list[ColumnOut] = Field(default_factory=list)
+    sample_records: list[dict] = Field(default_factory=list)
 
 
 class TableUpdate(BaseModel):
@@ -110,6 +112,35 @@ class TableUpdate(BaseModel):
     tags: list[str] | None = None
     classification: str | None = None
     canonical_name: str | None = None
+    is_enabled: bool | None = None
+
+
+class CalculatedFieldIn(BaseModel):
+    table_id: str
+    name: str
+    expression: str
+    description: str | None = None
+
+
+class CalculatedFieldUpdate(BaseModel):
+    name: str | None = None
+    expression: str | None = None
+    description: str | None = None
+    is_active: bool | None = None
+
+
+class CalculatedFieldOut(BaseModel):
+    id: str
+    table_id: str
+    name: str
+    expression: str
+    description: str | None
+    is_active: bool
+    source: str
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
 class GlossaryHintIn(BaseModel):

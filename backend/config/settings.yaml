@@ -53,6 +53,13 @@ connectors:
         backoff_seconds: 2
       session_settings:
         hive.auto.convert.join: "false"
+    catalog_store:
+      type: catalog_store
+      display_name: DataLens Catalog (governance metadata)
+      # No host/credentials - this connector reads DataLens's own catalog tables
+      # (classification, tags, activity, business rules, abbreviations, glossary) through a
+      # dedicated small connection pool onto the same database as metadata_repository.url.
+      # Registered in code by CatalogStoreConnectorConfig; this entry only makes it selectable.
 # stellar: custom local endpoint, POST {systemPrompt, userMessage}
 # ------------------------------------------------------------
 llm:
@@ -81,6 +88,9 @@ pipeline:
   confidence:
     clarification_threshold: 0.65   # below this the bot asks, never guesses
     autoexecute_threshold: 0.85     # below this show query preview first
+    preplan_metadata_weight: 0.7    # pre-planning confidence = this*metadata + (1-this)*business;
+                                     # weighted toward metadata (retrieval score) since intent's own
+                                     # self-reported confidence says nothing about catalog match quality
   query_preview:
     enabled: true                   # legacy; use manual_review instead
     manual_review: true             # true = show preview and wait for user; false = auto-review + execute
@@ -96,6 +106,17 @@ pipeline:
   query_library:
     enabled: true
     reuse_similarity_threshold: 0.82
+  retrieval:
+    # Tuned for catalog scale, not business meaning - business/functional knowledge lives in the
+    # catalog's glossary/synonym/business_term/business_rule tables, not here.
+    max_tables: 6                     # tables kept after ranking, regardless of catalog size
+    max_columns_per_table: 40         # columns kept per resolved table on wide tables
+    candidate_shortlist_size: 30      # tables kept after the cheap name/description pass,
+                                       # before the (costlier) column-level rescoring pass
+    usage_bonus_cap: 1000             # usage_count above this contributes no further ranking bonus
+    usage_bonus_weight: 0.0002        # per-usage-count ranking bonus (max bonus = cap * weight)
+    documentation_bonus_weight: 0.12  # max ranking bonus for a fully-described table/columns -
+                                       # rewards steward documentation effort over a lucky name match
 
 # ------------------------------------------------------------
 # Guard rails - read-only, always on, not user-disableable
@@ -150,6 +171,9 @@ metadata_sync:
   collect_distinct_counts: true
   collect_null_percentages: true
   max_tables_per_run: 500
+  collect_sample_records: true      # harvest distinct sample rows for LLM grounding
+  sample_records_per_table: 10
+  sample_records_timeout_seconds: 20
 
 # ------------------------------------------------------------
 # LLM metadata enrichment

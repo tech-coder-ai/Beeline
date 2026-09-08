@@ -6,9 +6,9 @@ import java.nio.file.Path;
 import java.util.Locale;
 
 /** Converts metadata_repository.url (SQLAlchemy-style) to JDBC connection settings. */
-final class MetadataRepositoryJdbc {
+public final class MetadataRepositoryJdbc {
 
-  record Config(
+  public record Config(
       String jdbcUrl,
       String username,
       String password,
@@ -17,7 +17,7 @@ final class MetadataRepositoryJdbc {
 
   private MetadataRepositoryJdbc() {}
 
-  static Config fromSettings(DataLensSettings settings, Path backendRoot) {
+  public static Config fromSettings(DataLensSettings settings, Path backendRoot) {
     String url = string(settings.get("metadata_repository.url", ""));
     if (url.isBlank()) {
       throw new IllegalStateException("metadata_repository.url is required in settings.yaml");

@@ -82,6 +82,24 @@
   .table-name { font-weight: 600; font-size: 13.5px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
 
+.table-card.disabled-entity {
+  opacity: 0.55;
+}
+
+.eye-toggle {
+  flex-shrink: 0;
+
+  &.active { color: var(--bl-accent); }
+  &:not(.active) { color: var(--bl-text-muted); }
+}
+
+.drawer-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
 .table-desc {
   font-size: 12px;
   margin: 0;
@@ -110,7 +128,7 @@
   top: 12px;
   right: 12px;
   bottom: 12px;
-  width: min(480px, calc(100vw - 24px));
+  width: min(760px, calc(100vw - 24px));
   z-index: 21;
   padding: 20px;
   overflow-y: auto;
@@ -276,6 +294,17 @@
 .small { font-size: 12px; }
 
 .bl-table { font-size: 12px; }
+
+.sample-table-scroll {
+  overflow-x: auto;
+  border-radius: 8px;
+
+  .bl-table {
+    white-space: nowrap;
+
+    th, td { padding: 6px 10px; }
+  }
+}
 
 .field-grid {
   display: grid;

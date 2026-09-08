@@ -20,7 +20,7 @@
 
     <div class="table-grid">
       @for (table of filteredTables(); track table.id) {
-        <div class="table-card glass-card" (click)="openTable(table)">
+        <div class="table-card glass-card" [class.disabled-entity]="!table.is_enabled" (click)="openTable(table)">
           <div class="table-card-header">
             <mat-icon>table_chart</mat-icon>
             <span class="table-name">{{ table.canonical_name || table.name }}</span>
@@ -32,6 +32,14 @@
                 {{ table.classification }}
               </span>
             }
+            <button
+              class="icon-btn eye-toggle"
+              [class.active]="table.is_enabled"
+              [matTooltip]="table.is_enabled ? 'Included in SQL generation — click to exclude' : 'Excluded from SQL generation — click to include'"
+              (click)="toggleEnabled(table, $event)"
+            >
+              <mat-icon>{{ table.is_enabled ? 'visibility' : 'visibility_off' }}</mat-icon>
+            </button>
           </div>
           <p class="table-desc muted">{{ table.description || 'No description yet' }}</p>
           <div class="table-meta">
@@ -62,8 +70,19 @@
           }
           <span class="chip neutral">{{ table.table_type }}</span>
           @if (table.classification) { <span class="chip">{{ table.classification }}</span> }
+          @if (!table.is_enabled) { <span class="chip bad">Excluded from SQL generation</span> }
         </div>
-        <button class="icon-btn" (click)="closeDrawer()"><mat-icon>close</mat-icon></button>
+        <div class="drawer-header-actions">
+          <button
+            class="icon-btn eye-toggle"
+            [class.active]="table.is_enabled"
+            [matTooltip]="table.is_enabled ? 'Included in SQL generation — click to exclude' : 'Excluded from SQL generation — click to include'"
+            (click)="toggleEnabled(table, $event)"
+          >
+            <mat-icon>{{ table.is_enabled ? 'visibility' : 'visibility_off' }}</mat-icon>
+          </button>
+          <button class="icon-btn" (click)="closeDrawer()"><mat-icon>close</mat-icon></button>
+        </div>
       </div>
 
       <div class="drawer-section">
@@ -292,6 +311,72 @@
         }
       </div>
 
+      <div class="drawer-section calc-fields-section">
+        <div class="section-label">
+          Calculated fields
+          @if (!showCalcFieldForm()) {
+            <button class="icon-btn" matTooltip="Add calculated field" (click)="startCalcFieldForm()">
+              <mat-icon>add_link</mat-icon>
+            </button>
+          }
+        </div>
+        <p class="enrich-help muted">
+          Virtual columns defined by a SQL expression (e.g. <span class="mono">(revenue - cost) / NULLIF(revenue, 0)</span>).
+          Not real columns in the source system - the AI inlines the expression directly when the question calls for it.
+        </p>
+
+        @if (calculatedFields().length) {
+          <div class="rel-list">
+            @for (field of calculatedFields(); track field.id) {
+              <div class="rel-card">
+                <div class="rel-main">
+                  <span class="rel-line mono">{{ field.name }} = {{ field.expression }}</span>
+                  @if (field.description) {
+                    <span class="rel-meta muted">{{ field.description }}</span>
+                  }
+                </div>
+                <button class="icon-btn" matTooltip="Delete calculated field" (click)="deleteCalcField(field)">
+                  <mat-icon>delete</mat-icon>
+                </button>
+              </div>
+            }
+          </div>
+        } @else if (!showCalcFieldForm()) {
+          <p class="muted small">No calculated fields defined for this table.</p>
+        }
+
+        @if (showCalcFieldForm()) {
+          <div class="rel-form">
+            <label class="field-label muted">Field name</label>
+            <input class="text-input mono" placeholder="e.g. profit_margin" [(ngModel)]="calcFieldName" />
+            <label class="field-label muted">SQL expression</label>
+            <textarea
+              class="text-input mono"
+              rows="2"
+              placeholder="e.g. (revenue - cost) / NULLIF(revenue, 0)"
+              [(ngModel)]="calcFieldExpression"
+            ></textarea>
+            <label class="field-label muted">Description</label>
+            <textarea
+              class="text-input"
+              rows="2"
+              placeholder="What this represents, for the AI to decide when to use it"
+              [(ngModel)]="calcFieldDescription"
+            ></textarea>
+            <div class="drawer-actions">
+              <button
+                class="primary-btn small-btn"
+                [disabled]="savingCalcField() || !calcFieldName.trim() || !calcFieldExpression.trim()"
+                (click)="saveCalcField()"
+              >
+                @if (savingCalcField()) { Saving… } @else { Save field }
+              </button>
+              <button class="ghost-btn small-btn" (click)="cancelCalcFieldForm()">Cancel</button>
+            </div>
+          </div>
+        }
+      </div>
+
       <div class="drawer-section">
         <div class="section-label">Columns ({{ table.columns?.length || 0 }})</div>
         <table class="bl-table">
@@ -350,6 +435,35 @@
           </tbody>
         </table>
       </div>
+
+      @if (table.sample_records?.length) {
+        <div class="drawer-section">
+          <div class="section-label">Sample records ({{ table.sample_records?.length }})</div>
+          <p class="enrich-help muted">
+            Distinct rows harvested during metadata sync, used to ground the AI when generating SQL.
+          </p>
+          <div class="sample-table-scroll">
+            <table class="bl-table mono">
+              <thead>
+                <tr>
+                  @for (col of sampleRecordColumns(table); track col) {
+                    <th>{{ col }}</th>
+                  }
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of table.sample_records; track $index) {
+                  <tr>
+                    @for (col of sampleRecordColumns(table); track col) {
+                      <td>{{ formatCellValue(row[col]) }}</td>
+                    }
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      }
     </div>
   }
 </div>

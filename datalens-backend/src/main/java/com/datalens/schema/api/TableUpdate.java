@@ -10,4 +10,5 @@ public record TableUpdate(
     String steward,
     java.util.List<String> tags,
     String classification,
-    String canonicalName) {}
+    String canonicalName,
+    Boolean isEnabled) {}

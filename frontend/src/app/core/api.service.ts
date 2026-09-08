@@ -5,6 +5,7 @@ import {
   ApprovalItem,
   AuditLogEntry,
   DataLensResponse,
+  CalculatedField,
   CatalogDatabase,
   CatalogRelationship,
   CatalogTable,
@@ -15,6 +16,7 @@ import {
   DashboardWidget,
   ExecutionLog,
   BusinessTerm,
+  BusinessRule,
   Abbreviation,
   GlossaryTerm,
   SavedQuery,
@@ -152,6 +154,32 @@ export class ApiService {
     return this.http.delete<{ deleted: string }>(`${API}/metadata/relationships/${relationshipId}`);
   }
 
+  listCalculatedFields(tableId: string): Observable<CalculatedField[]> {
+    return this.http.get<CalculatedField[]>(`${API}/metadata/calculated-fields`, {
+      params: { table_id: tableId },
+    });
+  }
+
+  createCalculatedField(body: {
+    table_id: string;
+    name: string;
+    expression: string;
+    description?: string | null;
+  }): Observable<CalculatedField> {
+    return this.http.post<CalculatedField>(`${API}/metadata/calculated-fields`, body);
+  }
+
+  updateCalculatedField(
+    fieldId: string,
+    body: Partial<{ name: string; expression: string; description: string | null; is_active: boolean }>,
+  ): Observable<CalculatedField> {
+    return this.http.patch<CalculatedField>(`${API}/metadata/calculated-fields/${fieldId}`, body);
+  }
+
+  deleteCalculatedField(fieldId: string): Observable<{ deleted: string }> {
+    return this.http.delete<{ deleted: string }>(`${API}/metadata/calculated-fields/${fieldId}`);
+  }
+
   // ------------------------------------------------------------- approvals
   listApprovals(status = 'pending', entityType?: string): Observable<ApprovalItem[]> {
     const params: Record<string, string> = { status };
@@ -248,6 +276,25 @@ export class ApiService {
 
   deleteAbbreviation(id: string): Observable<unknown> {
     return this.http.delete(`${API}/abbreviations/${id}`);
+  }
+
+  listBusinessRules(search?: string, scope?: string): Observable<BusinessRule[]> {
+    const params: Record<string, string> = {};
+    if (search) params['search'] = search;
+    if (scope) params['scope'] = scope;
+    return this.http.get<BusinessRule[]>(`${API}/business-rules`, { params });
+  }
+
+  createBusinessRule(rule: BusinessRule): Observable<BusinessRule> {
+    return this.http.post<BusinessRule>(`${API}/business-rules`, rule);
+  }
+
+  updateBusinessRule(id: string, rule: BusinessRule): Observable<BusinessRule> {
+    return this.http.put<BusinessRule>(`${API}/business-rules/${id}`, rule);
+  }
+
+  deleteBusinessRule(id: string): Observable<unknown> {
+    return this.http.delete(`${API}/business-rules/${id}`);
   }
 
   // ------------------------------------------------------------- sql & queries

@@ -44,7 +44,10 @@ public class QueryLibraryService {
               });
       return;
     }
-    var existing = library.findByNormalizedQuestionAndConnectorId(normalized, ctx.getConnectorId());
+    var existing =
+        library.findByConnectorId(ctx.getConnectorId()).stream()
+            .filter(e -> normalized.equals(e.getNormalizedQuestion()))
+            .findFirst();
     if (existing.isPresent()) {
       QueryLibraryEntry e = existing.get();
       e.setSql(sql);

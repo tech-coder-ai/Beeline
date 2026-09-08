@@ -209,9 +209,11 @@ export interface CatalogTable {
   partition_columns?: string[] | null;
   last_synced_at?: string | null;
   usage_count: number;
+  is_enabled: boolean;
   database_name?: string;
   column_count: number;
   columns?: CatalogColumn[];
+  sample_records?: Record<string, unknown>[] | null;
 }
 
 export interface CatalogRelationship {
@@ -230,6 +232,18 @@ export interface CatalogRelationship {
   source: string;
   confidence?: number | null;
   is_approved: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface CalculatedField {
+  id: string;
+  table_id: string;
+  name: string;
+  expression: string;
+  description?: string | null;
+  is_active: boolean;
+  source: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -267,6 +281,24 @@ export interface Abbreviation {
   entity: string;
   value: string;
   description?: string | null;
+  /** When set, this abbreviation refers to a catalog classification (e.g. CDE -> "critical") for
+   * governance questions like "what % of CDE are active", answered from catalog metadata directly
+   * instead of fuzzy-matching `value` against whatever classification strings happen to exist. */
+  maps_to_classification?: string | null;
+  status?: string;
+  source?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface BusinessRule {
+  id?: string;
+  name: string;
+  scope: 'global' | 'table' | 'column';
+  entity?: string | null;
+  column_name?: string | null;
+  rule_type?: string | null;
+  statement: string;
   status?: string;
   source?: string;
   created_at?: string;

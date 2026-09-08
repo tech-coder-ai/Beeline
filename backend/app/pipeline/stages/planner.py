@@ -78,10 +78,21 @@ class QueryPlanner:
                 for c in table.columns
             )
             row_info = f", ~{table.row_count:,} rows" if table.row_count else ""
+            sample_block = (
+                f"\n  Sample rows:\n{table.sample_rows_text()}" if table.sample_records else ""
+            )
+            calc_block = (
+                f"\n  Calculated fields (virtual - reference as {table.qualified_name}.<name> like a "
+                f"normal column, the SQL expression is substituted automatically):\n"
+                f"{table.calculated_fields_text()}"
+                if table.calculated_fields else ""
+            )
             blocks.append(
                 f"TABLE {table.qualified_name}{row_info}"
                 + (f" - {table.description}" if table.description else "")
                 + f"\n{cols}"
+                + sample_block
+                + calc_block
             )
         return "\n\n".join(blocks)
 
@@ -119,6 +130,8 @@ class QueryPlanner:
         for table in ctx.resolved_tables:
             for col in table.columns:
                 known_columns.add(f"{table.qualified_name}.{col['name']}".lower())
+            for calc in table.calculated_fields:
+                known_columns.add(f"{table.qualified_name}.{calc['name']}".lower())
 
         removed: set[str] = set()
 

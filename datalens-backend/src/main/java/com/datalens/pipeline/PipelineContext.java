@@ -24,6 +24,7 @@ public class PipelineContext {
   private List<Map<String, Object>> glossaryContext = new ArrayList<>();
   private List<Map<String, Object>> businessTermContext = new ArrayList<>();
   private List<Map<String, Object>> metricContext = new ArrayList<>();
+  private List<Map<String, Object>> businessRuleContext = new ArrayList<>();
   private LibraryMatchModel libraryMatch;
   private ExecutionPlanModel plan;
   private String sql;

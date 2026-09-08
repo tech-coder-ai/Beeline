@@ -7,7 +7,8 @@ refresh; the NL pipeline only ever reads the repository.
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,6 +24,17 @@ from app.models.catalog import CatalogColumn, CatalogDatabase, CatalogTable, Syn
 logger = get_logger(__name__)
 
 _sync_lock = asyncio.Lock()
+
+
+def _jsonable(value):
+    """Coerces a raw driver value into something JSON-column-safe."""
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    return str(value)
 
 
 class MetadataSyncService:
@@ -55,6 +67,8 @@ class MetadataSyncService:
         max_tables = settings.get("metadata_sync.max_tables_per_run", 500)
         sample_limit = settings.get("metadata_sync.sample_values_per_column", 8)
         collect_stats = settings.get("metadata_sync.collect_distinct_counts", True)
+        collect_sample_records = settings.get("metadata_sync.collect_sample_records", True)
+        sample_records_limit = settings.get("metadata_sync.sample_records_per_table", 10)
         now = datetime.now(timezone.utc)
 
         provider = connector.metadata_provider
@@ -145,6 +159,8 @@ class MetadataSyncService:
 
                 if collect_stats:
                     await self._collect_statistics(db, connector, table, db_name, sample_limit)
+                if collect_sample_records:
+                    await self._collect_sample_records(connector, table, db_name, sample_records_limit)
                 tables_synced += 1
 
         # stale detection: tables no longer present upstream
@@ -187,6 +203,25 @@ class MetadataSyncService:
                     )
             except Exception as exc:  # noqa: BLE001 - stats are best-effort
                 logger.debug("stats skipped for %s.%s: %s", table.name, col.name, exc)
+
+    async def _collect_sample_records(self, connector: IAnalyticsConnector, table: CatalogTable,
+                                      db_name: str, limit: int) -> None:
+        """Harvests up to `limit` distinct whole rows so the LLM sees real value shapes
+        and cross-column patterns, not just per-column samples, when generating SQL."""
+        if limit <= 0:
+            return
+        quote = connector.dialect.quote_identifier
+        qualified = f"{quote(db_name)}.{quote(table.name)}"
+        sql = f"SELECT DISTINCT * FROM {qualified} LIMIT {limit}"
+        timeout = get_settings().get("metadata_sync.sample_records_timeout_seconds", 20)
+        try:
+            result = await connector.execute(sql, max_rows=limit, timeout_seconds=timeout)
+            table.sample_records = [
+                {col: _jsonable(value) for col, value in zip(result.columns, row)}
+                for row in result.rows
+            ]
+        except Exception as exc:  # noqa: BLE001 - sample rows are best-effort
+            logger.debug("sample records skipped for %s: %s", table.name, exc)
 
     async def refresh_table_stats(self, db: AsyncSession, table_id: str) -> dict:
         table = (
