@@ -1,8 +1,9 @@
 import { DecimalPipe } from '@angular/common';
 import { Component, computed, inject, input, signal } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { FeatureFlagService } from '../../core/feature-flags.service';
-import { DataLensResponse } from '../../core/models';
+import { DataLensResponse, LlmPromptTrace } from '../../core/models';
 import { SqlPanelComponent } from '../../shared/sql-panel.component';
 
 type Tab = 'sql' | 'warnings' | 'cost' | 'prompts';
@@ -10,7 +11,7 @@ type Tab = 'sql' | 'warnings' | 'cost' | 'prompts';
 /** Bottom expandable panel: SQL, warnings, cost/estimate details, and debug prompts. */
 @Component({
   selector: 'bl-chat-bottom-panel',
-  imports: [DecimalPipe, MatIconModule, SqlPanelComponent],
+  imports: [DecimalPipe, MatIconModule, MatTooltipModule, SqlPanelComponent],
   templateUrl: './chat-bottom-panel.component.html',
   styleUrl: './chat-bottom-panel.component.scss',
 })
@@ -21,6 +22,7 @@ export class ChatBottomPanelComponent {
   readonly expanded = signal(false);
   readonly activeTab = signal<Tab>('sql');
   readonly expandedPrompt = signal<string | null>(null);
+  readonly copiedAllPrompts = signal(false);
 
   readonly warningCount = computed(() => this.response()?.warnings.length ?? 0);
   readonly hasSql = computed(() => !!this.response()?.sql);
@@ -45,4 +47,20 @@ export class ChatBottomPanelComponent {
   promptKey(index: number, purpose: string): string {
     return `${index}-${purpose}`;
   }
+
+  copyAllPrompts(): void {
+    const prompts = this.response()?.prompts_used ?? [];
+    if (!prompts.length) return;
+    const text = prompts.map((p) => formatPromptTrace(p)).join('\n\n' + '='.repeat(60) + '\n\n');
+    navigator.clipboard.writeText(text);
+    this.copiedAllPrompts.set(true);
+    setTimeout(() => this.copiedAllPrompts.set(false), 1500);
+  }
+}
+
+function formatPromptTrace(p: LlmPromptTrace): string {
+  const header = `# ${p.purpose}${p.model ? ` (${p.model})` : ''}`;
+  const sections = [header, '## System', p.system_prompt ?? '', '## User', p.user_message ?? ''];
+  if (p.response) sections.push('## Response', p.response);
+  return sections.join('\n\n');
 }

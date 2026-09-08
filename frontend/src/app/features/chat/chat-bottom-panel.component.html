@@ -52,6 +52,13 @@
           </ul>
         }
         @case ('prompts') {
+          <div class="prompt-toolbar">
+            <span class="muted prompt-toolbar-hint">{{ promptCount() }} prompt{{ promptCount() === 1 ? '' : 's' }} in this run</span>
+            <button class="ghost-btn small" matTooltip="Copy all prompts" (click)="copyAllPrompts()">
+              <mat-icon>{{ copiedAllPrompts() ? 'check' : 'content_copy' }}</mat-icon>
+              {{ copiedAllPrompts() ? 'Copied' : 'Copy all' }}
+            </button>
+          </div>
           <div class="prompt-list">
             @for (p of response()?.prompts_used ?? []; track promptKey($index, p.purpose); let i = $index) {
               @let key = promptKey(i, p.purpose);
