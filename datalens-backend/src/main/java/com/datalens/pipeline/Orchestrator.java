@@ -213,6 +213,10 @@ public class Orchestrator {
 
   private DataLensResponseDto runPipeline(PipelineContext ctx, ExecutionHistory history) throws Exception {
     AnalyticsConnector connector = connectors.get(ctx.getConnectorId());
+    // The request may not have specified a connector (falls back to connectors.default); write
+    // the resolved id back so every downstream stage scopes catalog lookups to the connector this
+    // request is actually running against, not an unresolved null.
+    ctx.setConnectorId(connector.connectorId());
     stages.refine(ctx);
     stages.intent(ctx);
 
@@ -226,7 +230,7 @@ public class Orchestrator {
     if (ctx.getIntent() != null && !ctx.getIntent().isNeedsData()) {
       return metadataAnswer(ctx);
     }
-    if (ctx.getResolvedTables().isEmpty() && !stages.catalogHasTables()) {
+    if (ctx.getResolvedTables().isEmpty() && !stages.catalogHasTables(ctx.getConnectorId())) {
       history.setStatus("blocked");
       DataLensResponseDto r = new DataLensResponseDto();
       r.setKind("answer");

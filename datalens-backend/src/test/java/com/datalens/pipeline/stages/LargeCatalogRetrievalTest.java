@@ -547,6 +547,47 @@ class LargeCatalogRetrievalTest {
     }
   }
 
+  @Test
+  void retrievalNeverMixesTablesFromADifferentConnectorIntoOnePlan() {
+    CatalogDatabase primaryDb = new CatalogDatabase();
+    primaryDb.setConnectorId("primary_conn");
+    primaryDb.setName("primary_domain");
+    primaryDb = databases.save(primaryDb);
+
+    CatalogTable primaryTable = new CatalogTable();
+    primaryTable.setDatabaseId(primaryDb.getId());
+    primaryTable.setName("orders_ledger");
+    primaryTable.setDescription("Orders ledger for the primary connector's warehouse.");
+    primaryTable.setUsageCount(0);
+    tables.save(primaryTable);
+
+    CatalogDatabase otherDb = new CatalogDatabase();
+    otherDb.setConnectorId("other_conn");
+    otherDb.setName("other_domain");
+    otherDb = databases.save(otherDb);
+
+    CatalogTable otherTable = new CatalogTable();
+    otherTable.setDatabaseId(otherDb.getId());
+    otherTable.setName("orders_ledger");
+    // Same name/description as the primary connector's table and a much higher usage count, so
+    // if scoping were broken this one would win the ranking and leak across connectors.
+    otherTable.setDescription("Orders ledger for the primary connector's warehouse.");
+    otherTable.setUsageCount(1000);
+    tables.save(otherTable);
+
+    PipelineContext ctx = new PipelineContext();
+    ctx.setConnectorId("primary_conn");
+    ctx.setPrompt("Show orders ledger records");
+    stages.semanticSearch(ctx);
+
+    assertThat(ctx.getResolvedTables())
+        .as("A same-named, higher-usage table belonging to a different connector must never be "
+            + "resolved - the two tables live in physically separate databases, so mixing them into "
+            + "one plan would produce SQL that can't execute against either connection")
+        .allMatch(t -> t.getDatabase().equals("primary_domain"));
+    assertThat(ctx.getResolvedTables()).anyMatch(t -> t.getName().equals("orders_ledger"));
+  }
+
   private static CatalogColumn describedColumn(String tableId, String name, String description) {
     CatalogColumn col = new CatalogColumn();
     col.setTableId(tableId);

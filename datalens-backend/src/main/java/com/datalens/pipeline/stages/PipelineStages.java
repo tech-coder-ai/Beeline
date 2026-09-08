@@ -495,7 +495,7 @@ public class PipelineStages {
    */
   public void prepareSql(PipelineContext ctx, AnalyticsConnector connector) throws Exception {
     String dialect = connector.dialect().sqlglotDialect();
-    Set<String> known = knownTables();
+    Set<String> known = knownTables(ctx.getConnectorId());
     try {
       applySqlChecks(ctx, connector, dialect, known);
       return;
@@ -668,6 +668,24 @@ public class PipelineStages {
     return visualizationPlanner.run(ctx).toMap();
   }
 
+  /**
+   * Catalog rows aren't scoped by connector at the storage layer, but a chat session only ever
+   * queries ONE connector's physical database, so table/glossary/validation lookups must be
+   * filtered to that connector - otherwise the planner can mix tables from two different
+   * connectors into one plan (which can't be executed - they're separate connections), or leak a
+   * table that belongs to a connector the current session was never meant to see.
+   */
+  private List<CatalogDatabase> scopedDatabases(String connectorId) {
+    if (connectorId == null || connectorId.isBlank()) return databases.findAll();
+    return databases.findByConnectorId(connectorId);
+  }
+
+  private Set<String> scopedDatabaseIds(String connectorId) {
+    Set<String> ids = new HashSet<>();
+    for (CatalogDatabase db : scopedDatabases(connectorId)) ids.add(db.getId());
+    return ids;
+  }
+
   public ClarificationRequestDto clarification(PipelineContext ctx) {
     ClarificationRequestDto req = new ClarificationRequestDto();
     req.setQuestion("Which table or metric should I use?");
@@ -681,9 +699,10 @@ public class PipelineStages {
       }
     } else {
       Map<String, String> dbNames = new HashMap<>();
-      for (CatalogDatabase db : databases.findAll()) dbNames.put(db.getId(), db.getName());
+      Set<String> dbIds = scopedDatabaseIds(ctx.getConnectorId());
+      for (CatalogDatabase db : scopedDatabases(ctx.getConnectorId())) dbNames.put(db.getId(), db.getName());
       for (CatalogTable table :
-          tables.findByIsActiveTrueAndIsEnabledTrueOrderByUsageCountDescNameAsc().stream()
+          tables.findByDatabaseIdInAndIsActiveTrueAndIsEnabledTrueOrderByUsageCountDescNameAsc(dbIds).stream()
               .limit(5)
               .toList()) {
         String dbName = dbNames.getOrDefault(table.getDatabaseId(), "");
@@ -701,9 +720,9 @@ public class PipelineStages {
     return sqlReviewer.review(ctx, dialect);
   }
 
-  public Set<String> knownTables() {
+  public Set<String> knownTables(String connectorId) {
     Set<String> out = new HashSet<>();
-    for (CatalogDatabase db : databases.findAll()) {
+    for (CatalogDatabase db : scopedDatabases(connectorId)) {
       for (CatalogTable t : tables.findByDatabaseIdAndIsActiveTrueAndIsEnabledTrue(db.getId())) {
         out.add((db.getName() + "." + t.getName()).toLowerCase(Locale.ROOT));
       }
@@ -711,14 +730,15 @@ public class PipelineStages {
     return out;
   }
 
-  public boolean catalogHasTables() {
-    return tables.findAll().stream()
-        .anyMatch(t -> Boolean.TRUE.equals(t.getIsActive()) && !Boolean.FALSE.equals(t.getIsEnabled()));
+  public boolean catalogHasTables(String connectorId) {
+    return tables.existsByDatabaseIdInAndIsActiveTrueAndIsEnabledTrue(scopedDatabaseIds(connectorId));
   }
 
   public String buildMetadataSummary(PipelineContext ctx) {
     List<ResolvedTableModel> toShow =
-        isListAllTablesQuestion(ctx.effectivePrompt()) ? loadAllCatalogTables() : ctx.getResolvedTables();
+        isListAllTablesQuestion(ctx.effectivePrompt())
+            ? loadAllCatalogTables(ctx.getConnectorId())
+            : ctx.getResolvedTables();
     if (toShow.isEmpty()) {
       return "I couldn't find matching metadata in the catalog.";
     }
@@ -730,7 +750,9 @@ public class PipelineStages {
 
   public TableSpecDto buildMetadataTable(PipelineContext ctx) {
     List<ResolvedTableModel> toShow =
-        isListAllTablesQuestion(ctx.effectivePrompt()) ? loadAllCatalogTables() : ctx.getResolvedTables();
+        isListAllTablesQuestion(ctx.effectivePrompt())
+            ? loadAllCatalogTables(ctx.getConnectorId())
+            : ctx.getResolvedTables();
     TableSpecDto table = new TableSpecDto();
     if (toShow.isEmpty()) return table;
 
@@ -896,14 +918,18 @@ public class PipelineStages {
   }
 
   public List<ResolvedTableModel> metadataTablesForResponse(PipelineContext ctx) {
-    return isListAllTablesQuestion(ctx.effectivePrompt()) ? loadAllCatalogTables() : ctx.getResolvedTables();
+    return isListAllTablesQuestion(ctx.effectivePrompt())
+        ? loadAllCatalogTables(ctx.getConnectorId())
+        : ctx.getResolvedTables();
   }
 
-  private List<ResolvedTableModel> loadAllCatalogTables() {
+  private List<ResolvedTableModel> loadAllCatalogTables(String connectorId) {
     Map<String, String> dbNames = new HashMap<>();
-    for (CatalogDatabase db : databases.findAll()) dbNames.put(db.getId(), db.getName());
+    Set<String> dbIds = scopedDatabaseIds(connectorId);
+    for (CatalogDatabase db : scopedDatabases(connectorId)) dbNames.put(db.getId(), db.getName());
     List<ResolvedTableModel> out = new ArrayList<>();
-    for (CatalogTable table : tables.findByIsActiveTrueAndIsEnabledTrueOrderByUsageCountDescNameAsc()) {
+    for (CatalogTable table :
+        tables.findByDatabaseIdInAndIsActiveTrueAndIsEnabledTrueOrderByUsageCountDescNameAsc(dbIds)) {
       out.add(toResolvedTable(table, dbNames.getOrDefault(table.getDatabaseId(), ""), 1.0));
     }
     out.sort(
@@ -1033,10 +1059,12 @@ public class PipelineStages {
    */
   private void resolveTables(PipelineContext ctx, String search, Set<String> qTokens) {
     Map<String, String> dbNames = new HashMap<>();
-    for (CatalogDatabase db : databases.findAll()) dbNames.put(db.getId(), db.getName());
+    Set<String> dbIds = scopedDatabaseIds(ctx.getConnectorId());
+    for (CatalogDatabase db : scopedDatabases(ctx.getConnectorId())) dbNames.put(db.getId(), db.getName());
 
     List<Map.Entry<Double, CatalogTable>> coarse = new ArrayList<>();
-    for (CatalogTable table : tables.findByIsActiveTrueAndIsEnabledTrueOrderByUsageCountDescNameAsc()) {
+    for (CatalogTable table :
+        tables.findByDatabaseIdInAndIsActiveTrueAndIsEnabledTrueOrderByUsageCountDescNameAsc(dbIds)) {
       String dbName = dbNames.getOrDefault(table.getDatabaseId(), "");
       String candidate =
           table.getName()
@@ -1103,7 +1131,7 @@ public class PipelineStages {
     String key = SqlUtils.normalizeTableRef(answer.strip());
     if (!key.contains(".")) return;
     String[] parts = key.split("\\.", 2);
-    for (CatalogDatabase db : databases.findAll()) {
+    for (CatalogDatabase db : scopedDatabases(ctx.getConnectorId())) {
       if (!db.getName().equalsIgnoreCase(parts[0])) continue;
       CatalogTable table =
           tables.findByDatabaseIdAndName(db.getId(), parts[1])
