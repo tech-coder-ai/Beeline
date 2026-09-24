@@ -1,0 +1,6 @@
+spring:
+  application:
+    name: drools-sql-equivalence
+
+server:
+  port: 8085
