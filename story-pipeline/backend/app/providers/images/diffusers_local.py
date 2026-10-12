@@ -29,7 +29,8 @@ class DiffusersProvider:
 
     def __init__(self, cfg: ImageCfg):
         self.cfg = cfg
-        self.model = cfg.diffusers_model + (f"+ip:{cfg.ip_adapter}" if cfg.ip_adapter else "")
+        self.model = (cfg.diffusers_model + f"@{cfg.steps}steps/cfg{cfg.guidance}"
+                      + (f"+ip:{cfg.ip_adapter}" if cfg.ip_adapter else ""))
 
     def _load(self):
         with DiffusersProvider._lock:
@@ -43,7 +44,10 @@ class DiffusersProvider:
             cuda = torch.cuda.is_available() and self.cfg.device in ("auto", "cuda")
             dtype = (torch.bfloat16 if "flux" in self.cfg.diffusers_model.lower() else torch.float16) if cuda else torch.float32
             try:
-                pipe = AutoPipelineForText2Image.from_pretrained(self.cfg.diffusers_model, torch_dtype=dtype)
+                extra = {"variant": self.cfg.diffusers_variant} if self.cfg.diffusers_variant else {}
+                pipe = AutoPipelineForText2Image.from_pretrained(self.cfg.diffusers_model, torch_dtype=dtype, **extra)
+                if not cuda:
+                    pipe = pipe.to(dtype=torch.float32)  # fp16 weights must be upcast to run on CPU
             except Exception as exc:  # noqa: BLE001 - network/auth/missing model
                 raise ProviderError(f"could not load {self.cfg.diffusers_model}: {exc}", transient="connect" in str(exc).lower()) from exc
             if self.cfg.ip_adapter:

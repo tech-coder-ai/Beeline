@@ -38,10 +38,15 @@ models:
     max_source_chars: 24000       # truncate long sources to fit small context windows
     keep_alive: "5m"              # "0" unloads the LLM right after each call, freeing VRAM for video models
   image:
-    # comfyui | placeholder
-    # "placeholder" draws deterministic storyboard cards with Pillow so the
-    # whole pipeline runs on any machine. Switch to comfyui once it's installed.
+    # placeholder | diffusers | comfyui
+    # "placeholder" draws layout cards with Pillow (no AI) so the pipeline runs anywhere.
+    # "diffusers" runs a Hugging Face model in-process: FLUX.1-schnell (Apache 2.0) on a 24-48 GB GPU,
+    # or stabilityai/sd-turbo for CPU testing (check each model's license before monetising).
     provider: placeholder
+    diffusers_model: black-forest-labs/FLUX.1-schnell
+    diffusers_variant: ""
+    steps: 4
+    guidance: 0.0
     base_url: http://localhost:8188
     timeout_seconds: 600
     workflows:

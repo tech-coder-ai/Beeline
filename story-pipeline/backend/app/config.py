@@ -55,6 +55,7 @@ class ImageCfg(BaseModel):
     height: int = 768
     # diffusers provider
     diffusers_model: str = "black-forest-labs/FLUX.1-schnell"
+    diffusers_variant: str = ""   # e.g. "fp16": download half-size weights (they are upcast on CPU)
     steps: int = Field(4, ge=1, le=100)
     guidance: float = Field(0.0, ge=0, le=20)
     device: Literal["auto", "cuda", "cpu"] = "auto"
@@ -203,6 +204,12 @@ ENV_OVERRIDES: dict[str, tuple[str, type]] = {
     "SPA_LLM_API_KEY": ("models.llm.api_key", str),
     "SPA_IMAGE_PROVIDER": ("models.image.provider", str),
     "SPA_IMAGE_BASE_URL": ("models.image.base_url", str),
+    "SPA_IMAGE_MODEL": ("models.image.diffusers_model", str),
+    "SPA_IMAGE_VARIANT": ("models.image.diffusers_variant", str),
+    "SPA_IMAGE_STEPS": ("models.image.steps", int),
+    "SPA_IMAGE_GUIDANCE": ("models.image.guidance", float),
+    "SPA_IMAGE_WIDTH": ("models.image.width", int),
+    "SPA_IMAGE_HEIGHT": ("models.image.height", int),
     "SPA_VIDEO_PROVIDER": ("models.video.provider", str),
     "SPA_VIDEO_BASE_URL": ("models.video.base_url", str),
     "SPA_PUBLISH_PROVIDER": ("publishing.provider", str),
