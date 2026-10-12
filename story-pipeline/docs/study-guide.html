@@ -1,0 +1,477 @@
+<title>Story Pipeline Field Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: sticky contents rail on the left, one 70ch reading column; collapses to a single column on phones. */
+:root {
+  --paper: #f4f5f2;
+  --sheet: #ffffff;
+  --ink: #1a2320;
+  --ink-soft: #4e5b56;
+  --rule: #d9ddd7;
+  --teal: #0d6b66;
+  --teal-wash: #e2f0ee;
+  --marker: #b7860b;
+  --marker-wash: #fbf1d4;
+  --red: #a63a2c;
+  --red-wash: #f8e4e0;
+  --code-bg: #eef0ec;
+  --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #121816; --sheet: #182120; --ink: #e4ebe8; --ink-soft: #9fb0aa; --rule: #2c3836;
+    --teal: #5cc7bd; --teal-wash: #143331; --marker: #e9be4a; --marker-wash: #362c12;
+    --red: #f08b7c; --red-wash: #3a1e1a; --code-bg: #1f2a28; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #121816; --sheet: #182120; --ink: #e4ebe8; --ink-soft: #9fb0aa; --rule: #2c3836;
+  --teal: #5cc7bd; --teal-wash: #143331; --marker: #e9be4a; --marker-wash: #362c12;
+  --red: #f08b7c; --red-wash: #3a1e1a; --code-bg: #1f2a28; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 17px; line-height: 1.62; }
+.wrap { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 48px; max-width: 1180px; margin: 0 auto; padding-inline: 24px; padding-block: 32px 96px; }
+@media (max-width: 900px) { .wrap { grid-template-columns: minmax(0, 1fr); gap: 0; padding-inline: 16px; } nav.toc { position: static; max-height: none; margin-bottom: 24px; } }
+nav.toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); align-self: start; max-height: calc(100vh - 48px); overflow: auto; font-family: var(--display); font-size: 14px; }
+nav.toc .brand { font-weight: 700; font-size: 15px; color: var(--teal); margin-bottom: 14px; letter-spacing: .01em; }
+nav.toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; counter-reset: toc; }
+nav.toc li a { display: flex; gap: 10px; padding: 5px 8px; border-radius: 6px; color: var(--ink-soft); text-decoration: none; }
+nav.toc li a::before { counter-increment: toc; content: counter(toc, decimal-leading-zero); font-family: var(--mono); font-size: 11px; color: var(--teal); padding-top: 3px; }
+nav.toc li a:hover, nav.toc li a:focus-visible { background: var(--teal-wash); color: var(--ink); outline: none; }
+main { min-width: 0; max-width: 74ch; }
+header.hero { padding-bottom: 28px; border-bottom: 2px solid var(--ink); margin-bottom: 40px; }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--teal); }
+h1, h2, h3, h4 { font-family: var(--display); line-height: 1.15; text-wrap: balance; color: var(--ink); }
+h1 { font-size: clamp(34px, 6vw, 52px); font-weight: 700; margin: 10px 0 14px; letter-spacing: -.015em; }
+h2 { font-size: 28px; font-weight: 700; margin: 64px 0 14px; padding-top: 8px; scroll-margin-top: 20px; }
+h3 { font-size: 20px; font-weight: 700; margin: 34px 0 8px; }
+h4 { font-size: 16px; font-weight: 700; margin: 22px 0 6px; }
+.lede { font-size: 20px; color: var(--ink-soft); margin: 0; }
+p { margin: 0 0 14px; }
+a { color: var(--teal); text-underline-offset: 3px; }
+strong { font-weight: 600; }
+ul, ol { padding-left: 1.3em; margin: 0 0 14px; }
+li { margin: 4px 0; }
+code { font-family: var(--mono); font-size: .84em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+pre { font-family: var(--mono); font-size: 13px; line-height: 1.55; background: var(--code-bg); border-radius: 8px; padding: 14px 16px; overflow-x: auto; margin: 0 0 18px; }
+pre code { background: none; padding: 0; font-size: inherit; }
+pre.mermaid { background: var(--sheet); border: 1px solid var(--rule); text-align: center; }
+.path { font-family: var(--mono); font-size: 12.5px; color: var(--teal); }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; margin: 22px 0 0; }
+.facts div { background: var(--sheet); padding: 12px 14px; }
+.facts b { display: block; font-family: var(--display); font-size: 22px; font-variant-numeric: tabular-nums; }
+.facts span { font-family: var(--mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); }
+.table-wrap { overflow-x: auto; margin: 0 0 20px; border: 1px solid var(--rule); border-radius: 8px; background: var(--sheet); }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+th { font-family: var(--display); text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-soft); background: var(--code-bg); }
+th, td { padding: 9px 12px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+tr:last-child td { border-bottom: none; }
+td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.adr { background: var(--sheet); border: 1px solid var(--rule); border-radius: 10px; padding: 18px 20px 6px; margin: 22px 0; }
+.adr h3 { margin-top: 0; display: flex; gap: 12px; align-items: baseline; }
+.adr h3 .id { font-family: var(--mono); font-size: 13px; color: var(--teal); font-weight: 600; }
+.adr dl { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 6px 16px; margin: 0 0 12px; }
+.adr dt { font-family: var(--mono); font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); padding-top: 4px; }
+.adr dd { margin: 0; min-width: 0; }
+@media (max-width: 560px) { .adr dl { grid-template-columns: minmax(0, 1fr); } .adr dt { padding-top: 8px; } }
+.note { border-left: 4px solid var(--marker); background: var(--marker-wash); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 18px 0; }
+.note.bug { border-color: var(--red); background: var(--red-wash); }
+.note.tip { border-color: var(--teal); background: var(--teal-wash); }
+.note > b:first-child { font-family: var(--display); display: block; margin-bottom: 2px; }
+.steps { counter-reset: step; list-style: none; padding: 0; }
+.steps > li { position: relative; padding-left: 46px; margin: 18px 0; }
+.steps > li::before { counter-increment: step; content: counter(step); position: absolute; left: 0; top: 0; width: 30px; height: 30px; border-radius: 50%; background: var(--ink); color: var(--paper); font-family: var(--display); font-weight: 700; display: grid; place-items: center; font-size: 14px; }
+.steps > li > b:first-child { font-family: var(--display); }
+.checklist { list-style: none; padding: 0; }
+.checklist li { padding-left: 28px; position: relative; }
+.checklist li::before { content: ""; position: absolute; left: 2px; top: 7px; width: 13px; height: 13px; border: 2px solid var(--teal); border-radius: 3px; }
+footer { margin-top: 72px; padding-top: 18px; border-top: 1px solid var(--rule); color: var(--ink-soft); font-size: 14px; }
+:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+html { scroll-behavior: smooth; }
+</style>
+
+<div class="wrap">
+<nav class="toc" aria-label="Contents">
+  <div class="brand">Story Pipeline Field Guide</div>
+  <ol>
+    <li><a href="#start">How to use this guide</a></li>
+    <li><a href="#big-idea">The one big decision</a></li>
+    <li><a href="#map">Architecture map</a></li>
+    <li><a href="#order">The build order</a></li>
+    <li><a href="#decisions">Decision records</a></li>
+    <li><a href="#lifecycle">One video, end to end</a></li>
+    <li><a href="#bugs">Bugs found while building</a></li>
+    <li><a href="#testing">How it is tested</a></li>
+    <li><a href="#real">Going from offline to real AI</a></li>
+    <li><a href="#recipe">Recipe for your own pipeline</a></li>
+    <li><a href="#exercises">Exercises</a></li>
+    <li><a href="#glossary">Glossary</a></li>
+  </ol>
+</nav>
+
+<main>
+<header class="hero">
+  <div class="eyebrow">Study guide · story-pipeline/</div>
+  <h1>How the Story-to-YouTube pipeline was designed and built</h1>
+  <p class="lede">This guide follows the reasoning behind each part of the app: what was built, in what order, which alternatives were rejected, and which bugs testing caught. Read it next to the code and you should be able to build a similar pipeline yourself.</p>
+  <div class="facts">
+    <div><b>7</b><span>pipeline stages</span></div>
+    <div><b>12</b><span>database entities</span></div>
+    <div><b>4</b><span>provider interfaces</span></div>
+    <div><b>22</b><span>automated tests</span></div>
+    <div><b>98 s</b><span>first test video</span></div>
+  </div>
+</header>
+
+<section id="start">
+<h2>How to use this guide</h2>
+<p>The app lives in <span class="path">story-pipeline/</span> on branch <code>claude/zealous-babbage-efuf30</code> of your Beeline repository. It implements the "Story-to-YouTube" plan from your ChatGPT conversation as a working MVP. It covers discovery, the rights gate, adaptation, character sheets, scene art, voices, rendering, QC and publishing, plus an Angular dashboard.</p>
+<p>Every section names the file that implements what it describes. The best way to learn from it is to run the app first, then read the guide with the code open:</p>
+<pre><code>cd story-pipeline/backend
+python3 -m venv .venv &amp;&amp; .venv/bin/pip install -e ".[dev]"
+.venv/bin/pytest                          # 22 tests, including a full offline render
+.venv/bin/uvicorn app.main:app --port 8000
+cd ../frontend &amp;&amp; npm ci &amp;&amp; npx ng serve   # dashboard on http://localhost:4200</code></pre>
+<p>In the dashboard, open <strong>Story library → Discover stories</strong>, run the <code>library</code> connector, approve a fable, create a project and press <strong>Run</strong>. You will hit three approval checkpoints and end with an MP4, subtitles, a thumbnail and a QC report.</p>
+<div class="note tip"><b>No GPU or API keys needed to start</b>Out of the box the app uses offline stand-ins: a rule-based scene splitter instead of an LLM, Pillow-drawn storyboard cards instead of a diffusion model, FFmpeg's built-in <code>flite</code> voice, and a "dry run" publisher. Section 9 shows how to switch each one to the real thing by changing configuration only.</div>
+</section>
+
+<section id="big-idea">
+<h2>The one big decision: a pipeline, not an agent</h2>
+<p>The most important sentence in the original plan was: <em>"don't build one giant AI agent that does everything. Build a sequence of independent, testable services."</em> Almost every other choice follows from it.</p>
+<p>An agent that "makes a video from a story" fails in ways you can't see, can't resume, and can't test. A pipeline of stages gives you:</p>
+<ul>
+  <li><strong>Inspectable intermediate results.</strong> The story bible, the scene list, each image, each audio clip and the timeline are all saved. When the video is wrong, you can see which stage went wrong.</li>
+  <li><strong>Cheap retries.</strong> If image 18 of 30 fails, only image 18 is redone.</li>
+  <li><strong>Human control at the right moments.</strong> You approve the script before paying for art, and the art before paying for rendering.</li>
+  <li><strong>Swappable parts.</strong> Replacing the image model doesn't touch translation or publishing.</li>
+</ul>
+<p>The working rule: <strong>use AI for the creative work and ordinary code for everything that has a right answer.</strong> In this codebase, an LLM writes the story bible, the script, translations and video titles. Plain code handles validation, timing, file management, retries, rights checks, QC and uploading.</p>
+</section>
+
+<section id="map">
+<h2>Architecture map</h2>
+<pre class="mermaid">
+flowchart LR
+  subgraph Sources
+    L[Curated library] --- G[Gutenberg / Gutendex] --- R[RSS feeds] --- U[Uploads]
+  end
+  Sources --> D[Discovery<br/>extract, normalize,<br/>hash, dedupe, rank]
+  D --> RG{Rights review<br/>human decision}
+  RG -->|approved| P[Project]
+  P --> S1[script] --> C1((approve))
+  C1 --> S2[characters] --> C2((approve))
+  C2 --> S3[scenes] --> S4[audio] --> S5[render] --> S6[qc] --> C3((approve<br/>final cut))
+  C3 --> S7[publish] --> YT[(YouTube)]
+</pre>
+<p>The layers, and the job each one has:</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Layer</th><th>Where</th><th>Responsibility</th></tr></thead>
+  <tbody>
+    <tr><td>Configuration</td><td class="path">config/*.yaml, app/config.py</td><td>Every choice of model, engine and limit. Validated at startup.</td></tr>
+    <tr><td>Domain</td><td class="path">app/domain/states.py</td><td>The state machine: statuses, stages, checkpoints, what may run when.</td></tr>
+    <tr><td>Workflow</td><td class="path">app/workflow/</td><td>Queue jobs, run one at a time, retry, raise checkpoints, recover after a crash.</td></tr>
+    <tr><td>Services</td><td class="path">app/services/*</td><td>One package per stage. Plain functions that read inputs and write artifacts.</td></tr>
+    <tr><td>Providers</td><td class="path">app/providers/*</td><td>Adapters around the outside world: LLM, image model, TTS, YouTube.</td></tr>
+    <tr><td>Persistence</td><td class="path">app/persistence/</td><td>SQLAlchemy models and the asset registry.</td></tr>
+    <tr><td>API</td><td class="path">app/api/</td><td>FastAPI routers plus the serializers that define the UI contract.</td></tr>
+    <tr><td>UI</td><td class="path">frontend/</td><td>Angular 20 with signals. Displays state and sends commands. No business rules.</td></tr>
+  </tbody>
+</table></div>
+<h3>What was left out on purpose</h3>
+<p>No LangChain, Celery, Kafka, Redis or Kubernetes. Each one solves a problem this system doesn't have yet. A single workstation runs one GPU job at a time. Prompting is two well-defined calls, and those don't need a framework. The extension points are in place (a provider protocol, a jobs table, a <code>database_url</code> setting) so you can add these tools when real throughput requires them. Adding infrastructure before you need it is the most common way projects like this stall.</p>
+</section>
+
+<section id="order">
+<h2>The build order, and why it went in that order</h2>
+<p>The order matters more than people expect. Each step gives the next one something solid to stand on, and the riskiest pieces (orchestration and resumability) were built before any stage depended on them.</p>
+<ol class="steps">
+  <li><b>Configuration files.</b> <span class="path">config/pipeline.yaml</span>, <span class="path">languages.yaml</span>, <span class="path">prompts/*.md</span>. Writing these first forces you to name every choice (provider, model, limits, checkpoints) before writing code that assumes one. Prompts live here too, so you can tune them without a deploy.</li>
+  <li><b>Typed settings loader.</b> <span class="path">app/config.py</span>. Pydantic models for every YAML key, <code>SPA_*</code> environment overrides, and a <code>config_version</code> hash stored on every project and job. A typo like <code>provider: olama</code> fails at startup, not two hours into a render.</li>
+  <li><b>The state machine.</b> <span class="path">app/domain/states.py</span>. One table of stages: what each requires, what it produces, and which checkpoint it raises. The API, the engine and the UI all read this table, so they can't disagree about what comes next.</li>
+  <li><b>Database models.</b> <span class="path">app/persistence/models.py</span>. The twelve entities from the plan's data model, plus a <code>fingerprint</code> column on everything that gets generated (more on that in D6).</li>
+  <li><b>Provider interfaces with two adapters each.</b> A real adapter (Ollama, ComfyUI, Piper, YouTube) and an offline one, written together. The offline adapters made it possible to test every later step on a laptop.</li>
+  <li><b>The workflow engine and runner.</b> <span class="path">app/workflow/</span>. Queueing, the retry policy, checkpoints and crash recovery, built before any real stage existed. Engine tests use fake stage handlers that fail on purpose.</li>
+  <li><b>The stages, in pipeline order.</b> Discovery and rights, then script, characters, scenes, audio, render, QC and publish. Each stage was run for real before starting the next, because each consumes the previous stage's output.</li>
+  <li><b>The API.</b> Thin routers over the engine and services. Business rules such as "no project from an unapproved source" are enforced here and in the engine, never only in the UI.</li>
+  <li><b>Tests, then a live 1080p run.</b> The test suite renders tiny 320×180 videos to stay fast. A full-resolution run through the HTTP API then caught problems tests can't see, such as subtitle size.</li>
+  <li><b>The dashboard last.</b> When the UI comes last it can't hide missing backend rules, and every screen is a view of state that already exists.</li>
+</ol>
+</section>
+
+<section id="decisions">
+<h2>Decision records</h2>
+<p>Each record follows the same shape: the situation, the choice, what else was considered, and what the choice costs. This format (an "architecture decision record") is worth copying into your own projects.</p>
+
+<div class="adr" id="d1"><h3><span class="id">D1</span>Configuration first, typed, versioned</h3><dl>
+  <dt>Context</dt><dd>The plan has many interchangeable parts: LLM, image engine, voices, languages, checkpoints, video size. These will change far more often than the code does.</dd>
+  <dt>Decision</dt><dd>YAML files validated by Pydantic (<span class="path">config.py</span>), environment-variable overrides for the common switches, and a 12-character hash of both YAML files stored as <code>config_version</code> on each project and job.</dd>
+  <dt>Alternatives</dt><dd>Constants in code (every change needs a deploy). Untyped dicts (typos surface at runtime).</dd>
+  <dt>Consequence</dt><dd>You can always answer "which settings produced this video?" The Settings screen calls <code>/api/health</code>, which checks the configured models, voices and workflows against what is actually installed.</dd>
+</dl></div>
+
+<div class="adr" id="d2"><h3><span class="id">D2</span>An explicit state machine in one table</h3><dl>
+  <dt>Context</dt><dd>The plan lists the states <code>CREATED → SOURCE_APPROVED → SCRIPT_READY → … → UPLOADED</code>. Three parts of the system need to know what may run next.</dd>
+  <dt>Decision</dt><dd>A <code>StageSpec</code> list (<span class="path">domain/states.py</span>) with <code>requires</code>, <code>produces</code> and <code>checkpoint</code> fields. A stage may <em>re-run</em> once its prerequisite is reached, but can never skip ahead.</dd>
+  <dt>Deviation</dt><dd>One state was added that the plan didn't have: <code>QC_PASSED</code>. The plan jumped from <code>RENDERED</code> to <code>QC_APPROVED</code>, which merged "the machine checks passed" with "a person approved it". Those are separate facts, and the publish gate needs to tell them apart.</dd>
+</dl></div>
+<pre class="mermaid">
+stateDiagram-v2
+  [*] --> SOURCE_APPROVED: project created (rights approved)
+  SOURCE_APPROVED --> SCRIPT_READY: script
+  SCRIPT_READY --> CHARACTERS_READY: characters (after approval)
+  CHARACTERS_READY --> SCENES_READY: scenes (after approval)
+  SCENES_READY --> AUDIO_READY: audio
+  AUDIO_READY --> RENDERED: render
+  RENDERED --> QC_PASSED: qc
+  QC_PASSED --> QC_APPROVED: human approves final cut
+  QC_APPROVED --> UPLOADED: publish
+</pre>
+
+<div class="adr" id="d3"><h3><span class="id">D3</span>The database is the job queue</h3><dl>
+  <dt>Context</dt><dd>Stages take seconds to minutes, and the process may restart mid-render.</dd>
+  <dt>Decision</dt><dd>A <code>workflow_jobs</code> table plus one worker thread that polls for <code>QUEUED</code> or due <code>RETRY_PENDING</code> rows (<span class="path">workflow/runner.py</span>). On startup, rows stuck in <code>RUNNING</code> are put back in the queue. Only one job runs at a time; parallelism happens <em>inside</em> a stage, such as <code>max_parallel_scenes</code>.</dd>
+  <dt>Alternatives</dt><dd>Celery with RabbitMQ or Redis: more moving parts, and it still needs a database for history. asyncio background tasks: lost on restart.</dd>
+  <dt>Consequence</dt><dd>The queue survives crashes for free, and job history is the same rows the UI shows. One job at a time is deliberate: on a single GPU, two heavy stages together usually run out of memory.</dd>
+</dl></div>
+
+<div class="adr" id="d4"><h3><span class="id">D4</span>One provider interface per capability</h3><dl>
+  <dt>Context</dt><dd>The plan says "do not let application code call Ollama directly", and that image, speech and video generation "should not be forced into a single LLM interface".</dd>
+  <dt>Decision</dt><dd>Four separate <code>Protocol</code>s (<code>LLMProvider</code>, <code>ImageProvider</code>, <code>TTSProvider</code>, <code>Publisher</code>). <span class="path">providers/registry.py</span> is the only file that knows concrete classes. Errors share one rule: <code>ProviderError(transient=True)</code> means "worth retrying" and <code>ProviderUnavailable</code> means "use a fallback".</dd>
+  <dt>Consequence</dt><dd>Switching ComfyUI for another engine means writing one class with one method. The offline adapters keep the full pipeline runnable in CI.</dd>
+</dl></div>
+<pre><code>class LLMProvider(Protocol):
+    name: str
+    async def generate_text(self, prompt: str, system_prompt: str | None = None) -&gt; str: ...
+    async def generate_json(self, prompt: str, schema: dict, system_prompt: str | None = None) -&gt; dict: ...
+    async def health(self) -&gt; dict: ...</code></pre>
+
+<div class="adr" id="d5"><h3><span class="id">D5</span>Structured LLM output, in three layers</h3><dl>
+  <dt>Context</dt><dd>Later stages must never have to "interpret" free text. The renderer can't ask the model what order the scenes go in.</dd>
+  <dt>Decision</dt><dd>
+    <ol>
+      <li><strong>Constrained decoding.</strong> The Pydantic schema is sent as JSON Schema (<code>format</code> in Ollama, <code>response_format</code> on OpenAI-compatible servers), so the output is well-formed JSON.</li>
+      <li><strong>Validation and repair.</strong> <code>generate_model()</code> validates with Pydantic and, if that fails, re-prompts with the exact validation errors, up to <code>json_repair_attempts</code> times.</li>
+      <li><strong>Domain checks.</strong> <span class="path">story/checks.py</span> catches what a schema can't: unknown speakers, duplicate or out-of-order scenes, a missing protagonist, an abrupt ending, too much text for the duration, or copying too close to the source. Errors go back to the model as a "fix these problems" note for one more draft.</li>
+    </ol>
+  </dd>
+  <dt>Fallback</dt><dd>With no LLM, a rule-based adapter (<span class="path">story/heuristic.py</span>) splits the source into scenes, detects characters and attributes quoted speech to the nearest named character. Because it reuses the source text word for word, it is <strong>allowed only when the license permits verbatim use</strong>. Otherwise the stage fails with a clear message.</dd>
+</dl></div>
+
+<div class="adr" id="d6"><h3><span class="id">D6</span>Fingerprints make every stage resumable</h3><dl>
+  <dt>Context</dt><dd>The plan's critical requirement: "if generating scene 18 of 30 fails, rerunning the job must not regenerate scenes 1–17."</dd>
+  <dt>Decision</dt><dd>Every generated item stores a hash of <em>all</em> the inputs that affect it. Before generating, a stage computes the hash. If it matches the stored one and the file is still intact, the item is reused.</dd>
+  <dt>Consequence</dt><dd>This single idea handles retries, crash recovery, targeted regeneration ("new seed" changes the hash) and dependency tracking. A scene's hash includes its characters' reference-sheet checksums, so redrawing a character automatically redraws every scene that character appears in, and no other scene.</dd>
+</dl></div>
+<pre><code># services/scenes/service.py
+fp = fingerprint("scene", image.name, image.model, prompt, negative_prompt,
+                 sc.seed, w, h, ref_sums)          # ref_sums = checksums of character sheets
+if sc.fingerprint == fp and ctx.assets.is_valid(db, sc.image_asset_id):
+    reused += 1                                     # nothing that matters changed
+    continue</code></pre>
+<p>This shows up in practice. The first render of the Town Mouse video took <strong>113 s</strong>. After the subtitle fix (see section 7), the re-render took <strong>38 s</strong>. Images and timing hadn't changed, so all six scene clips were reused and only the final encode ran again.</p>
+
+<div class="adr" id="d7"><h3><span class="id">D7</span>A single asset registry, with atomic writes</h3><dl>
+  <dt>Decision</dt><dd>Business tables never store file paths. They reference an <code>Asset</code> row that owns the path, SHA-256 checksum, size, provider, model, prompt and seed (<span class="path">services/assets.py</span>). Files are written to <code>name.part</code> and then renamed. Paths are checked so they can't escape the project folder.</dd>
+  <dt>Consequence</dt><dd>You can reproduce any image from its row. A crash never leaves a half-written file under the real name. "Is this asset valid?" is one check: the row exists, the file exists, and the size matches.</dd>
+</dl></div>
+
+<div class="adr" id="d8"><h3><span class="id">D8</span>The rights gate is code, and a person decides</h3><dl>
+  <dt>Context</dt><dd>Being publicly accessible doesn't mean you may adapt something. "Never infer approved because a local LLM says the story is old."</dd>
+  <dt>Decision</dt><dd>Connectors only <em>suggest</em> a license. Discovery sets <code>review_required</code> (a license claim exists) or <code>pending</code> (no claim). Approval needs a license type, evidence (a URL or notes), and allowed uses that include <code>adaptation</code>. Attribution text is required if the license demands it (<span class="path">services/rights/service.py</span>). The gate is checked when a project is created, again in QC, and again right before upload, because rights can be revoked.</dd>
+  <dt>Extra check</dt><dd>When a license doesn't permit verbatim use, a check measures how many of the script's 8-word sequences appear word for word in the source. Above 60% (configurable), the script is rejected as too close to the original.</dd>
+</dl></div>
+
+<div class="adr" id="d9"><h3><span class="id">D9</span>Scenes store spoken lines in order (a correction during the build)</h3><dl>
+  <dt>Context</dt><dd>The plan's scene schema had separate <code>narration</code> and <code>dialogue</code> fields.</dd>
+  <dt>Problem</dt><dd>With separate fields, you lose <em>when</em> each line is spoken. "The Mouse pleaded: '…spare my life…' The Lion laughed and let him go" can't be voiced correctly from two lists.</dd>
+  <dt>Decision</dt><dd>Changed to an ordered <code>lines: [{speaker, text}]</code> list, where <code>speaker</code> is <code>"narrator"</code> or a character id. Audio, subtitles and timing all follow this order.</dd>
+  <dt>Lesson</dt><dd>Check a schema against the stage that <em>consumes</em> it, not only the one that produces it. The problem only showed up when writing the audio stage.</dd>
+</dl></div>
+
+<div class="adr" id="d10"><h3><span class="id">D10</span>Timing comes from measured audio</h3><dl>
+  <dt>Decision</dt><dd>One WAV per spoken line per language. The timeline (<span class="path">rendering/timeline.py</span>) sizes each scene from the <em>measured</em> length of its audio: padding + each line + gaps + padding, never shorter than <code>min_scene_seconds</code>, rounded to whole frames so audio and video never drift. The script's <code>duration_seconds</code> is only an estimate.</dd>
+  <dt>Consequence</dt><dd>A Hindi line that runs longer than the English one simply makes that scene longer in the Hindi video. You can fix one mistranslated line and re-voice it alone. Subtitles come from the same timeline, so they always match the audio.</dd>
+</dl></div>
+
+<div class="adr" id="d11"><h3><span class="id">D11</span>The application plans the video and FFmpeg renders it</h3><dl>
+  <dt>Decision</dt><dd>Three FFmpeg steps (<span class="path">rendering/ffmpeg_render.py</span>):
+    <ol>
+      <li>One clip per scene: the image is upscaled 2× (to avoid zoom jitter), given a Ken Burns move with <code>zoompan</code>, and short fades. Clips are cached by fingerprint and shared across languages.</li>
+      <li>One narration track: each line is placed at its exact start time with <code>adelay</code> and mixed with <code>amix</code>. Long filter graphs go in a script file instead of the command line.</li>
+      <li>Final mux: concatenate the clips, normalise loudness with <code>loudnorm</code> (−16 LUFS), burn in the subtitles, <em>and</em> include them as a soft subtitle track. Optional background music is lowered under the voice with <code>sidechaincompress</code>.</li>
+    </ol>
+  </dd>
+  <dt>Alternatives</dt><dd>MoviePy or a Python video library: slower, and still FFmpeg underneath. One giant filter graph: no per-scene caching.</dd>
+</dl></div>
+
+<div class="adr" id="d12"><h3><span class="id">D12</span>QC measures the actual output files</h3><dl>
+  <dt>Decision</dt><dd>Twenty checks, each <code>pass</code>, <code>warn</code> or <code>fail</code>, run on the real MP4 with ffprobe and FFmpeg's analysis filters (<span class="path">quality/qc.py</span>):
+    <ul>
+      <li>Format: resolution, frame rate, codec, duration against the timeline.</li>
+      <li>Audio: audible narration (mean volume), clipping (peak), long silences.</li>
+      <li>Black frames.</li>
+      <li>Subtitles: count, overlaps, timing range, reading speed.</li>
+      <li>Thumbnail: size and the 2 MB limit.</li>
+      <li>Metadata: lengths, YouTube's ban on <code>&lt;&gt;</code>, attribution, AI disclosure.</li>
+      <li>Rights, and whether any line used a fallback voice.</li>
+    </ul>
+  </dd>
+  <dt>Split of work</dt><dd>Anything measurable is checked by code. "Is this story good?" is the job of the human final-cut approval.</dd>
+</dl></div>
+
+<div class="adr" id="d13"><h3><span class="id">D13</span>Checkpoints, and why approving does not upload</h3><dl>
+  <dt>Decision</dt><dd>Approval mode pauses after the script, after the character sheets, and after QC. Approving continues the pipeline. Rejecting sends the project back to the start of that stage, and for visual checkpoints gives new seeds so the next run draws something different. <code>publishing.require_approval</code> forces the final human check even in fully automated mode.</dd>
+  <dt>Correction</dt><dd>The first version continued straight from "approve final cut" into uploading. The test suite caught it, and it was changed: in approval mode, publishing is a separate, deliberate action where you choose visibility. Approving content and publishing it are two separate decisions.</dd>
+</dl></div>
+
+<div class="adr" id="d14"><h3><span class="id">D14</span>Publishing is idempotent</h3><dl>
+  <dt>Context</dt><dd>"A network timeout does not prove that YouTube rejected the upload." A naive retry can post the same video twice.</dd>
+  <dt>Decision</dt><dd>Each language gets one <code>Publication</code> row with a stable <code>attempt_id</code>, also added to the video's tags as <code>spa-…</code>. The row is marked <code>uploading</code> and saved <em>before</em> the API call. Every attempt after the first calls <code>find_existing(attempt_id)</code> before uploading again (<span class="path">services/publishing/service.py</span>).</dd>
+</dl></div>
+<pre class="mermaid">
+sequenceDiagram
+  participant E as Publish stage
+  participant DB as Database
+  participant YT as YouTube
+  E->>DB: Publication(attempt_id) status=uploading (committed)
+  E->>YT: videos.insert (tag spa-attempt)
+  YT--xE: timeout (but the video was created)
+  E->>DB: status=failed, retries=1 -> job RETRY_PENDING
+  Note over E: next attempt
+  E->>YT: find_existing(attempt_id)?
+  YT-->>E: found video_id
+  E->>DB: status=uploaded (no second upload)
+</pre>
+<p>The test <code>test_publish_timeout_is_reconciled_not_duplicated</code> simulates exactly this and checks that the publisher's upload method was called once.</p>
+
+<div class="adr" id="d15"><h3><span class="id">D15</span>The UI is thin and the backend has the final say</h3><dl>
+  <dt>Decision</dt><dd>Angular components hold only view state, in signals. Every rule lives in the API: one active job per project, checkpoint gates, the rights gate and the publish gate. The project page polls every 1.5 s while a job runs and every 8 s otherwise. <span class="path">core/models.ts</span> mirrors <span class="path">api/serializers.py</span>, so the contract lives in one place on each side.</dd>
+  <dt>Consequence</dt><dd>A buggy or hand-crafted request can't publish an unapproved video, because the server refuses it with HTTP 409.</dd>
+</dl></div>
+</section>
+
+<section id="lifecycle">
+<h2>One video, end to end</h2>
+<p>This is what happened to <em>The Town Mouse and the Country Mouse</em> on the first full 1080p run, with the real time each stage took:</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Stage</th><th>What it produced</th><th>Time</th></tr></thead>
+  <tbody>
+    <tr><td>Discovery</td><td>3 fables, scored on length, dialogue, cast and how clear the rights are (85.0 for this one), status <code>review_required</code></td><td class="num">&lt;1 s</td></tr>
+    <tr><td>Rights</td><td>Approved by a person as <code>public_domain_us</code>, with Project Gutenberg #21 as evidence</td><td class="num">manual</td></tr>
+    <tr><td>script</td><td>Story bible, 2 characters (Country Mouse, Town Mouse), 6 scenes, 2 warnings</td><td class="num">0.05 s</td></tr>
+    <tr><td>characters</td><td>2 reference sheets (front, ¾ and side views, palette)</td><td class="num">0.25 s</td></tr>
+    <tr><td>scenes</td><td>6 illustrations, 2 drawn in parallel</td><td class="num">0.58 s</td></tr>
+    <tr><td>audio</td><td>10 English WAVs: narrator voice <code>slt</code>, each mouse its own voice. Hindi skipped and reported because no LLM was configured</td><td class="num">4.1 s</td></tr>
+    <tr><td>render</td><td>98 s MP4 at 1920×1080, 24 fps, H.264 + AAC + soft subtitles; SRT/VTT, thumbnail, metadata with chapters</td><td class="num">113 s</td></tr>
+    <tr><td>qc</td><td>20 of 20 checks passed (mean −19.1 dB, peak −1.5 dBFS, 0 black frames, 23 cues)</td><td class="num">7.0 s</td></tr>
+  </tbody>
+</table></div>
+<p>The Overview screen shows these timings because the plan said: <em>measure every stage before deciding what to optimise.</em> Rendering is about 90% of the time here. With real models, image generation will probably take its place. Either way, the numbers tell you where to spend effort or money.</p>
+</section>
+
+<section id="bugs">
+<h2>Bugs found while building</h2>
+<p>These were real, and each one teaches something general.</p>
+<div class="note bug"><b>1. A new row's defaults are empty until it is saved</b><code>Publication(...)</code> had <code>retries=None</code> and <code>id=None</code> right after creation. SQLAlchemy column defaults only apply when the row is flushed to the database. Fix: set the values explicitly and call <code>db.flush()</code> when you need the id straight away.</div>
+<div class="note bug"><b>2. Subtitles four times too big</b>The style used <code>FontSize = height/40</code>, about 27. But libass measures subtitle styles against a 288-pixel-tall virtual screen, not the real 1080 px frame. Tests rendered at 320×180 and all passed; only looking at a real 1080p frame showed the problem. Lesson: always look at real output at real size.</div>
+<div class="note bug"><b>3. Approving the final cut started an upload</b>"Approve" continued to the next stage, and after QC the next stage is publish. The end-to-end test failed with "a job is already queued". Fixed as described in D13.</div>
+<div class="note bug"><b>4. Couldn't redraw a scene while waiting at a later checkpoint</b>Regeneration only worked at the scene checkpoint, but you usually notice a bad image while watching the final cut. Now regenerating withdraws whatever checkpoint is pending (recorded in the approval history) and moves the project back to the right state.</div>
+<div class="note bug"><b>5. The fallback "moral" was a half sentence</b>The rule "last sentence under 12 words is the moral" picked <em>"…said to his friend:"</em>. The rule now ignores sentences that end with a colon. Rule-based fallbacks need edge-case tests just like any other code.</div>
+</section>
+
+<section id="testing">
+<h2>How it is tested</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>File</th><th>What it proves</th></tr></thead>
+  <tbody>
+    <tr><td class="path">test_states.py</td><td>Stages can re-run but never skip ahead; publishing needs approval.</td></tr>
+    <tr><td class="path">test_story.py</td><td>Character detection (including "Town Mouse"), speaker attribution, checks catch bad scripts, a verbatim script is blocked when the license requires an original.</td></tr>
+    <tr><td class="path">test_rights.py</td><td>Discovery never approves anything, duplicates are detected, projects need approved rights, a no-derivatives license can't be approved.</td></tr>
+    <tr><td class="path">test_engine.py</td><td>Transient failures retry and then succeed; deterministic ones stop; one job per project; checkpoint gates hold; a lost scene is redrawn alone; regenerating one scene works from the final checkpoint.</td></tr>
+    <tr><td class="path">test_timeline.py</td><td>Scene length follows audio length; subtitles survive an SRT round trip; YouTube chapter rules.</td></tr>
+    <tr><td class="path">test_providers.py</td><td>ComfyUI tokens keep their types; placeholder art is deterministic per seed.</td></tr>
+    <tr><td class="path">test_end_to_end.py</td><td>The whole pipeline offline, producing a real MP4 with video, audio and subtitle streams. Publishing twice doesn't upload twice. A timed-out upload is reconciled rather than duplicated.</td></tr>
+  </tbody>
+</table></div>
+<p>Two techniques are worth copying. First, the engine tests <strong>inject fake stage handlers</strong> (<code>run_job(job_id, settings, {Stage.SCRIPT: flaky})</code>), so retry logic is tested without any AI. Second, the end-to-end test runs at <strong>320×180 and 12 fps</strong> through environment overrides, so a full render takes seconds.</p>
+</section>
+
+<section id="real">
+<h2>Going from offline to real AI</h2>
+<p>Each switch is configuration only. Check the result on the <strong>Settings</strong> screen, which runs the health checks.</p>
+<ol class="steps">
+  <li><b>LLM: Ollama.</b> Install Ollama, run <code>ollama pull llama3.1:8b</code>, then start with <code>SPA_LLM_PROVIDER=ollama</code>. Script writing, translation (Hindi becomes <code>ready</code>) and metadata switch to the model. If your model handles long text badly, lower <code>max_source_chars</code>.</li>
+  <li><b>Images: ComfyUI.</b> Export a workflow in API format into <span class="path">comfyui-workflows/</span> using the <code>{{prompt}}</code>, <code>{{seed}}</code>, <code>{{width}}</code>, <code>{{height}}</code> and <code>{{reference_image}}</code> tokens, set the checkpoint name, and use <code>SPA_IMAGE_PROVIDER=comfyui</code>. For consistent characters, build a <code>scene_v2.json</code> that feeds <code>{{reference_image}}</code> into an IP-Adapter node.</li>
+  <li><b>Voices: Piper.</b> <code>pip install piper-tts</code>, put <code>hi_IN-pratham-medium.onnx</code> and its <code>.json</code> in <span class="path">models/piper/</span>. The voice registry already points to them.</li>
+  <li><b>YouTube.</b> Create an OAuth desktop client in Google Cloud, save it as <span class="path">secrets/client_secret.json</span>, run <code>python scripts/youtube_auth.py</code>, then <code>SPA_PUBLISH_PROVIDER=youtube</code>. Uploads stay <strong>private</strong> until you choose otherwise. Test against your project's real API quota before automating.</li>
+</ol>
+</section>
+
+<section id="recipe">
+<h2>Recipe for your own AI content pipeline</h2>
+<p>The same structure works for podcast generation, course videos, product-demo videos, comic strips or localized audiobooks. In order:</p>
+<ol class="steps">
+  <li><b>Write down the artifacts.</b> List every intermediate thing that needs to exist (brief, outline, script, images, audio, timeline, video, metadata). Each one becomes a schema and a saved file.</li>
+  <li><b>Draw the state machine.</b> One stage per artifact. Note what each stage requires and produces, and where a human must look.</li>
+  <li><b>Put every choice in config.</b> Models, engines, sizes, languages and checkpoints, validated at startup and stored as a version hash.</li>
+  <li><b>Define one interface per outside capability</b>, and write an offline adapter next to each real one.</li>
+  <li><b>Build the engine before the stages:</b> a jobs table, one worker, transient versus permanent errors, backoff, checkpoints, and recovery after a crash. Test it with fake handlers.</li>
+  <li><b>Fingerprint every generated item.</b> Hash all its inputs, reuse when the hash matches and the file is intact, and change the seed to force a redo.</li>
+  <li><b>Wrap every LLM call in three layers:</b> schema-constrained output, Pydantic validation with a repair loop, then domain checks that feed errors back.</li>
+  <li><b>Make legal and policy rules code:</b> rights, attribution, disclosure and publish gates, checked again right before anything leaves the machine.</li>
+  <li><b>Measure the output, not the intent.</b> Write QC that probes the real files, and keep human approval for taste.</li>
+  <li><b>Make every outside action idempotent:</b> stable attempt ids, the record saved before the call, and a check for an earlier success before retrying.</li>
+  <li><b>Build the UI last</b>, as a view over backend state with no rules of its own.</li>
+</ol>
+<h3>Definition of done for an MVP like this</h3>
+<ul class="checklist">
+  <li>One story goes from source to private upload with every artifact saved</li>
+  <li>Killing the server mid-render and restarting it resumes the job without redoing finished work</li>
+  <li>A failed item can be retried alone</li>
+  <li>Every published video can be traced to its config version, prompts, seeds and rights decision</li>
+  <li>The publish endpoint refuses anything unapproved, even when called directly</li>
+</ul>
+</section>
+
+<section id="exercises">
+<h2>Exercises</h2>
+<p>Each exercise touches one layer, so you learn the codebase a piece at a time. They go from easiest to hardest.</p>
+<ol>
+  <li><strong>Add Spanish.</strong> Add <code>es</code> to <code>languages.targets</code> and run with Ollama. Watch the Languages tab and the per-language render. (Config only.)</li>
+  <li><strong>Add a feed.</strong> Put a Creative Commons story feed in <code>discovery.rss_feeds</code> and discover from it. Note that it arrives as <code>pending</code>, not approved.</li>
+  <li><strong>Background music.</strong> Set <code>video.music_path</code> to a licensed track and listen to the ducking. Then add a QC check that the music is at least 12 dB below the voice.</li>
+  <li><strong>A Shorts template.</strong> Add a <code>video.aspect</code> setting and a 1080×1920 render variant that crops each scene to its centre. Add the matching QC rule.</li>
+  <li><strong>Character consistency.</strong> Build the IP-Adapter <code>scene_v2.json</code> workflow and compare scenes before and after.</li>
+  <li><strong>Episodes.</strong> For long sources, add a stage before <code>script</code> that splits the bible into episodes, each becoming its own project. (Touches the state machine, models and API.)</li>
+  <li><strong>Migrations.</strong> Add Alembic, generate the first migration from the models, and change startup to run <code>alembic upgrade head</code> instead of <code>create_all</code>.</li>
+  <li><strong>An LLM continuity reviewer.</strong> Add an optional QC check where the LLM reads the script and timeline and reports contradictions as warnings. Keep it advisory, never blocking.</li>
+</ol>
+</section>
+
+<section id="glossary">
+<h2>Glossary</h2>
+<div class="table-wrap"><table>
+  <tbody>
+    <tr><td><strong>Checkpoint</strong></td><td>A point where the pipeline stops for a person to approve or send back the latest stage's output.</td></tr>
+    <tr><td><strong>Fingerprint</strong></td><td>A hash of every input that affects an output. The same fingerprint means the output can be reused.</td></tr>
+    <tr><td><strong>Transient error</strong></td><td>A failure that may succeed on retry (timeout, server restarting). Permanent errors (bad config, missing model) are not retried automatically.</td></tr>
+    <tr><td><strong>Story bible</strong></td><td>The structured summary of a story (plot, locations, characters, facts to preserve) that every later stage reads.</td></tr>
+    <tr><td><strong>Reference sheet</strong></td><td>An approved image of a character from several angles, used to keep their look consistent across scenes.</td></tr>
+    <tr><td><strong>Timeline</strong></td><td>The exact per-language schedule of scenes, lines and subtitle cues that the renderer follows.</td></tr>
+    <tr><td><strong>Ken Burns effect</strong></td><td>A slow zoom or pan across a still image that makes illustrated narration feel alive.</td></tr>
+    <tr><td><strong>Idempotent</strong></td><td>Doing it twice has the same effect as doing it once. Required for anything that talks to the outside world.</td></tr>
+    <tr><td><strong>Soft subtitles</strong></td><td>A subtitle track viewers can turn on or off, as opposed to subtitles burned into the picture. This pipeline produces both.</td></tr>
+    <tr><td><strong>LUFS</strong></td><td>A loudness unit. Normalising to about −16 LUFS keeps your videos as loud as others on the platform without distortion.</td></tr>
+  </tbody>
+</table></div>
+</section>
+
+<footer>Written for the <span class="path">story-pipeline/</span> MVP on branch <code>claude/zealous-babbage-efuf30</code>. Public-domain sample texts: Aesop's Fables, translated by George Fyler Townsend (Project Gutenberg eBook #21).</footer>
+</main>
+</div>

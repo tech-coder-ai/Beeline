@@ -1,5 +1,7 @@
 # Story-to-YouTube Pipeline
 
+> New here? Read the [study guide](docs/study-guide.html) for the reasoning behind every design decision.
+
 A self-hosted production pipeline that takes a story from **discovery** to a **finished, subtitled,
 multilingual YouTube video**, with human approval checkpoints and a hard rights gate.
 
