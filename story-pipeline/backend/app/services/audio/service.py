@@ -33,7 +33,7 @@ def _localize(ctx: StageContext, script: Script, profiles: list[CharacterProfile
     """Create/refresh Localization rows. Returns the languages that are ready for voicing."""
     s: Settings = ctx.settings
     llm = build_llm(s)
-    base = source_segments(script)
+    base = source_segments(script, title_card=s.video.title_card)
     glossary = glossary_for(profiles)
     ready: list[str] = []
     codes = s.languages.all_codes()

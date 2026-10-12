@@ -15,7 +15,9 @@ dependencies = [
 
 [project.optional-dependencies]
 youtube = ["google-api-python-client>=2.130", "google-auth-oauthlib>=1.2"]
-tts = ["piper-tts>=1.2"]
+tts = ["kokoro-onnx>=0.4", "soundfile>=0.12"]
+diffusers = ["torch>=2.3", "diffusers>=0.32", "transformers>=4.44", "accelerate>=0.33", "sentencepiece", "protobuf"]
+piper = ["piper-tts>=1.2"]
 dev = ["pytest>=8.0"]
 
 [build-system]

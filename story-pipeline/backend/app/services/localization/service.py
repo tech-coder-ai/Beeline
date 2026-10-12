@@ -15,9 +15,13 @@ from app.providers.llm.base import LLMProvider, generate_model
 from app.schemas.story import CharacterProfile, Script, Translation
 
 
-def source_segments(script: Script) -> list[dict]:
+def source_segments(script: Script, title_card: bool = True) -> list[dict]:
     segs = []
     order = 0
+    if title_card:  # the narrator reads the title over the title card
+        segs.append({"segment_id": "intro_l00", "scene_id": "intro", "order": 0, "speaker": "narrator",
+                     "text": script.title.rstrip(".") + "."})
+        order = 1
     for sc in sorted(script.scenes, key=lambda x: x.sequence):
         for i, line in enumerate(sc.lines):
             segs.append({"segment_id": f"{sc.scene_id}_l{i:02d}", "scene_id": sc.scene_id, "order": order,

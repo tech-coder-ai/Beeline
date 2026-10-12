@@ -1,6 +1,7 @@
 """Render stage: timeline -> clips -> narration -> final MP4 + subtitles + thumbnail + metadata, per language."""
 from __future__ import annotations
 
+import hashlib
 import json
 import time
 from pathlib import Path
@@ -22,9 +23,44 @@ from app.persistence.models import (
 from app.schemas.story import SceneSpec, StoryBible
 from app.services.publishing.metadata import build_metadata
 from app.services.rendering import ffmpeg_render as fr
+from app.services.rendering.cards import end_card, title_card
 from app.services.rendering.thumbnail import make_thumbnail
 from app.services.rendering.timeline import build_timeline, to_srt, to_vtt
 from app.workflow.context import StageContext, StageFailed
+
+
+def _with_cards(ctx: StageContext, scenes: list[dict], bible: StoryBible, source: StorySource, title: str,
+                code: str) -> list[dict]:
+    """Wrap the story scenes in a narrated title card and an end card (both cached by content)."""
+    v = ctx.settings.video
+    if not scenes:
+        return scenes
+    out = list(scenes)
+    hero = max(scenes, key=lambda x: (x["n_chars"], -x["sequence"]))
+    cards_dir = ctx.assets.abs("render/cards/.keep").parent
+
+    def card(name: str, data: bytes) -> tuple[str, str]:
+        digest = hashlib.sha256(data).hexdigest()[:16]
+        path = cards_dir / f"{name}_{digest}.png"
+        if not path.exists():
+            path.write_bytes(data)
+        return str(path), digest
+
+    if v.title_card:
+        eyebrow = "An Aesop's Fable" if "aesop" in (source.author or "").lower() else (bible.genre or "A story")
+        path, digest = card(f"title_{code}", title_card(Path(hero["image_path"]), title.rstrip("."), eyebrow,
+                                                       v.width, v.height))
+        out.insert(0, {"scene_id": "intro", "sequence": 0, "title": title.rstrip("."), "image_path": path,
+                       "image_checksum": digest, "planned": 3.0, "min_seconds": 3.0,
+                       "camera_movement": "slow_push_in", "n_chars": 0})
+    if v.end_card:
+        credit = f"Based on {source.attribution or source.title}"
+        path, digest = card(f"end_{code}", end_card(Path(scenes[-1]["image_path"]), bible.moral, credit,
+                                                   v.width, v.height))
+        out.append({"scene_id": "outro", "sequence": 10_000, "title": "The End", "image_path": path,
+                    "image_checksum": digest, "planned": v.end_card_seconds, "min_seconds": v.end_card_seconds,
+                    "camera_movement": "slow_pull_out", "n_chars": 0})
+    return out
 
 
 def run_render_stage(ctx: StageContext) -> dict:
@@ -79,10 +115,13 @@ def run_render_stage(ctx: StageContext) -> dict:
                 segs.append({"segment_id": a.segment_id, "scene_id": a.scene_id, "order": a.order,
                              "speaker": a.speaker, "text": a.text, "audio_path": str(ctx.assets.path_of(asset)),
                              "duration": a.duration_seconds, "checksum": asset.checksum})
-        timeline = build_timeline(language=code, width=v.width, height=v.height, fps=v.fps, scenes=scenes,
+        intro_text = next((x["text"] for x in segs if x["scene_id"] == "intro"), bible.title)
+        timeline_scenes = _with_cards(ctx, scenes, bible, source, intro_text, code)
+        timeline = build_timeline(language=code, width=v.width, height=v.height, fps=v.fps, scenes=timeline_scenes,
                                   segments=segs, names=names, padding=v.scene_padding_seconds,
-                                  gap=v.segment_gap_seconds, min_scene=s.pipeline.min_scene_seconds)
-        fp = fingerprint("render-v1", timeline.to_dict(), [x["checksum"] for x in segs], v.model_dump(),
+                                  gap=v.segment_gap_seconds, min_scene=s.pipeline.min_scene_seconds,
+                                  speaker_labels=v.subtitle_speaker_labels)
+        fp = fingerprint("render-v2", timeline.to_dict(), [x["checksum"] for x in segs], v.model_dump(),
                          str(music) if music else None)
         with ctx.db() as db:
             rj = db.scalars(select(RenderJob).where(RenderJob.project_id == ctx.project_id,
@@ -94,13 +133,17 @@ def run_render_stage(ctx: StageContext) -> dict:
         started = time.monotonic()
         base = f"languages/{code}"
         clip_paths = []
+        n = len(timeline.scenes)
+        overlap = fr.transition_seconds(v)
         for si, sc in enumerate(timeline.scenes):
             ctx.check_cancelled()
-            ctx.progress((li + si / len(timeline.scenes) * 0.7) / len(order), f"{code}: rendering {sc.scene_id}")
-            cp = clips_dir / f"{fr.clip_fingerprint(sc, v)}.mp4"
+            ctx.progress((li + si / n * 0.7) / len(order), f"{code}: rendering {sc.scene_id}")
+            # every clip but the last runs `overlap` seconds long so it can crossfade into the next scene
+            plan = {"extend": overlap if si < n - 1 else 0.0, "fade_in": si == 0, "fade_out": si == n - 1}
+            cp = clips_dir / f"{fr.clip_fingerprint(sc, v, **plan)}.mp4"
             if not cp.exists():  # identical clips are shared across languages and reruns
                 tmp = cp.with_suffix(".part.mp4")
-                fr.render_clip(sc, v, tmp)
+                fr.render_clip(sc, v, tmp, **plan)
                 tmp.replace(cp)
             clip_paths.append(cp)
         ctx.progress((li + 0.75) / len(order), f"{code}: mixing audio")

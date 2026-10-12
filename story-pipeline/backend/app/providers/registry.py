@@ -27,11 +27,17 @@ def build_image(settings: Settings) -> ImageProvider:
     if cfg.provider == "comfyui":
         from app.providers.images.comfyui import ComfyUIProvider
         return ComfyUIProvider(cfg, settings.path("comfyui-workflows"))
+    if cfg.provider == "diffusers":
+        from app.providers.images.diffusers_local import DiffusersProvider
+        return DiffusersProvider(cfg)
     from app.providers.images.placeholder import PlaceholderImageProvider
     return PlaceholderImageProvider()
 
 
 def build_tts(settings: Settings, voice: VoiceCfg) -> TTSProvider:
+    if voice.provider == "kokoro":
+        from app.providers.tts.kokoro import KokoroTTS
+        return KokoroTTS(settings.path(settings.languages.kokoro_models_dir))
     if voice.provider == "flite":
         from app.providers.tts.flite import FliteTTS
         return FliteTTS()

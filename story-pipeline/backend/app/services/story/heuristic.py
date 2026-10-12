@@ -36,6 +36,24 @@ MOODS = [
     ("joyful", r"\b(laugh|delight|luxur|feast|dainties|cheer|plenty)"),
     ("peaceful", r"\b(asleep|sleep|dozing|rest|safety|quiet)"),
 ]
+# Natural colouring per species (first two = coat/accents); variants keep two of the same species apart.
+SPECIES_PALETTES = {
+    "lion": [["#d4a017", "#8b5a2b"], ["#c9a25e", "#5c3a1e"]], "mouse": [["#8c8c8c", "#f2c6c2"], ["#7b4a26", "#f5e6d3"]],
+    "hare": [["#a0785a", "#f5f5f5"]], "rabbit": [["#c8b39a", "#f5f5f5"]], "tortoise": [["#6b7a3a", "#a0785a"]],
+    "fox": [["#e07b24", "#f5f5f5"]], "wolf": [["#7f8c8d", "#ecf0f1"]], "crow": [["#1c1c1c", "#4a4a6a"]],
+    "frog": [["#3c9a3c", "#e8e070"]], "ant": [["#5c3a1e", "#1c1c1c"]], "grasshopper": [["#7cb342", "#c5e1a5"]],
+    "dog": [["#a0785a", "#f5f5f5"]], "cat": [["#e0a060", "#f5f5f5"]], "bear": [["#5c3a1e", "#a0785a"]],
+}
+NAME_TRAITS = {"town": "dapper little waistcoat", "city": "dapper little waistcoat", "country": "simple rustic scarf",
+               "old": "grey whiskers", "young": "small and bright-eyed", "king": "tiny golden crown"}
+SETTINGS = [
+    (r"\b(plowland|field|hedgerow|country fare|meadow)", "open countryside fields with hedgerows"),
+    (r"\b(town|house|cupboard|door|hole|cheese|feast)", "cosy old town house interior, warm lamplight"),
+    (r"\b(race|course|wayside|goal)", "winding country road through green meadows"),
+    (r"\b(hunter|rope|roar|lion)", "sunlit savanna grassland with acacia trees"),
+    (r"\b(forest|wood|tree)", "deep green forest"),
+    (r"\b(river|pond|stream|lake)", "riverbank with reeds"),
+]
 QUOTE = re.compile(r'"([^"]+)"')
 SENT = re.compile(r"(?<=[.!?;])\s+(?=[A-Z\"])")
 
@@ -98,23 +116,51 @@ def _beats(text: str) -> list[list[tuple[str, str]]]:
     return [b for b in beats if b]
 
 
+def _setting(text: str, fallback: str) -> str:
+    low = text.lower()
+    for pat, name in SETTINGS:
+        if re.search(pat, low):
+            return name
+    return fallback
+
+
+def _visual_action(sentence: str) -> str:
+    """Turn a narration sentence into a short visual description: drop speech, keep the action."""
+    text = re.sub(r'"[^"]*"', "", sentence)
+    text = re.split(r",? (?:saying|exclaiming|replied|said)\b", text)[0]
+    text = re.sub(r"\s+", " ", text).strip(" ,;:")
+    words = text.split()
+    text = " ".join(words[:28])
+    return text
+
+
 def adapt(title: str, author: str | None, text: str, *, target_scenes: int, min_s: float, max_s: float,
           style: str, max_animated: int = 3) -> tuple[StoryAnalysis, Script]:
     names = detect_characters(text) or ["Narrator"]
     chars: list[CharacterProfile] = []
     for i, name in enumerate(names):
         species = name.split()[-1].lower()
+        same = sum(1 for c in chars if c.appearance.species == species)
+        palette = (SPECIES_PALETTES[species][same % len(SPECIES_PALETTES[species])] if species in SPECIES_PALETTES
+                   else PALETTES[(_h(name) + i) % len(PALETTES)])
         chars.append(CharacterProfile(
             character_id=f"char_{i + 1:03d}", name=name,
             role="protagonist" if i == 0 else "supporting" if i < 3 else "minor",
             description=f"The {name} from the story.",
-            appearance=Appearance(species=species if species in ANIMALS else "human",
-                                  palette=PALETTES[(_h(name) + i) % len(PALETTES)],
-                                  distinctive_features=[f"signature {PALETTES[(_h(name) + i) % len(PALETTES)][0]} colouring"]),
+            appearance=Appearance(species=species if species in ANIMALS else "human", palette=palette,
+                                  distinctive_features=[NAME_TRAITS[w.lower()] for w in name.split()[:-1]
+                                                        if w.lower() in NAME_TRAITS]),
             voice_profile=VoiceProfile(speaking_style="expressive"),
         ))
     by_name = {c.name: c.character_id for c in chars}
-    location = Location(location_id="location_001", name="Story world", description=f"The world of {title}")
+    default_setting = _setting(text, "storybook countryside")
+    locations: dict[str, Location] = {}
+
+    def location_for(scene_text: str) -> str:
+        name = _setting(scene_text, default_setting)
+        if name not in locations:
+            locations[name] = Location(location_id=f"location_{len(locations) + 1:03d}", name=name)
+        return locations[name].location_id
     sentences = [t for b in _beats(text) for k, t in b if k == "narration"]
     complete = [x for x in sentences if x.rstrip().endswith((".", "!", "?"))]  # skip "...said:" lead-ins
     last = sentences[-1] if sentences else ""
@@ -122,7 +168,7 @@ def adapt(title: str, author: str | None, text: str, *, target_scenes: int, min_
         title=title,
         synopsis=" ".join(complete[:2])[:600],
         genre="fable" if author and "aesop" in author.lower() else "short story",
-        tone="classic", audience="general", locations=[location],
+        tone="classic", audience="general", locations=[Location(location_id="location_000", name=default_setting)],
         main_plot=" ".join(sentences[:3])[:800],
         resolution=sentences[-1] if sentences else "",
         moral=last if last.endswith(".") and len(last.split()) < 12 else "",
@@ -166,18 +212,18 @@ def adapt(title: str, author: str | None, text: str, *, target_scenes: int, min_
         mood = _mood(scene_text)
         words = len(scene_text.split())
         first = lines[0].text if lines else title
-        cast = "; ".join(f"{c.name} ({c.appearance.species}, colours {', '.join(c.appearance.palette)})"
-                         for c in chars if c.character_id in present)
+        cast = " and ".join(c.name.lower() if c.appearance.species in c.name.lower() else c.name
+                            for c in chars if c.character_id in present)
         shot = shots[i % len(shots)] if i else "establishing"
         scenes.append(SceneSpec(
             scene_id=f"scene_{i + 1:03d}", sequence=i + 1,
             title=" ".join(first.split()[:6]).rstrip(",;:") + ("…" if len(first.split()) > 6 else ""),
             duration_seconds=round(min(max_s, max(min_s, words / 2.5 + 1.5)), 1),
-            location_id=location.location_id, characters=present, lines=lines,
-            visual_prompt=f"{style}. {first[:300]} Characters: {cast or 'none'}. Mood: {mood}. {shot.replace('_', ' ')} shot.",
+            location_id=location_for(scene_text), characters=present, lines=lines,
+            visual_prompt=_visual_action(first),
             camera=Camera(shot_type=shot, movement=moves[i % len(moves)]),
             mood=mood, music_cue="gentle_strings" if mood in ("peaceful", "reflective") else "light_percussion",
-            continuity_requirements=[f"{c.name} keeps the {c.appearance.palette[0]} colouring" for c in chars
+            continuity_requirements=[f"same {c.name.lower()} design as the reference sheet" for c in chars
                                      if c.character_id in present],
         ))
     # Mark scenes for AI motion: the hook first, then the most dramatic moods.
@@ -189,6 +235,7 @@ def adapt(title: str, author: str | None, text: str, *, target_scenes: int, min_
             sc.animate = True
             sc.motion_prompt = (f"{who} move naturally, {sc.mood} energy, gentle wind, "
                                 f"{sc.camera.movement.replace('_', ' ')}")
+    bible.locations = list(locations.values()) or bible.locations
     script = Script(title=title, hook=sentences[0] if sentences else title, scenes=scenes,
                     ending=sentences[-1] if sentences else "")
     return StoryAnalysis(bible=bible, characters=chars), script

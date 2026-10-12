@@ -45,7 +45,7 @@ class LLMCfg(BaseModel):
 
 
 class ImageCfg(BaseModel):
-    provider: Literal["comfyui", "placeholder"] = "placeholder"
+    provider: Literal["comfyui", "diffusers", "placeholder"] = "placeholder"
     base_url: str = "http://localhost:8188"
     timeout_seconds: float = 600
     workflows: dict[str, str] = {}
@@ -53,6 +53,14 @@ class ImageCfg(BaseModel):
     negative_prompt: str = ""
     width: int = 1344
     height: int = 768
+    # diffusers provider
+    diffusers_model: str = "black-forest-labs/FLUX.1-schnell"
+    steps: int = Field(4, ge=1, le=100)
+    guidance: float = Field(0.0, ge=0, le=20)
+    device: Literal["auto", "cuda", "cpu"] = "auto"
+    cpu_offload: bool = False
+    ip_adapter: str = ""          # e.g. "h94/IP-Adapter:ip-adapter_sdxl.bin" (SDXL models only)
+    ip_adapter_scale: float = 0.6
 
 
 class VideoModelCfg(BaseModel):
@@ -89,10 +97,17 @@ class VideoCfg(BaseModel):
     camera_zoom: float = Field(1.12, ge=1.0, le=2.0)
     music_path: str | None = None
     music_volume: float = Field(0.12, ge=0, le=1)
+    transition: Literal["fade", "dissolve", "fadeblack", "smoothleft", "none"] = "fade"
+    transition_seconds: float = Field(0.7, ge=0.1, le=3)
+    title_card: bool = True               # narrated title over a blurred frame
+    end_card: bool = True
+    end_card_seconds: float = Field(3.5, ge=1, le=15)
+    subtitle_font: str = "DejaVu Sans"
+    subtitle_speaker_labels: bool = False  # "[Lion] ..." prefixes on dialogue cues
 
 
 class QualityCfg(BaseModel):
-    max_silence_seconds: float = 4.0
+    max_silence_seconds: float = 5.0
     max_black_seconds: float = 1.0
     duration_tolerance_seconds: float = 1.5
     clipping_threshold_db: float = -0.1
@@ -128,7 +143,7 @@ class DiscoveryCfg(BaseModel):
 
 class VoiceCfg(BaseModel):
     voice_id: str
-    provider: Literal["flite", "piper", "silent"]
+    provider: Literal["kokoro", "flite", "piper", "silent"]
     voice: str = ""
     rate: float = Field(1.0, gt=0.25, le=4.0)
 
@@ -145,6 +160,7 @@ class LanguagesCfg(BaseModel):
     source: str = "en"
     targets: list[str] = []
     tts_models_dir: str = "models/piper"
+    kokoro_models_dir: str = "models/kokoro"
     languages: dict[str, LanguageCfg]
 
     def all_codes(self) -> list[str]:

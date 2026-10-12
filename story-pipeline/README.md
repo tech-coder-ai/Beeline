@@ -26,8 +26,10 @@ Requirements: Python 3.11+, Node 20+, and FFmpeg built with `libx264`, `libass` 
 voices) `libflite`. Ubuntu's `ffmpeg` package has all three.
 
 ```bash
-cd story-pipeline/backend
-python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
+cd story-pipeline
+scripts/download_models.sh                 # Kokoro voice model (~350 MB, from GitHub)
+cd backend
+python3 -m venv .venv && .venv/bin/pip install -e ".[dev,tts]"
 .venv/bin/pytest                         # 26 tests, including full offline renders
 .venv/bin/uvicorn app.main:app --port 8000
 
@@ -41,9 +43,9 @@ Then open **Story library → Discover stories → library**, approve a fable, c
 | Capability | Default (offline) | Production provider | Switch with |
 |---|---|---|---|
 | LLM | `offline`: deterministic scene splitter, template metadata, **no translation** | Ollama / any OpenAI-compatible server | `SPA_LLM_PROVIDER=ollama SPA_LLM_MODEL=llama3.1:8b` |
-| Images | `placeholder`: Pillow storyboard cards | ComfyUI workflows | `SPA_IMAGE_PROVIDER=comfyui` |
+| Images | `placeholder`: Pillow storyboard cards (layout only, not art) | `diffusers` (FLUX.1-schnell / SDXL) or ComfyUI | `SPA_IMAGE_PROVIDER=diffusers` |
 | Animation (hybrid projects) | `none`: every scene is a still with a camera move (`placeholder` fakes motion with FFmpeg) | Wan 2.2 14B image-to-video in ComfyUI | `SPA_VIDEO_PROVIDER=comfyui` |
-| Voices | FFmpeg `flite` (English) | Piper neural TTS | `config/languages.yaml` |
+| Voices | Kokoro neural TTS (English + Hindi) after `scripts/download_models.sh`; FFmpeg `flite` if missing | Kokoro, or Piper | `config/languages.yaml` |
 | Publishing | `dry_run`: writes a receipt | YouTube Data API v3 | `SPA_PUBLISH_PROVIDER=youtube` + `scripts/youtube_auth.py` |
 
 Hindi (`hi`) is a configured target language. With no LLM it is **skipped and reported**; it is never
@@ -54,7 +56,12 @@ the configured `silent` fallback renders it subtitled, and QC flags it.
 
 1. **LLM**: install [Ollama](https://ollama.com), `ollama pull llama3.1:8b`, set `models.llm.provider: ollama`.
    Responses are schema-constrained (`format=<JSON schema>`) *and* validated with Pydantic, with a repair loop.
-2. **Images**: run [ComfyUI](https://docs.comfy.org/), export your workflows in API format into
+2. **Images (pick one)**:
+   - *Simplest*: `pip install -e "backend[diffusers]"`, set `models.image.provider: diffusers` and
+     `diffusers_model: black-forest-labs/FLUX.1-schnell` (Apache 2.0, 4 steps, fits a 48 GB GPU in bf16).
+     Weights download from Hugging Face on first use. For SDXL models, `ip_adapter: "h94/IP-Adapter:ip-adapter_sdxl.bin"`
+     conditions every scene on the character sheet.
+   - *Most control*: run [ComfyUI](https://docs.comfy.org/), export your workflows in API format into
    `comfyui-workflows/` using the `{{prompt}}`/`{{seed}}`/`{{reference_image}}` tokens (see that folder's README),
    and set `models.image.provider: comfyui`.
 3. **AI animation (optional)**: create projects with style *Hybrid animation*. Download the Wan 2.2 14B

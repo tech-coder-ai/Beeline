@@ -81,9 +81,16 @@ video:
   camera_zoom: 1.12               # max zoom for the Ken Burns effect
   music_path: null                # optional background track (looped, ducked)
   music_volume: 0.12
+  transition: fade                # crossfade between scenes: fade | dissolve | fadeblack | smoothleft | none
+  transition_seconds: 0.7
+  title_card: true                # narrator reads the title over a blurred opening frame
+  end_card: true                  # "The End", the moral (if any) and the source credit
+  end_card_seconds: 3.5
+  subtitle_font: DejaVu Sans      # any font installed for libass (e.g. Inter, Montserrat)
+  subtitle_speaker_labels: false
 
 quality:
-  max_silence_seconds: 4.0
+  max_silence_seconds: 5.0       # the end card is intentionally quiet
   max_black_seconds: 1.0
   duration_tolerance_seconds: 1.5
   clipping_threshold_db: -0.1

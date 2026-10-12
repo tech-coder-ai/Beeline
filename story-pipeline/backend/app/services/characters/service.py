@@ -14,16 +14,8 @@ from app.providers.errors import ProviderError
 from app.providers.images.base import ImageRequest
 from app.providers.registry import build_image
 from app.schemas.story import CharacterProfile
+from app.services.visual_prompts import character_prompt
 from app.workflow.context import StageContext
-
-
-def character_prompt(style: str, prof: CharacterProfile) -> str:
-    a = prof.appearance
-    traits = ", ".join(x for x in [a.species, a.build, a.hair, a.clothing_style, *a.distinctive_features] if x)
-    palette = f" Colour palette: {', '.join(a.palette)}." if a.palette else ""
-    return (f"{style}. Character reference sheet of {prof.name}: {traits}. "
-            f"Front view, three-quarter view and side view on a plain background, consistent proportions, "
-            f"neutral expression.{palette}")
 
 
 def run_characters_stage(ctx: StageContext) -> dict:

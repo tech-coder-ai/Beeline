@@ -63,7 +63,8 @@ class Timeline:
 
 
 def build_timeline(*, language: str, width: int, height: int, fps: int, scenes: list[dict], segments: list[dict],
-                   names: dict[str, str], padding: float, gap: float, min_scene: float) -> Timeline:
+                   names: dict[str, str], padding: float, gap: float, min_scene: float,
+                   speaker_labels: bool = True) -> Timeline:
     """scenes: [{scene_id, sequence, title, image_path, image_checksum, planned, camera_movement}]
     segments: [{segment_id, scene_id, order, speaker, text, audio_path, duration}]"""
     by_scene: dict[str, list[dict]] = {}
@@ -74,7 +75,8 @@ def build_timeline(*, language: str, width: int, height: int, fps: int, scenes: 
     for sc in sorted(scenes, key=lambda s: s["sequence"]):
         segs = by_scene.get(sc["scene_id"], [])
         speech = sum(s["duration"] for s in segs) + gap * max(0, len(segs) - 1)
-        dur = max(min_scene, speech + 2 * padding) if segs else max(min_scene, sc["planned"])
+        floor = sc.get("min_seconds", min_scene)
+        dur = max(floor, speech + 2 * padding) if segs else max(floor, sc["planned"])
         # snap to whole frames so video and audio never drift apart
         dur = round(round(dur * fps) / fps, 3)
         ts = TimelineScene(scene_id=sc["scene_id"], sequence=sc["sequence"], title=sc["title"],
@@ -91,15 +93,17 @@ def build_timeline(*, language: str, width: int, height: int, fps: int, scenes: 
         out_scenes.append(ts)
         t += dur
     return Timeline(language=language, width=width, height=height, fps=fps, duration=round(t, 3),
-                    scenes=out_scenes, subtitles=subtitle_events(out_scenes))
+                    scenes=out_scenes, subtitles=subtitle_events(out_scenes, labels=speaker_labels))
 
 
-def subtitle_events(scenes: list[TimelineScene], max_chars: int = 84) -> list[SubtitleEvent]:
+def subtitle_events(scenes: list[TimelineScene], max_chars: int = 84, labels: bool = True) -> list[SubtitleEvent]:
     """Split long segments into readable cues (<= 2 lines of ~42 chars), timed by character share."""
     events: list[SubtitleEvent] = []
     for sc in scenes:
+        if sc.scene_id == "intro":
+            continue  # the title card already shows the words being read
         for seg in sc.segments:
-            label = f"[{seg.speaker_name}] " if seg.speaker != "narrator" and seg.speaker_name else ""
+            label = f"[{seg.speaker_name}] " if labels and seg.speaker != "narrator" and seg.speaker_name else ""
             chunks = _cue_chunks(seg.text, max_chars)
             total = sum(len(c) for c in chunks)
             start = seg.start

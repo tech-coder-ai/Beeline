@@ -105,6 +105,7 @@ html { scroll-behavior: smooth; }
     <li><a href="#order">The build order</a></li>
     <li><a href="#decisions">Decision records</a></li>
     <li><a href="#animation">Adding AI animation</a></li>
+    <li><a href="#polish">Making it look professional</a></li>
     <li><a href="#lifecycle">One video, end to end</a></li>
     <li><a href="#bugs">Bugs found while building</a></li>
     <li><a href="#testing">How it is tested</a></li>
@@ -124,7 +125,7 @@ html { scroll-behavior: smooth; }
     <div><b>8</b><span>pipeline stages</span></div>
     <div><b>12</b><span>database entities</span></div>
     <div><b>5</b><span>provider interfaces</span></div>
-    <div><b>26</b><span>automated tests</span></div>
+    <div><b>28</b><span>automated tests</span></div>
     <div><b>98 s</b><span>first test video</span></div>
   </div>
 </header>
@@ -390,6 +391,27 @@ sequenceDiagram
   <li><strong>UI</strong>: a style picker, motion clips in the Scenes tab, and a health card.</li>
 </ol>
 <div class="note"><b>Lesson: you need migrations once there is real data</b>Adding the <code>motion_*</code> columns works on a fresh database, but <code>create_all</code> never alters an existing table. An existing <code>data/pipeline.db</code> has to be deleted or altered by hand. This is the moment the Alembic exercise below stops being optional.</div>
+</section>
+
+<section id="polish">
+<h2>Making it look professional</h2>
+<p>Your feedback on the first demo was blunt and correct: <em>"the lion and mouse are not actual lion or mouse, just a colour pill with L and M written."</em> That's what the placeholder renderer draws. It was built to exercise the pipeline, not to look good. The fix splits into two independent parts, and it's worth keeping them apart in your head.</p>
+
+<div class="adr" id="d17"><h3><span class="id">D17</span>Model quality and production quality are different problems</h3><dl>
+  <dt>Model quality</dt><dd>Whether the lion looks like a lion depends entirely on the image model. That needed a real provider: <code>diffusers</code> (<span class="path">providers/images/diffusers_local.py</span>) runs FLUX.1-schnell (Apache 2.0, 4 steps) or SDXL directly in Python. It's simpler than ComfyUI when you don't need custom graphs. For SDXL, an optional IP-Adapter conditions every scene on the character sheet to keep characters consistent. Voices got the same treatment: <strong>Kokoro</strong> (82M parameters, Apache 2.0) replaced the robotic <code>flite</code> voice. It runs about twice as fast as real time on a plain CPU and includes Hindi voices.</dd>
+  <dt>Prompt quality</dt><dd>A good model with a bad prompt still draws badly. The old prompts sent hex codes ("colours #c0392b"), raw source sentences, and a setting called "Story world". <span class="path">services/visual_prompts.py</span> now builds prompts subject first, because CLIP-based models only read about 77 tokens and weight the first words most. Colours are turned into words ("golden, brown tones"), each species gets natural colours, and settings come from the text ("sunlit savanna grassland").</dd>
+  <dt>Production quality</dt><dd>These are things no model gives you, and they're what make a video read as "professional":
+    <ul>
+      <li>a narrated <strong>title card</strong> over a blurred frame from the story</li>
+      <li><strong>crossfades</strong> between scenes (FFmpeg <code>xfade</code>) instead of dips to black</li>
+      <li><strong>boxed captions</strong> without speaker labels</li>
+      <li>an <strong>end card</strong> with the moral and the source credit</li>
+    </ul>
+    All of this lives in the renderer (<span class="path">rendering/cards.py</span>, <span class="path">ffmpeg_render.py</span>) and works with any model.</dd>
+  <dt>Crossfade timing</dt><dd>A crossfade overlaps two clips, which would shorten the video and pull the narration out of sync. So every clip except the last is rendered <code>transition_seconds</code> longer, and each <code>xfade</code> starts exactly at the next scene's timeline start. The total length doesn't change and the narration stays in place.</dd>
+  <dt>Constraint</dt><dd>This build environment blocks Hugging Face, where image model weights are hosted, so the demo video still uses placeholder art. Kokoro worked because its model is published on GitHub. On your machine the art changes with one config line.</dd>
+</dl></div>
+<div class="note"><b>Lesson: restart the server after a code change</b>After the subtitle fix, the re-render reported "reused". The running server was still the old code, because uvicorn wasn't started with <code>--reload</code>. The same idea applies to fingerprints: when a renderer's <em>behaviour</em> changes, bump its version string (<code>"render-v2"</code>, <code>"clip-v3"</code>) so cached outputs made by the old code are not reused.</div>
 </section>
 
 <section id="lifecycle">

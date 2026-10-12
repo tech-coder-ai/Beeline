@@ -36,3 +36,22 @@ def test_chapters_follow_youtube_rules():
     assert chapters(_tl([[3.0]] * 2).scenes) == []          # too few / too short
     ch = chapters(_tl([[12.0]] * 4).scenes)
     assert ch[0][0] == 0 and len(ch) >= 3
+
+
+def test_title_card_is_not_subtitled():
+    from app.services.rendering.timeline import subtitle_events
+    tl = _tl([[2.0], [3.0]])
+    tl.scenes[0].scene_id = "intro"
+    events = subtitle_events(tl.scenes)
+    assert len(events) == 1 and events[0].start >= tl.scenes[1].start
+
+
+def test_visual_prompts_use_words_not_hex_codes():
+    from app.schemas.story import Appearance, CharacterProfile
+    from app.services.visual_prompts import character_prompt, color_name, scene_prompt
+    lion = CharacterProfile(character_id="char_001", name="Lion",
+                            appearance=Appearance(species="lion", palette=["#d4a017", "#8b5a2b"]))
+    assert color_name("#d4a017") == "golden"
+    p = scene_prompt("watercolor", "The lion sleeps", [lion], "savanna", "wide", "peaceful", ["keep #fff"])
+    assert "#" not in p and p.startswith("The lion sleeps") and "a lion (golden, brown tones)" in p
+    assert "#" not in character_prompt("watercolor", lion)

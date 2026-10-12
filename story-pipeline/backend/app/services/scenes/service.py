@@ -18,16 +18,8 @@ from app.providers.errors import ProviderError
 from app.providers.images.base import ImageRequest
 from app.providers.registry import build_image
 from app.schemas.story import CharacterProfile, SceneSpec, StoryBible
+from app.services.visual_prompts import scene_prompt
 from app.workflow.context import StageContext, StageFailed
-
-
-def scene_prompt(style: str, spec: SceneSpec, cast: list[CharacterProfile]) -> str:
-    who = "; ".join(
-        f"{c.name} ({', '.join(x for x in [c.appearance.species, c.appearance.hair, c.appearance.clothing_style, *c.appearance.distinctive_features] if x)})"
-        for c in cast)
-    continuity = f" Continuity: {'; '.join(spec.continuity_requirements)}." if spec.continuity_requirements else ""
-    return (f"{style}. {spec.visual_prompt} {spec.camera.shot_type.replace('_', ' ')} shot, {spec.mood} mood."
-            f"{' Characters: ' + who + '.' if who else ''}{continuity}")
 
 
 def run_scenes_stage(ctx: StageContext) -> dict:
@@ -54,7 +46,9 @@ def run_scenes_stage(ctx: StageContext) -> dict:
             cast = [chars[c][0] for c in spec.characters if c in chars]
             refs = [chars[c][1] for c in spec.characters if c in chars]
             ref_sums = [chars[c][2] for c in spec.characters if c in chars]
-            prompt = scene_prompt(s.models.image.style, spec, cast)
+            prompt = scene_prompt(s.models.image.style, spec.visual_prompt, cast,
+                                  locations.get(spec.location_id, ""), spec.camera.shot_type, spec.mood,
+                                  spec.continuity_requirements)
             fp = fingerprint("scene", image.name, image.model, prompt, s.models.image.negative_prompt, sc.seed, w, h, ref_sums)
             if sc.fingerprint == fp and ctx.assets.is_valid(db, sc.image_asset_id):
                 reused += 1

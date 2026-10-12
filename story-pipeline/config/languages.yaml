@@ -5,47 +5,52 @@
 # unless the character profile names a voice_id explicitly.
 #
 # TTS providers:
-#   flite  - built into many FFmpeg builds; English only, robotic but offline and free.
-#   piper  - high quality local neural TTS (https://github.com/rhasspy/piper).
-#            `voice` is the model name; files are looked up in tts_models_dir.
-#   silent - timed silence sized to the text. A last-resort fallback so a
-#            language can still be rendered (with subtitles) while you set up TTS.
+#   kokoro - Kokoro v1.0 neural TTS (Apache 2.0). Natural, fast on CPU, many languages incl. Hindi.
+#            pip install -e "backend[tts]" && scripts/download_models.sh
+#   piper  - Piper neural TTS (https://github.com/rhasspy/piper); `voice` = model name in tts_models_dir.
+#   flite  - built into many FFmpeg builds; English only and robotic. Offline last resort.
+#   silent - timed silence sized to the text, so a language can render with subtitles while TTS is set up.
+# If a voice's provider is unavailable, the language's `fallback` voice is used and QC flags it.
 
 source: en
 targets: [hi]
+kokoro_models_dir: models/kokoro
 tts_models_dir: models/piper
 
 languages:
   en:
     name: English
     locale: en-US
-    narrator: { voice_id: narrator_en_01, provider: flite, voice: slt, rate: 1.0 }
+    narrator: { voice_id: narrator_en_01, provider: kokoro, voice: bm_george, rate: 0.95 }   # warm British storyteller
     character_pool:
-      - { voice_id: char_en_01, provider: flite, voice: kal16, rate: 1.0 }
-      - { voice_id: char_en_02, provider: flite, voice: rms, rate: 1.0 }
-      - { voice_id: char_en_03, provider: flite, voice: awb, rate: 1.0 }
-    fallback: { voice_id: silent_en, provider: silent, voice: "" }
+      - { voice_id: char_en_01, provider: kokoro, voice: am_onyx, rate: 1.0 }     # deep
+      - { voice_id: char_en_02, provider: kokoro, voice: af_bella, rate: 1.05 }   # bright
+      - { voice_id: char_en_03, provider: kokoro, voice: bm_lewis, rate: 1.0 }
+      - { voice_id: char_en_04, provider: kokoro, voice: af_nicole, rate: 1.0 }
+    fallback: { voice_id: flite_en, provider: flite, voice: slt }
 
   hi:
     name: Hindi
     locale: hi-IN
-    narrator: { voice_id: narrator_hi_01, provider: piper, voice: hi_IN-pratham-medium, rate: 1.0 }
+    narrator: { voice_id: narrator_hi_01, provider: kokoro, voice: hf_alpha, rate: 0.95 }
     character_pool:
-      - { voice_id: char_hi_01, provider: piper, voice: hi_IN-priyamvada-medium, rate: 1.0 }
+      - { voice_id: char_hi_01, provider: kokoro, voice: hm_omega, rate: 1.0 }
+      - { voice_id: char_hi_02, provider: kokoro, voice: hf_beta, rate: 1.0 }
+      - { voice_id: char_hi_03, provider: kokoro, voice: hm_psi, rate: 1.0 }
     fallback: { voice_id: silent_hi, provider: silent, voice: "" }
 
   es:
     name: Spanish
     locale: es-ES
-    narrator: { voice_id: narrator_es_01, provider: piper, voice: es_ES-davefx-medium, rate: 1.0 }
+    narrator: { voice_id: narrator_es_01, provider: kokoro, voice: em_alex, rate: 0.95 }
     character_pool:
-      - { voice_id: char_es_01, provider: piper, voice: es_ES-sharvard-medium, rate: 1.0 }
+      - { voice_id: char_es_01, provider: kokoro, voice: ef_dora, rate: 1.0 }
     fallback: { voice_id: silent_es, provider: silent, voice: "" }
 
   fr:
     name: French
     locale: fr-FR
-    narrator: { voice_id: narrator_fr_01, provider: piper, voice: fr_FR-siwis-medium, rate: 1.0 }
+    narrator: { voice_id: narrator_fr_01, provider: kokoro, voice: ff_siwis, rate: 0.95 }
     character_pool:
-      - { voice_id: char_fr_01, provider: piper, voice: fr_FR-upmc-medium, rate: 1.0 }
+      - { voice_id: char_fr_01, provider: kokoro, voice: ff_siwis, rate: 1.1 }
     fallback: { voice_id: silent_fr, provider: silent, voice: "" }
