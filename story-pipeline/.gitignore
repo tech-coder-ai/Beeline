@@ -1,0 +1,8 @@
+data/
+secrets/
+models/
+*.part
+*.part.mp4
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/

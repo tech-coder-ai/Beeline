@@ -129,3 +129,7 @@ cd frontend && npx ng test --watch=false --browsers=ChromeHeadless
   selection) and `ChartComponent` (frontend, ECharts option builder).
 - **New grid action button**: add an entry to `api_actions` in
   `settings.yaml` — no code change.
+
+## Also in this repository
+
+- [`story-pipeline/`](story-pipeline/README.md): a separate Story-to-YouTube production pipeline (FastAPI + Angular + FFmpeg) that turns public-domain or licensed stories into narrated, subtitled videos.

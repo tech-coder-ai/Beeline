@@ -1,0 +1,51 @@
+# Languages and the voice registry.
+#
+# Each language declares a narrator voice and a pool of character voices.
+# Characters are assigned voices from the pool in order (char_001 -> pool[0] ...)
+# unless the character profile names a voice_id explicitly.
+#
+# TTS providers:
+#   flite  - built into many FFmpeg builds; English only, robotic but offline and free.
+#   piper  - high quality local neural TTS (https://github.com/rhasspy/piper).
+#            `voice` is the model name; files are looked up in tts_models_dir.
+#   silent - timed silence sized to the text. A last-resort fallback so a
+#            language can still be rendered (with subtitles) while you set up TTS.
+
+source: en
+targets: [hi]
+tts_models_dir: models/piper
+
+languages:
+  en:
+    name: English
+    locale: en-US
+    narrator: { voice_id: narrator_en_01, provider: flite, voice: slt, rate: 1.0 }
+    character_pool:
+      - { voice_id: char_en_01, provider: flite, voice: kal16, rate: 1.0 }
+      - { voice_id: char_en_02, provider: flite, voice: rms, rate: 1.0 }
+      - { voice_id: char_en_03, provider: flite, voice: awb, rate: 1.0 }
+    fallback: { voice_id: silent_en, provider: silent, voice: "" }
+
+  hi:
+    name: Hindi
+    locale: hi-IN
+    narrator: { voice_id: narrator_hi_01, provider: piper, voice: hi_IN-pratham-medium, rate: 1.0 }
+    character_pool:
+      - { voice_id: char_hi_01, provider: piper, voice: hi_IN-priyamvada-medium, rate: 1.0 }
+    fallback: { voice_id: silent_hi, provider: silent, voice: "" }
+
+  es:
+    name: Spanish
+    locale: es-ES
+    narrator: { voice_id: narrator_es_01, provider: piper, voice: es_ES-davefx-medium, rate: 1.0 }
+    character_pool:
+      - { voice_id: char_es_01, provider: piper, voice: es_ES-sharvard-medium, rate: 1.0 }
+    fallback: { voice_id: silent_es, provider: silent, voice: "" }
+
+  fr:
+    name: French
+    locale: fr-FR
+    narrator: { voice_id: narrator_fr_01, provider: piper, voice: fr_FR-siwis-medium, rate: 1.0 }
+    character_pool:
+      - { voice_id: char_fr_01, provider: piper, voice: fr_FR-upmc-medium, rate: 1.0 }
+    fallback: { voice_id: silent_fr, provider: silent, voice: "" }

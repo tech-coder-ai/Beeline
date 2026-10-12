@@ -1,0 +1,305 @@
+@if (p(); as p) {
+  <div class="page-head">
+    <div>
+      <div class="row"><h1>{{ p.name }}</h1><app-status [value]="p.status" /></div>
+      <div class="sub">
+        From <a routerLink="/library">{{ p.source.title }}</a> · {{ p.source.license_type }} ·
+        languages {{ p.languages.join(', ') }} · config <span class="mono">{{ p.config_version }}</span>
+      </div>
+    </div>
+    <div class="row">
+      @if (nextStage(); as n) {
+        <button mat-flat-button (click)="run()" [disabled]="!!activeJob() || !!p.pending_checkpoint"
+                matTooltip="Runs stages until the next checkpoint, a failure, or the end">
+          <mat-icon>play_arrow</mat-icon> Run from “{{ n.label }}”
+        </button>
+      }
+      @if (p.status !== 'CANCELLED' && p.status !== 'UPLOADED') {
+        <button mat-stroked-button (click)="cancelProject()"><mat-icon>block</mat-icon> Cancel project</button>
+      }
+    </div>
+  </div>
+
+  @if (p.pending_checkpoint; as cp) {
+    <div class="banner attention">
+      <mat-icon>rate_review</mat-icon>
+      <div style="flex:1">
+        <b>Checkpoint: {{ cp.replaceAll('_', ' ') }}</b>
+        <div class="small" style="margin:4px 0 10px">{{ help[cp] }}</div>
+        <div class="row">
+          <mat-form-field class="dense" subscriptSizing="dynamic" style="flex:1; min-width:220px">
+            <mat-label>Note for the record (optional)</mat-label><input matInput [(ngModel)]="note">
+          </mat-form-field>
+          <button mat-flat-button (click)="approve(cp)"><mat-icon>check</mat-icon> {{ cp === 'final_render' ? 'Approve final cut' : 'Approve & continue' }}</button>
+          <button mat-stroked-button (click)="reject(cp)"><mat-icon>undo</mat-icon> Send back</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- pipeline -->
+  <div class="pipeline">
+    @for (s of p.stages; track s.stage; let i = $index) {
+      @let state = stageState(s);
+      <div class="stage card" [class]="'stage card state-' + state.replaceAll(' ', '-')">
+        <div class="stage-top">
+          <span class="stage-num">{{ i + 1 }}</span>
+          <span class="stage-label">{{ s.label }}</span>
+        </div>
+        <div class="row" style="gap:6px; margin:6px 0">
+          <span class="chip" [class]="'chip ' + (state === 'done' ? 'tone-ok' : state === 'FAILED' ? 'tone-bad' : state === 'next' || state === 'awaiting approval' || state === 'RETRY_PENDING' ? 'tone-warn' : state === 'RUNNING' || state === 'QUEUED' ? 'tone-info' : 'tone-muted')">{{ state.toLowerCase() }}</span>
+          @if (s.checkpoint) { <mat-icon class="small-icon" matTooltip="Approval checkpoint after this stage">verified_user</mat-icon> }
+        </div>
+        @if (s.latest_job; as j) {
+          @if (j.status === 'RUNNING' || j.status === 'QUEUED') {
+            <mat-progress-bar mode="determinate" [value]="j.progress * 100" />
+            <div class="small muted ellipsis">{{ j.message }}</div>
+          } @else if (j.status === 'FAILED' || j.status === 'RETRY_PENDING') {
+            <div class="small ellipsis" style="color:var(--bad)" [matTooltip]="j.error || ''">{{ firstLine(j.error) }}</div>
+          } @else if (j.duration_seconds !== null) {
+            <div class="small muted">{{ j.duration_seconds | number:'1.0-1' }} s · attempt {{ j.attempts }}</div>
+          }
+        }
+        <div class="stage-actions">
+          @if (s.latest_job?.status === 'FAILED' || s.latest_job?.status === 'CANCELLED') {
+            <button mat-button (click)="retry(s.latest_job!)" [disabled]="!!activeJob()"><mat-icon>replay</mat-icon> Retry</button>
+          } @else if (s.latest_job?.status === 'RUNNING' || s.latest_job?.status === 'QUEUED') {
+            <button mat-button (click)="cancelJob(s.latest_job!)"><mat-icon>stop</mat-icon> Stop</button>
+          } @else if (s.stage !== 'publish') {
+            <button mat-button (click)="runStage(s.stage)" [disabled]="!s.can_run || !!activeJob()">
+              <mat-icon>{{ s.latest_job ? 'refresh' : 'play_arrow' }}</mat-icon> {{ s.latest_job ? 'Re-run' : 'Run' }}
+            </button>
+          }
+        </div>
+      </div>
+    }
+  </div>
+
+  <mat-tab-group animationDuration="0ms" class="detail-tabs">
+    <!-- STORY -->
+    <mat-tab label="Story">
+      <div class="tab-body">
+        @if (p.story; as st) {
+          <div class="grid cols-2">
+            <div class="card">
+              <h2>Story bible <span class="muted small">v{{ st.version }} · {{ st.generated_by }} @if (st.approved) { · approved }</span></h2>
+              <div class="kv">
+                <span>Synopsis</span><span>{{ st.bible.synopsis }}</span>
+                <span>Genre / tone</span><span>{{ st.bible.genre }} · {{ st.bible.tone }}</span>
+                <span>Audience</span><span>{{ st.bible.audience }}</span>
+                @if (st.bible.moral) { <span>Moral</span><span>{{ st.bible.moral }}</span> }
+                <span>Locations</span><span>@for (l of st.bible.locations; track l.location_id) { {{ l.name }} }</span>
+                <span>Must preserve</span><span>@for (f of st.bible.preserved_facts; track $index) { <div>• {{ f }}</div> }</span>
+              </div>
+            </div>
+            <div class="card">
+              <h2>Automated script checks</h2>
+              @for (i of st.issues; track $index) {
+                <div class="row small" style="padding:3px 0"><app-status [value]="i.severity === 'error' ? 'fail' : 'warn'" /> <span>{{ i.scene_id ? i.scene_id + ': ' : '' }}{{ i.message }}</span></div>
+              } @empty { <div class="muted">No issues found.</div> }
+              <h3 style="margin-top:14px">Hook</h3><div>{{ st.script.hook }}</div>
+              <h3 style="margin-top:10px">Ending</h3><div>{{ st.script.ending }}</div>
+            </div>
+          </div>
+          <div class="card table-wrap" style="margin-top:14px">
+            <h2>Scene breakdown</h2>
+            <table class="data">
+              <thead><tr><th>#</th><th>Scene</th><th>Spoken track</th><th>Visual</th></tr></thead>
+              <tbody>
+                @for (sc of st.script.scenes; track sc.scene_id) {
+                  <tr>
+                    <td>{{ sc.sequence }}</td>
+                    <td style="min-width:160px"><b>{{ sc.title }}</b><div class="small muted">{{ sc.duration_seconds }} s · {{ sc.mood }}<br>{{ sc.camera.shot_type }} / {{ sc.camera.movement }}</div></td>
+                    <td>@for (l of sc.lines; track $index) { <div class="line"><span class="speaker">{{ speaker(l.speaker) }}</span> {{ l.text }}</div> }</td>
+                    <td class="small muted" style="max-width:280px">{{ sc.visual_prompt }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        } @else { <div class="card empty">No script yet. Run “Story bible & script”.</div> }
+      </div>
+    </mat-tab>
+
+    <!-- CHARACTERS -->
+    <mat-tab label="Characters ({{ p.characters.length }})">
+      <div class="tab-body grid cols-3">
+        @for (c of p.characters; track c.id) {
+          <div class="card">
+            @if (c.reference_url) { <img class="thumb" [src]="c.reference_url + '?s=' + c.seed" [alt]="c.name + ' reference sheet'"> }
+            @else { <div class="thumb empty">not drawn yet</div> }
+            <div class="row" style="margin-top:10px"><b>{{ c.name }}</b><span class="chip tone-muted">{{ c.profile.role }}</span>
+              @if (c.approved) { <app-status value="approved" /> }<span class="spacer"></span>
+              <button mat-icon-button matTooltip="Redraw with a new seed" (click)="regenChar(c.character_id)" [disabled]="!!activeJob()"><mat-icon>autorenew</mat-icon></button>
+            </div>
+            <div class="small muted">{{ c.profile.appearance.species }} · seed {{ c.seed }} · {{ c.character_id }}</div>
+            <div class="row" style="margin-top:6px; gap:4px">@for (col of c.profile.appearance.palette; track col) { <span class="swatch" [style.background]="col" [matTooltip]="col"></span> }</div>
+          </div>
+        } @empty { <div class="card empty">No characters yet.</div> }
+      </div>
+    </mat-tab>
+
+    <!-- SCENES -->
+    <mat-tab label="Scenes ({{ p.scenes.length }})">
+      <div class="tab-body grid cols-3">
+        @for (sc of p.scenes; track sc.id) {
+          <div class="card">
+            @if (sc.image_url) { <img class="thumb" [src]="sc.image_url + '?s=' + sc.seed" [alt]="sc.spec.title"> }
+            @else { <div class="thumb empty">{{ sc.status }}</div> }
+            <div class="row" style="margin-top:10px"><b>{{ sc.sequence }}. {{ sc.spec.title }}</b><span class="spacer"></span>
+              <button mat-icon-button matTooltip="Redraw only this scene" (click)="regenScene(sc.scene_id)" [disabled]="!!activeJob()"><mat-icon>autorenew</mat-icon></button></div>
+            <div class="small muted">{{ sc.spec.mood }} · {{ sc.spec.camera.shot_type }} · seed {{ sc.seed }}</div>
+            @if (sc.error) { <div class="small" style="color:var(--bad)">{{ sc.error }}</div> }
+            <details class="small"><summary class="muted">prompt</summary>{{ sc.spec.visual_prompt }}</details>
+          </div>
+        } @empty { <div class="card empty">No scenes yet.</div> }
+      </div>
+    </mat-tab>
+
+    <!-- LANGUAGES -->
+    <mat-tab label="Languages">
+      <div class="tab-body">
+        @for (loc of p.localizations; track loc.language) {
+          <div class="card" style="margin-bottom:14px">
+            <div class="row"><h2 style="margin:0">{{ loc.language }}</h2><app-status [value]="loc.status" /><span class="muted small">{{ loc.generated_by }}</span></div>
+            @if (loc.note) { <div class="small" style="margin:6px 0; color:var(--warn)">{{ loc.note }}</div> }
+            @if (loc.audio.length) {
+              <div class="table-wrap"><table class="data">
+                <thead><tr><th>Segment</th><th>Speaker / voice</th><th>Text</th><th>Audio</th></tr></thead>
+                <tbody>
+                  @for (a of loc.audio; track a.segment_id) {
+                    @let key = loc.language + '/' + a.segment_id;
+                    <tr>
+                      <td class="mono">{{ a.segment_id }}</td>
+                      <td class="small">{{ speaker(a.speaker) }}<div class="muted">{{ a.voice_id }} ({{ a.tts_provider }})</div>
+                        @if (a.status === 'fallback') { <app-status value="fallback" /> }</td>
+                      <td style="min-width:260px">
+                        @if (edits[key] !== undefined) {
+                          <textarea class="edit" rows="3" [(ngModel)]="edits[key]"></textarea>
+                          <div class="row"><button mat-button (click)="saveSegment(loc.language, a.segment_id)">Save</button>
+                            <button mat-button (click)="edits[key] = undefined!">Cancel</button></div>
+                        } @else {
+                          <span>{{ a.text }}</span>
+                          <button mat-icon-button class="tiny" matTooltip="Fix this line" (click)="edits[key] = a.text"><mat-icon>edit</mat-icon></button>
+                        }
+                      </td>
+                      <td>@if (a.audio_url) { <audio controls preload="none" [src]="a.audio_url"></audio> }<div class="muted small">{{ a.duration }} s</div></td>
+                    </tr>
+                  }
+                </tbody>
+              </table></div>
+            }
+          </div>
+        } @empty { <div class="card empty">Localization runs in the “Localization, voices & subtitles” stage.</div> }
+      </div>
+    </mat-tab>
+
+    <!-- VIDEO & QC -->
+    <mat-tab label="Video & QC">
+      <div class="tab-body">
+        @for (r of p.renders; track r.id) {
+          <div class="card" style="margin-bottom:14px">
+            <div class="row" style="margin-bottom:10px"><h2 style="margin:0">{{ r.language }}</h2><app-status [value]="r.status" />
+              @if (r.qc_passed === true) { <app-status value="pass" /> } @else if (r.qc_passed === false) { <app-status value="fail" /> }
+              <span class="muted small">{{ r.duration | number:'1.0-0' }} s video · rendered in {{ r.render_seconds | number:'1.0-0' }} s</span></div>
+            <div class="grid cols-2">
+              <div>
+                @if (r.video_url) { <video class="thumb" controls preload="metadata" [src]="r.video_url + '?t=' + r.updated_at" [poster]="r.thumbnail_url"></video> }
+                <div class="row" style="margin-top:8px">
+                  @if (r.video_url) { <a mat-stroked-button [href]="r.video_url" download><mat-icon>download</mat-icon> MP4</a> }
+                  @if (r.subtitles_url) { <a mat-stroked-button [href]="r.subtitles_url" download><mat-icon>subtitles</mat-icon> SRT</a> }
+                </div>
+                <h3 style="margin-top:14px">YouTube metadata <span class="muted small">({{ r.metadata.generated_by }})</span></h3>
+                <div><b>{{ r.metadata.title }}</b></div>
+                <pre style="margin-top:6px; max-height:220px; overflow:auto">{{ r.metadata.description }}</pre>
+                <div class="row" style="margin-top:6px; gap:4px">@for (t of r.metadata.tags; track t) { <span class="chip tone-muted">{{ t }}</span> }</div>
+              </div>
+              <div>
+                @if (r.thumbnail_url) { <img class="thumb" [src]="r.thumbnail_url + '?t=' + r.updated_at" alt="thumbnail"> }
+                <h3 style="margin-top:12px">QC report</h3>
+                @for (c of r.qc.checks ?? []; track c.name) {
+                  <div class="qc-row">
+                    <mat-icon [class]="'qc-' + c.status">{{ c.status === 'pass' ? 'check_circle' : c.status === 'warn' ? 'warning' : 'cancel' }}</mat-icon>
+                    <span class="qc-name">{{ c.name.replaceAll('_', ' ') }}</span><span class="muted small">{{ c.detail }}</span>
+                  </div>
+                } @empty { <div class="muted">QC has not run on this render.</div> }
+              </div>
+            </div>
+          </div>
+        } @empty { <div class="card empty">Nothing rendered yet.</div> }
+      </div>
+    </mat-tab>
+
+    <!-- PUBLISHING -->
+    <mat-tab label="Publishing">
+      <div class="tab-body grid cols-2">
+        <div class="card">
+          <h2>Publish</h2>
+          @if (!p.can_publish) {
+            <div class="banner attention"><mat-icon>lock</mat-icon><div>Publishing unlocks after QC passes and a person approves the final cut. The backend enforces this as well.</div></div>
+          }
+          <mat-form-field class="dense"><mat-label>Visibility</mat-label>
+            <mat-select [(ngModel)]="visibility">
+              <mat-option value="private">private (recommended first)</mat-option>
+              <mat-option value="unlisted">unlisted</mat-option>
+              <mat-option value="public">public</mat-option>
+            </mat-select></mat-form-field>
+          <div class="row">
+            @for (r of publishable(); track r.id) {
+              <mat-checkbox [checked]="publishLangs.includes(r.language)"
+                (change)="$event.checked ? publishLangs.push(r.language) : publishLangs.splice(publishLangs.indexOf(r.language), 1)">{{ r.language }}</mat-checkbox>
+            }
+          </div>
+          <button mat-flat-button style="margin-top:10px" (click)="publish()" [disabled]="!p.can_publish || !!activeJob() || !publishLangs.length">
+            <mat-icon>cloud_upload</mat-icon> Upload</button>
+          <p class="small muted">Uploads are idempotent: a retry after a timeout first checks whether the video already exists.</p>
+        </div>
+        <div class="card">
+          <h2>Publications</h2>
+          @for (x of p.publications; track x.id) {
+            <div style="padding:6px 0; border-bottom:1px solid var(--border)">
+              <div class="row"><b>{{ x.language }}</b><app-status [value]="x.status" /><span class="chip tone-muted">{{ x.visibility }}</span><span class="muted small">{{ x.provider }}</span></div>
+              @if (x.url) { <a [href]="x.url" target="_blank" rel="noopener" class="small">{{ x.url }}</a> }
+              <div class="small muted mono">{{ x.attempt_id }} · retries {{ x.retries }}</div>
+              @if (x.last_error) { <div class="small" style="color:var(--bad)">{{ x.last_error }}</div> }
+            </div>
+          } @empty { <div class="muted">Not published yet.</div> }
+          <h2 style="margin-top:18px">Approval history</h2>
+          @for (a of p.approvals; track a.id) {
+            <div class="small" style="padding:3px 0"><app-status [value]="a.decision === 'auto' ? 'skipped' : a.decision" /> {{ a.checkpoint.replaceAll('_', ' ') }} · {{ a.decided_by }} · {{ a.created_at | date:'short' }} @if (a.note) { · “{{ a.note }}” }</div>
+          } @empty { <div class="muted">No decisions yet.</div> }
+        </div>
+      </div>
+    </mat-tab>
+
+    <!-- JOBS -->
+    <mat-tab label="Jobs ({{ p.jobs.length }})">
+      <div class="tab-body card table-wrap">
+        <table class="data">
+          <thead><tr><th>Stage</th><th>Status</th><th>Attempts</th><th>Duration</th><th>Detail</th><th></th></tr></thead>
+          <tbody>
+            @for (j of p.jobs; track j.id) {
+              <tr>
+                <td>{{ j.stage }}<div class="muted small mono">{{ j.id }}</div></td>
+                <td><app-status [value]="j.status" /></td>
+                <td>{{ j.attempts }}/{{ j.max_attempts }}</td>
+                <td>{{ j.duration_seconds !== null ? (j.duration_seconds | number:'1.0-1') + ' s' : '—' }}</td>
+                <td class="small" style="max-width:520px">
+                  <div>{{ j.message }}</div>
+                  @if (j.error) { <details><summary style="color:var(--bad)">{{ firstLine(j.error) }}</summary><pre>{{ j.error }}</pre></details> }
+                  @if (outputKeys(j)) { <details><summary class="muted">output</summary><pre>{{ j.output | json }}</pre></details> }
+                </td>
+                <td>
+                  @if (j.status === 'FAILED' || j.status === 'CANCELLED') { <button mat-button (click)="retry(j)" [disabled]="!!activeJob()">Retry</button> }
+                  @if (j.status === 'RUNNING' || j.status === 'QUEUED' || j.status === 'RETRY_PENDING') { <button mat-button (click)="cancelJob(j)">Cancel</button> }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </mat-tab>
+  </mat-tab-group>
+} @else {
+  <mat-progress-bar mode="indeterminate" />
+}

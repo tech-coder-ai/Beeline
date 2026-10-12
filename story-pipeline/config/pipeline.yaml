@@ -1,0 +1,96 @@
+# Story-to-YouTube pipeline configuration.
+#
+# Everything that is a *choice* (which model, which engine, which limits) lives
+# here, not in code. Environment variables override the most common keys
+# (see backend/app/config.py -> ENV_OVERRIDES), so you can switch providers
+# without editing this file, e.g.  SPA_LLM_PROVIDER=ollama SPA_LLM_MODEL=llama3.1:8b
+
+pipeline:
+  # approval_required: pause at every checkpoint listed below.
+  # fully_automated:   run straight through (publishing.require_approval still applies).
+  mode: approval_required
+  max_parallel_scenes: 2          # concurrent image generations inside the scenes stage
+  max_attempts: 3                 # automatic retries for transient provider failures
+  retry_backoff_seconds: 5
+  checkpoint_after:
+    - story_adaptation            # after the script stage
+    - character_generation        # after character reference sheets
+    - final_render                # after QC; required before publishing
+  target_scene_count: 6           # guidance for the script writer
+  min_scene_seconds: 4
+  max_scene_seconds: 40
+
+models:
+  llm:
+    # ollama | openai_compatible | offline
+    # "offline" = no LLM; the pipeline uses its deterministic fallbacks
+    # (heuristic scene splitting, template metadata). Translation is skipped.
+    provider: offline
+    model: llama3.1:8b
+    base_url: http://localhost:11434
+    api_key: ""                   # only for openai_compatible
+    temperature: 0.4
+    timeout_seconds: 300
+    json_repair_attempts: 2       # re-prompt with validation errors before falling back
+    max_source_chars: 24000       # truncate long sources to fit small context windows
+  image:
+    # comfyui | placeholder
+    # "placeholder" draws deterministic storyboard cards with Pillow so the
+    # whole pipeline runs on any machine. Switch to comfyui once it's installed.
+    provider: placeholder
+    base_url: http://localhost:8188
+    timeout_seconds: 600
+    workflows:
+      character_sheet: character_sheet_v1.json
+      scene: scene_v1.json
+    style: "storybook watercolor illustration, soft warm light, consistent character design"
+    negative_prompt: "text, watermark, logo, extra limbs, deformed, blurry"
+    width: 1344
+    height: 768
+
+video:
+  width: 1920
+  height: 1080
+  fps: 24
+  format: mp4
+  crf: 21
+  preset: veryfast
+  burn_subtitles: true            # also muxed as a soft subtitle track
+  scene_padding_seconds: 0.6      # silence before/after narration in each scene
+  segment_gap_seconds: 0.35       # pause between narration/dialogue segments
+  camera_zoom: 1.12               # max zoom for the Ken Burns effect
+  music_path: null                # optional background track (looped, ducked)
+  music_volume: 0.12
+
+quality:
+  max_silence_seconds: 4.0
+  max_black_seconds: 1.0
+  duration_tolerance_seconds: 1.5
+  clipping_threshold_db: -0.1
+  # Only enforced when a source's license requires transformation
+  # (allowed_uses lacks "verbatim"). 1.0 = identical text.
+  max_source_similarity: 0.6
+  thumbnail_width: 1280
+  thumbnail_height: 720
+
+publishing:
+  provider: dry_run               # youtube | dry_run
+  default_visibility: private     # private | unlisted | public
+  require_approval: true          # human must approve final_render before upload
+  category_id: "1"                # Film & Animation
+  client_secrets_file: secrets/client_secret.json
+  token_file: secrets/youtube_token.json
+  synthetic_content_disclosure: true
+  channel_attribution: "Narrated and illustrated with AI tools."
+
+storage:
+  data_dir: data
+  database_url: sqlite:///data/pipeline.db
+
+discovery:
+  library_dir: sample_stories
+  gutendex_url: https://gutendex.com
+  rss_feeds: []
+  user_agent: "StoryPipeline/0.1 (+contact: you@example.com)"
+  request_delay_seconds: 1.0
+  max_story_chars: 60000
