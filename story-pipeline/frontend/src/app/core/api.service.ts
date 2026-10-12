@@ -50,8 +50,8 @@ export class Api {
   // projects
   projects() { return this.call(this.http.get<ProjectSummary[]>('/api/projects')); }
   project(id: string, quiet = false) { return this.call(this.http.get<ProjectDetail>(`/api/projects/${id}`), quiet); }
-  createProject(source_id: string, name?: string) {
-    return this.call(this.http.post<ProjectDetail>('/api/projects', { source_id, name: name || null }));
+  createProject(source_id: string, name?: string, production_style?: string) {
+    return this.call(this.http.post<ProjectDetail>('/api/projects', { source_id, name: name || null, production_style: production_style || null }));
   }
   run(id: string) { return this.call(this.http.post<Job>(`/api/projects/${id}/run`, {})); }
   runStage(id: string, stage: string) { return this.call(this.http.post<Job>(`/api/projects/${id}/stages/${stage}`, {})); }

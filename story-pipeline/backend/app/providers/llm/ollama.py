@@ -25,6 +25,7 @@ class OllamaProvider:
             "model": self.cfg.model,
             "messages": messages,
             "stream": False,
+            "keep_alive": self.cfg.keep_alive,  # "0" frees VRAM right away for the image/video models
             "options": {"temperature": self.cfg.temperature},
         }
         if fmt is not None:

@@ -22,6 +22,12 @@ import { StatusChip } from '../../shared/status-chip';
             @for (s of approved(); track s.id) { <mat-option [value]="s.id">{{ s.title }}</mat-option> }
           </mat-select>
         </mat-form-field>
+        <mat-form-field class="dense" subscriptSizing="dynamic" style="min-width:220px"><mat-label>Style</mat-label>
+          <mat-select [(ngModel)]="style">
+            <mat-option value="illustrated_narration">Illustrated narration</mat-option>
+            <mat-option value="hybrid_animation">Hybrid animation (AI motion)</mat-option>
+          </mat-select>
+        </mat-form-field>
         <button mat-flat-button (click)="create()" [disabled]="!sourceId"><mat-icon>add</mat-icon> New project</button>
       </div>
     </div>
@@ -34,7 +40,7 @@ import { StatusChip } from '../../shared/status-chip';
         <tbody>
           @for (p of projects(); track p.id) {
             <tr class="clickable" (click)="open(p.id)">
-              <td><b>{{ p.name }}</b><div class="muted small">{{ p.source_title }} · {{ p.languages.join(', ') }}</div></td>
+              <td><b>{{ p.name }}</b><div class="muted small">{{ p.source_title }} · {{ p.languages.join(', ') }} · {{ p.production_style.replace('_', ' ') }}</div></td>
               <td><app-status [value]="p.status" /></td>
               <td>@if (p.pending_checkpoint) { <span class="chip tone-warn">{{ p.pending_checkpoint.replaceAll('_', ' ') }}</span> }</td>
               <td>@if (p.last_job; as j) { {{ j.stage }} <app-status [value]="j.status" /> }</td>
@@ -52,6 +58,7 @@ export class ProjectsPage implements OnInit {
   projects = signal<ProjectSummary[]>([]);
   approved = signal<Story[]>([]);
   sourceId = '';
+  style = 'illustrated_narration';
 
   async ngOnInit() {
     const [p, s] = await Promise.all([this.api.projects(), this.api.stories('approved')]);
@@ -60,7 +67,7 @@ export class ProjectsPage implements OnInit {
   }
   open(id: string) { this.router.navigate(['/projects', id]); }
   async create() {
-    const p = await this.api.createProject(this.sourceId);
+    const p = await this.api.createProject(this.sourceId, undefined, this.style);
     this.open(p.id);
   }
 }

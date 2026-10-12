@@ -15,7 +15,7 @@ from app.config import Settings
 from app.domain.states import STAGES
 from app.media import ffmpeg_filters, have_ffmpeg
 from app.persistence.models import Asset, Project, Publication, StorySource, WorkflowJob
-from app.providers.registry import build_image, build_llm, build_publisher, build_tts
+from app.providers.registry import build_image, build_llm, build_publisher, build_tts, build_video
 from app.services.assets import AssetStore
 
 router = APIRouter(prefix="/api", tags=["system"])
@@ -63,6 +63,7 @@ async def health(settings: Settings = Depends(settings_dep)):
         "mode": settings.pipeline.mode,
         "llm": {"provider": llm.name, **(await llm.health())},
         "image": {"provider": image.name, **(await asyncio.to_thread(image.health))},
+        "video": {"provider": build_video(settings).name, **(await asyncio.to_thread(build_video(settings).health))},
         "ffmpeg": {"ok": have_ffmpeg(), "detail": "zoompan/subtitles/loudnorm present"
                    if {"zoompan", "subtitles", "loudnorm"} <= filters else f"missing filters: {sorted({'zoompan', 'subtitles', 'loudnorm'} - filters)}"},
         "voices": voices,

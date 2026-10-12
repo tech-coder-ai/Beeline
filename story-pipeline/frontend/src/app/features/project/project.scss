@@ -1,4 +1,4 @@
-.pipeline { display: grid; grid-template-columns: repeat(7, minmax(150px, 1fr)); gap: 10px; margin-bottom: 18px; overflow-x: auto; }
+.pipeline { display: grid; grid-template-columns: repeat(8, minmax(130px, 1fr)); gap: 10px; margin-bottom: 18px; overflow-x: auto; }
 @media (max-width: 1200px) { .pipeline { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); } }
 .stage { padding: 12px; display: flex; flex-direction: column; min-height: 150px; }
 .stage-top { display: flex; gap: 8px; align-items: center; }

@@ -50,6 +50,7 @@ class WorkflowError(Exception):
 
 
 def _handlers() -> dict[Stage, StageHandler]:
+    from app.services.animation.service import run_animate_stage
     from app.services.audio.service import run_audio_stage
     from app.services.characters.service import run_characters_stage
     from app.services.publishing.service import run_publish_stage
@@ -62,6 +63,7 @@ def _handlers() -> dict[Stage, StageHandler]:
         Stage.SCRIPT: run_script_stage,
         Stage.CHARACTERS: run_characters_stage,
         Stage.SCENES: run_scenes_stage,
+        Stage.ANIMATE: run_animate_stage,
         Stage.AUDIO: run_audio_stage,
         Stage.RENDER: run_render_stage,
         Stage.QC: run_qc_stage,

@@ -55,6 +55,7 @@ export class SettingsPage implements OnInit {
   }
   items(h: Health): { name: string; v: HealthItem }[] {
     return [{ name: 'Language model', v: h.llm }, { name: 'Image generation', v: h.image },
+            { name: 'Image-to-video', v: h.video },
             { name: 'FFmpeg', v: h.ffmpeg }, { name: 'Publisher', v: h.publisher }];
   }
 }

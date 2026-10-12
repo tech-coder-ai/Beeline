@@ -48,3 +48,15 @@ def build_publisher(settings: Settings, project_dir: Path) -> Publisher:
         return YouTubeApiPublisher(settings.path(settings.publishing.token_file))
     from app.providers.youtube.dry_run import DryRunPublisher
     return DryRunPublisher(project_dir / "publishing")
+
+
+def build_video(settings: Settings):
+    cfg = settings.models.video
+    if cfg.provider == "comfyui":
+        from app.providers.video.comfyui import ComfyUIVideoProvider
+        return ComfyUIVideoProvider(cfg, settings.path("comfyui-workflows"))
+    if cfg.provider == "placeholder":
+        from app.providers.video.placeholder import PlaceholderVideoProvider
+        return PlaceholderVideoProvider()
+    from app.providers.video.placeholder import NoVideoProvider
+    return NoVideoProvider()

@@ -4,7 +4,7 @@
       <div class="row"><h1>{{ p.name }}</h1><app-status [value]="p.status" /></div>
       <div class="sub">
         From <a routerLink="/library">{{ p.source.title }}</a> · {{ p.source.license_type }} ·
-        languages {{ p.languages.join(', ') }} · config <span class="mono">{{ p.config_version }}</span>
+        {{ p.production_style.replace('_', ' ') }} · languages {{ p.languages.join(', ') }} · config <span class="mono">{{ p.config_version }}</span>
       </div>
     </div>
     <div class="row">
@@ -144,11 +144,17 @@
       <div class="tab-body grid cols-3">
         @for (sc of p.scenes; track sc.id) {
           <div class="card">
-            @if (sc.image_url) { <img class="thumb" [src]="sc.image_url + '?s=' + sc.seed" [alt]="sc.spec.title"> }
+            @if (sc.motion_url) {
+              <video class="thumb" [src]="sc.motion_url" [poster]="sc.image_url" muted loop playsinline controls preload="none"></video>
+            } @else if (sc.image_url) { <img class="thumb" [src]="sc.image_url + '?s=' + sc.seed" [alt]="sc.spec.title"> }
             @else { <div class="thumb empty">{{ sc.status }}</div> }
             <div class="row" style="margin-top:10px"><b>{{ sc.sequence }}. {{ sc.spec.title }}</b><span class="spacer"></span>
               <button mat-icon-button matTooltip="Redraw only this scene" (click)="regenScene(sc.scene_id)" [disabled]="!!activeJob()"><mat-icon>autorenew</mat-icon></button></div>
             <div class="small muted">{{ sc.spec.mood }} · {{ sc.spec.camera.shot_type }} · seed {{ sc.seed }}</div>
+            @if (sc.motion_status === 'animated') { <span class="chip tone-progress" matTooltip="AI image-to-video clip">animated</span> }
+            @else if (sc.spec.animate && p.production_style === 'hybrid_animation') { <span class="chip tone-muted" matTooltip="Marked for motion; runs in the AI animation stage">motion planned</span> }
+            @if (sc.motion_error) { <div class="small" style="color:var(--bad)">{{ sc.motion_error }}</div> }
+            @if (sc.spec.motion_prompt && p.production_style === 'hybrid_animation') { <div class="small muted">motion: {{ sc.spec.motion_prompt }}</div> }
             @if (sc.error) { <div class="small" style="color:var(--bad)">{{ sc.error }}</div> }
             <details class="small"><summary class="muted">prompt</summary>{{ sc.spec.visual_prompt }}</details>
           </div>

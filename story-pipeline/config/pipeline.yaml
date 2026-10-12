@@ -17,6 +17,9 @@ pipeline:
     - character_generation        # after character reference sheets
     - final_render                # after QC; required before publishing
   target_scene_count: 6           # guidance for the script writer
+  # illustrated_narration: every scene is a still image with a camera move (fast, cheap).
+  # hybrid_animation: the most important scenes also get an AI image-to-video clip (models.video).
+  default_production_style: illustrated_narration
   min_scene_seconds: 4
   max_scene_seconds: 40
 
@@ -33,6 +36,7 @@ models:
     timeout_seconds: 300
     json_repair_attempts: 2       # re-prompt with validation errors before falling back
     max_source_chars: 24000       # truncate long sources to fit small context windows
+    keep_alive: "5m"              # "0" unloads the LLM right after each call, freeing VRAM for video models
   image:
     # comfyui | placeholder
     # "placeholder" draws deterministic storyboard cards with Pillow so the
@@ -47,6 +51,22 @@ models:
     negative_prompt: "text, watermark, logo, extra limbs, deformed, blurry"
     width: 1344
     height: 768
+  video:
+    # Image-to-video for hybrid_animation projects: none | comfyui | placeholder
+    # Recommended local model: Wan 2.2 14B image-to-video (Apache 2.0), fp8 weights, run in ComfyUI.
+    # ~20 GB VRAM at fp8; a 48 GB card runs 720p comfortably. See comfyui-workflows/README.md.
+    # "placeholder" fakes motion with FFmpeg so you can test the hybrid path without a GPU.
+    provider: none
+    base_url: http://localhost:8188
+    timeout_seconds: 5400         # a 720p 14B clip can take many minutes; this is per clip
+    workflow: image_to_video_wan22_14b.json
+    width: 1280                   # 720p; use 832x480 for ~4x faster drafts
+    height: 720
+    fps: 16                       # Wan 2.2's native frame rate
+    frames: 81                    # 4n+1 frames; 81 @ 16 fps = ~5 s of motion per animated scene
+    negative_prompt: "static, frozen, morphing, distorted faces, extra limbs, text, watermark, flicker"
+    max_animated_scenes: 3        # GPU time is the cost: animate the hook and the key beats only
+    free_vram_after_stage: true   # POST /free to ComfyUI after the stage so TTS/render get the GPU
 
 video:
   width: 1920

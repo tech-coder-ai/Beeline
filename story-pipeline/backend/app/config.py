@@ -27,6 +27,7 @@ class PipelineCfg(BaseModel):
     retry_backoff_seconds: float = Field(5, ge=0)
     checkpoint_after: list[Checkpoint] = ["story_adaptation", "character_generation", "final_render"]
     target_scene_count: int = Field(6, ge=1, le=60)
+    default_production_style: Literal["illustrated_narration", "hybrid_animation"] = "illustrated_narration"
     min_scene_seconds: float = 4
     max_scene_seconds: float = 40
 
@@ -40,6 +41,7 @@ class LLMCfg(BaseModel):
     timeout_seconds: float = 300
     json_repair_attempts: int = Field(2, ge=0, le=5)
     max_source_chars: int = Field(24000, ge=1000)  # keep prompts inside small models' context windows
+    keep_alive: str = "5m"  # Ollama: how long the model stays in VRAM after a call ("0" frees it immediately)
 
 
 class ImageCfg(BaseModel):
@@ -53,9 +55,25 @@ class ImageCfg(BaseModel):
     height: int = 768
 
 
+class VideoModelCfg(BaseModel):
+    """Image-to-video model used by the animate stage (hybrid_animation projects only)."""
+    provider: Literal["none", "comfyui", "placeholder"] = "none"
+    base_url: str = "http://localhost:8188"
+    timeout_seconds: float = 5400
+    workflow: str = "image_to_video_wan22_14b.json"
+    width: int = 1280
+    height: int = 720
+    fps: int = Field(16, ge=1, le=60)        # the model's native frame rate (Wan 2.2: 16)
+    frames: int = Field(81, ge=9, le=241)    # Wan expects 4n+1 frames; 81 @ 16 fps = ~5 s
+    negative_prompt: str = "static, frozen, morphing, distorted faces, extra limbs, text, watermark, flicker"
+    max_animated_scenes: int = Field(3, ge=0, le=60)
+    free_vram_after_stage: bool = True      # ask ComfyUI to unload models so the next stage has the GPU
+
+
 class ModelsCfg(BaseModel):
     llm: LLMCfg = LLMCfg()
     image: ImageCfg = ImageCfg()
+    video: VideoModelCfg = VideoModelCfg()
 
 
 class VideoCfg(BaseModel):
@@ -169,6 +187,8 @@ ENV_OVERRIDES: dict[str, tuple[str, type]] = {
     "SPA_LLM_API_KEY": ("models.llm.api_key", str),
     "SPA_IMAGE_PROVIDER": ("models.image.provider", str),
     "SPA_IMAGE_BASE_URL": ("models.image.base_url", str),
+    "SPA_VIDEO_PROVIDER": ("models.video.provider", str),
+    "SPA_VIDEO_BASE_URL": ("models.video.base_url", str),
     "SPA_PUBLISH_PROVIDER": ("publishing.provider", str),
     "SPA_DATABASE_URL": ("storage.database_url", str),
     "SPA_DATA_DIR": ("storage.data_dir", str),

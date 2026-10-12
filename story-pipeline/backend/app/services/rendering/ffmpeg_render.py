@@ -36,11 +36,26 @@ def _motion(movement: str, zoom: float, frames: int) -> tuple[str, str, str]:
 
 
 def clip_fingerprint(scene: TimelineScene, cfg: VideoCfg) -> str:
-    return fingerprint("clip-v1", scene.image_checksum, scene.duration, scene.camera_movement, cfg.width, cfg.height,
-                       cfg.fps, cfg.crf, cfg.preset, cfg.camera_zoom)
+    return fingerprint("clip-v2", scene.image_checksum, scene.motion_checksum, scene.duration, scene.camera_movement,
+                       cfg.width, cfg.height, cfg.fps, cfg.crf, cfg.preset, cfg.camera_zoom)
+
+
+def render_motion_clip(scene: TimelineScene, cfg: VideoCfg, out: Path) -> None:
+    """AI clip -> output size/fps; if the narration is longer than the clip, hold the last frame."""
+    w, h, fps = cfg.width, cfg.height, cfg.fps
+    frames = max(1, round(scene.duration * fps))
+    vf = (f"fps={fps},scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},setsar=1,"
+          f"tpad=stop_mode=clone:stop_duration={scene.duration:.3f},trim=duration={scene.duration:.3f},"
+          f"fade=t=in:st=0:d={FADE},fade=t=out:st={max(0.0, scene.duration - FADE):.3f}:d={FADE},format=yuv420p")
+    run_ffmpeg(["-i", scene.motion_path, "-vf", vf, "-frames:v", str(frames), "-r", str(fps),
+                "-c:v", "libx264", "-preset", cfg.preset, "-crf", str(cfg.crf), "-pix_fmt", "yuv420p",
+                "-an", str(out)])
 
 
 def render_clip(scene: TimelineScene, cfg: VideoCfg, out: Path) -> None:
+    if scene.motion_path:
+        render_motion_clip(scene, cfg, out)
+        return
     w, h, fps = cfg.width, cfg.height, cfg.fps
     frames = max(1, round(scene.duration * fps))
     z, x, y = _motion(scene.camera_movement, cfg.camera_zoom, frames)

@@ -94,6 +94,7 @@ def project_detail(p: Project, db: Session) -> dict[str, Any]:
     d["scenes"] = [{
         "id": s.id, "scene_id": s.scene_id, "sequence": s.sequence, "spec": s.spec, "seed": s.seed,
         "status": s.status, "error": s.error, "image_url": asset_url(s.image_asset_id),
+        "motion_url": asset_url(s.motion_asset_id), "motion_status": s.motion_status, "motion_error": s.motion_error,
     } for s in db.scalars(select(Scene).where(Scene.project_id == p.id).order_by(Scene.sequence))]
     audio: dict[str, list[dict]] = {}
     for a in db.scalars(select(AudioSegment).where(AudioSegment.project_id == p.id).order_by(AudioSegment.order)):

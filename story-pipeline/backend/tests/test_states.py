@@ -3,6 +3,8 @@ from app.domain.states import ProjectStatus, Stage, can_run, next_stage
 
 def test_next_stage_follows_the_table():
     assert next_stage(ProjectStatus.SOURCE_APPROVED).stage is Stage.SCRIPT
+    assert next_stage(ProjectStatus.SCENES_READY).stage is Stage.ANIMATE
+    assert next_stage(ProjectStatus.MOTION_READY).stage is Stage.AUDIO
     assert next_stage(ProjectStatus.AUDIO_READY).stage is Stage.RENDER
     assert next_stage(ProjectStatus.QC_PASSED) is None  # waits for a human, not a stage
     assert next_stage(ProjectStatus.QC_APPROVED).stage is Stage.PUBLISH

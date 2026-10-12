@@ -125,6 +125,11 @@ class Scene(TimestampMixin, Base):
     fingerprint: Mapped[str | None] = mapped_column(String(64))
     status: Mapped[str] = mapped_column(String(32), default="pending")  # pending|generated|failed|approved
     error: Mapped[str | None] = mapped_column(Text)
+    # hybrid_animation: optional AI motion clip generated from the approved still
+    motion_asset_id: Mapped[str | None] = mapped_column(ForeignKey("assets.id"))
+    motion_fingerprint: Mapped[str | None] = mapped_column(String(64))
+    motion_status: Mapped[str | None] = mapped_column(String(32))  # animated|failed|None (still image)
+    motion_error: Mapped[str | None] = mapped_column(Text)
 
 
 class Asset(TimestampMixin, Base):

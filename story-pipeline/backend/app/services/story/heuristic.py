@@ -99,7 +99,7 @@ def _beats(text: str) -> list[list[tuple[str, str]]]:
 
 
 def adapt(title: str, author: str | None, text: str, *, target_scenes: int, min_s: float, max_s: float,
-          style: str) -> tuple[StoryAnalysis, Script]:
+          style: str, max_animated: int = 3) -> tuple[StoryAnalysis, Script]:
     names = detect_characters(text) or ["Narrator"]
     chars: list[CharacterProfile] = []
     for i, name in enumerate(names):
@@ -180,6 +180,15 @@ def adapt(title: str, author: str | None, text: str, *, target_scenes: int, min_
             continuity_requirements=[f"{c.name} keeps the {c.appearance.palette[0]} colouring" for c in chars
                                      if c.character_id in present],
         ))
+    # Mark scenes for AI motion: the hook first, then the most dramatic moods.
+    drama = {"tense": 0, "triumphant": 1, "joyful": 2}
+    ranked = [scenes[0]] + sorted(scenes[1:], key=lambda sc: (drama.get(sc.mood, 9), sc.sequence))
+    for sc in ranked[:max_animated]:
+        if sc is scenes[0] or sc.mood in drama:
+            who = ", ".join(c.name for c in chars if c.character_id in sc.characters) or "the scene"
+            sc.animate = True
+            sc.motion_prompt = (f"{who} move naturally, {sc.mood} energy, gentle wind, "
+                                f"{sc.camera.movement.replace('_', ' ')}")
     script = Script(title=title, hook=sentences[0] if sentences else title, scenes=scenes,
                     ending=sentences[-1] if sentences else "")
     return StoryAnalysis(bible=bible, characters=chars), script

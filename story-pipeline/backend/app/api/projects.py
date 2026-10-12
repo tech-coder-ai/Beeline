@@ -23,7 +23,7 @@ router = APIRouter(prefix="/api/projects", tags=["projects"])
 class CreateProject(BaseModel):
     source_id: str
     name: str | None = None
-    production_style: Literal["illustrated_narration", "hybrid_animation"] = "illustrated_narration"
+    production_style: Literal["illustrated_narration", "hybrid_animation"] | None = None  # default from config
 
 
 class PublishRequest(BaseModel):
@@ -69,7 +69,8 @@ def create_project(body: CreateProject, request: Request, db: Session = Depends(
         assert_usable(src)  # the rights gate: no project from an unapproved source
     except RightsError as exc:
         raise HTTPException(422, str(exc)) from exc
-    p = Project(name=body.name or src.title, source_id=src.id, production_style=body.production_style,
+    style = body.production_style or settings.pipeline.default_production_style
+    p = Project(name=body.name or src.title, source_id=src.id, production_style=style,
                 status=ProjectStatus.SOURCE_APPROVED.value, config_version=settings.config_version,
                 languages=settings.languages.all_codes())
     db.add(p)
@@ -207,9 +208,9 @@ def edit_segment(project_id: str, language: str, segment_id: str, body: SegmentE
     else:
         raise HTTPException(404, "segment not found")
     loc.segments = segs
-    if rank(p.status) > rank(ProjectStatus.SCENES_READY) and not engine.active_job(db, p.id):
+    if rank(p.status) > rank(ProjectStatus.MOTION_READY) and not engine.active_job(db, p.id):
         engine.withdraw_checkpoint(db, p, f"edited {language}/{segment_id}")
-        p.status = ProjectStatus.SCENES_READY.value
+        p.status = ProjectStatus.MOTION_READY.value  # next run starts at the audio stage
     return {"ok": True, "status": p.status}
 
 

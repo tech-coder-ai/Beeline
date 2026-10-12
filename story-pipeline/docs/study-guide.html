@@ -104,6 +104,7 @@ html { scroll-behavior: smooth; }
     <li><a href="#map">Architecture map</a></li>
     <li><a href="#order">The build order</a></li>
     <li><a href="#decisions">Decision records</a></li>
+    <li><a href="#animation">Adding AI animation</a></li>
     <li><a href="#lifecycle">One video, end to end</a></li>
     <li><a href="#bugs">Bugs found while building</a></li>
     <li><a href="#testing">How it is tested</a></li>
@@ -120,10 +121,10 @@ html { scroll-behavior: smooth; }
   <h1>How the Story-to-YouTube pipeline was designed and built</h1>
   <p class="lede">This guide follows the reasoning behind each part of the app: what was built, in what order, which alternatives were rejected, and which bugs testing caught. Read it next to the code and you should be able to build a similar pipeline yourself.</p>
   <div class="facts">
-    <div><b>7</b><span>pipeline stages</span></div>
+    <div><b>8</b><span>pipeline stages</span></div>
     <div><b>12</b><span>database entities</span></div>
-    <div><b>4</b><span>provider interfaces</span></div>
-    <div><b>22</b><span>automated tests</span></div>
+    <div><b>5</b><span>provider interfaces</span></div>
+    <div><b>26</b><span>automated tests</span></div>
     <div><b>98 s</b><span>first test video</span></div>
   </div>
 </header>
@@ -134,7 +135,7 @@ html { scroll-behavior: smooth; }
 <p>Every section names the file that implements what it describes. The best way to learn from it is to run the app first, then read the guide with the code open:</p>
 <pre><code>cd story-pipeline/backend
 python3 -m venv .venv &amp;&amp; .venv/bin/pip install -e ".[dev]"
-.venv/bin/pytest                          # 22 tests, including a full offline render
+.venv/bin/pytest                          # 26 tests, including full offline renders
 .venv/bin/uvicorn app.main:app --port 8000
 cd ../frontend &amp;&amp; npm ci &amp;&amp; npx ng serve   # dashboard on http://localhost:4200</code></pre>
 <p>In the dashboard, open <strong>Story library → Discover stories</strong>, run the <code>library</code> connector, approve a fable, create a project and press <strong>Run</strong>. You will hit three approval checkpoints and end with an MP4, subtitles, a thumbnail and a QC report.</p>
@@ -166,7 +167,7 @@ flowchart LR
   RG -->|approved| P[Project]
   P --> S1[script] --> C1((approve))
   C1 --> S2[characters] --> C2((approve))
-  C2 --> S3[scenes] --> S4[audio] --> S5[render] --> S6[qc] --> C3((approve<br/>final cut))
+  C2 --> S3[scenes] --> A[animate<br/>hybrid only] --> S4[audio] --> S5[render] --> S6[qc] --> C3((approve<br/>final cut))
   C3 --> S7[publish] --> YT[(YouTube)]
 </pre>
 <p>The layers, and the job each one has:</p>
@@ -226,7 +227,8 @@ stateDiagram-v2
   SOURCE_APPROVED --> SCRIPT_READY: script
   SCRIPT_READY --> CHARACTERS_READY: characters (after approval)
   CHARACTERS_READY --> SCENES_READY: scenes (after approval)
-  SCENES_READY --> AUDIO_READY: audio
+  SCENES_READY --> MOTION_READY: animate (no-op for illustrated)
+  MOTION_READY --> AUDIO_READY: audio
   AUDIO_READY --> RENDERED: render
   RENDERED --> QC_PASSED: qc
   QC_PASSED --> QC_APPROVED: human approves final cut
@@ -356,6 +358,40 @@ sequenceDiagram
 </dl></div>
 </section>
 
+<section id="animation">
+<h2>Adding AI animation (a change after the first build)</h2>
+<p>The first version produced "illustrated narration": still images with camera moves, which was the plan's recommended MVP. After it worked, you asked which local model generates the video and said you have 48 GB of GPU memory. That justified the plan's option B, <em>hybrid animation</em>: real AI motion clips for a few key scenes, stills with camera moves for the rest. It's also a good example of extending a pipeline without breaking it.</p>
+
+<div class="adr" id="d16"><h3><span class="id">D16</span>Hybrid animation as its own stage, after the stills are approved</h3><dl>
+  <dt>Model choice</dt><dd><strong>Wan 2.2 14B image-to-video</strong>, run in ComfyUI with fp8 weights. In the 2026 comparisons I checked, it was the consensus pick for image-to-video motion quality, and it's Apache 2.0, which matters for a monetised channel. LTX-2 is faster and adds audio, but needs a commercial licence once revenue passes $10M. The fp8 14B model needs about 20 GB of VRAM, so 48 GB runs 1280×720 with room to spare.</dd>
+  <dt>Decision</dt><dd>A new stage <code>animate</code> between <code>scenes</code> and <code>audio</code>, with a new status <code>MOTION_READY</code> (<span class="path">services/animation/service.py</span>). It only acts for projects whose style is <code>hybrid_animation</code>. For illustrated projects it finishes instantly with "skipped".</dd>
+  <dt>Why a stage</dt><dd>Image-to-video costs minutes of GPU per clip, far more than any other step. As a separate stage it:
+    <ul>
+      <li>runs only on stills a person has already approved</li>
+      <li>has its own retry budget and fingerprint cache</li>
+      <li>shows its own timing on the Overview, where it will almost certainly become the bottleneck</li>
+    </ul>
+  </dd>
+  <dt>Which scenes</dt><dd>The script prompt asks the LLM to set <code>animate: true</code> and write a short <code>motion_prompt</code> for at most N scenes: the hook, action and the emotional peak. Code then enforces the cap (<code>max_animated_scenes</code>, default 3). If nothing is marked, the opening scene is animated. The LLM makes the creative choice; code enforces the budget.</dd>
+  <dt>Rendering</dt><dd>An animated scene plays its clip, about 5 s (81 frames at Wan's native 16 fps), scaled to the output size. If the narration runs longer, the last frame is held with <code>tpad=stop_mode=clone</code>. The motion clip's checksum is part of the clip fingerprint, so a new motion clip re-renders just that scene.</dd>
+  <dt>GPU sharing</dt><dd>One job runs at a time (D3), and the stage calls ComfyUI's <code>/free</code> when it finishes. The Ollama adapter now sends <code>keep_alive</code>; set it to <code>"0"</code> so the LLM releases VRAM between calls.</dd>
+  <dt>Honesty</dt><dd>The bundled <span class="path">comfyui-workflows/image_to_video_wan22_14b.json</span> was written from ComfyUI's native Wan nodes and <strong>has not been run</strong>. The recommended path: get ComfyUI's own Wan 2.2 template rendering, export it in API format, and put the <code>{{image}}</code>, <code>{{prompt}}</code>, <code>{{seed}}</code>, <code>{{frames}}</code>, <code>{{fps}}</code> tokens into it. The token system exists so you're never locked into a hand-written graph.</dd>
+</dl></div>
+<h3>What changed, file by file</h3>
+<p>This is the pattern for adding any new capability to the pipeline:</p>
+<ol>
+  <li><strong>Config</strong>: a new <code>models.video</code> block (<span class="path">config.py</span>, <span class="path">pipeline.yaml</span>).</li>
+  <li><strong>State machine</strong>: one <code>StageSpec</code> row and one status (<span class="path">domain/states.py</span>). The API and UI picked up the new stage automatically because they read this table.</li>
+  <li><strong>Schema</strong>: <code>animate</code> and <code>motion_prompt</code> on <code>SceneSpec</code>, and four <code>motion_*</code> columns on <code>Scene</code>.</li>
+  <li><strong>Provider</strong>: a fifth interface, <code>VideoProvider</code>, with ComfyUI, placeholder and none adapters. The ComfyUI HTTP code moved into a shared <span class="path">providers/comfy_client.py</span> used by both images and video.</li>
+  <li><strong>Service</strong>: the stage itself, with fingerprints, partial failure, cancellation, and freeing VRAM.</li>
+  <li><strong>Renderer</strong>: a <code>motion_path</code> on <code>TimelineScene</code> and a <code>render_motion_clip</code> branch.</li>
+  <li><strong>Tests</strong>: scene selection, last-frame hold, a hybrid end-to-end run with clips reused on re-run, and the illustrated skip.</li>
+  <li><strong>UI</strong>: a style picker, motion clips in the Scenes tab, and a health card.</li>
+</ol>
+<div class="note"><b>Lesson: you need migrations once there is real data</b>Adding the <code>motion_*</code> columns works on a fresh database, but <code>create_all</code> never alters an existing table. An existing <code>data/pipeline.db</code> has to be deleted or altered by hand. This is the moment the Alembic exercise below stops being optional.</div>
+</section>
+
 <section id="lifecycle">
 <h2>One video, end to end</h2>
 <p>This is what happened to <em>The Town Mouse and the Country Mouse</em> on the first full 1080p run, with the real time each stage took:</p>
@@ -409,6 +445,7 @@ sequenceDiagram
   <li><b>LLM: Ollama.</b> Install Ollama, run <code>ollama pull llama3.1:8b</code>, then start with <code>SPA_LLM_PROVIDER=ollama</code>. Script writing, translation (Hindi becomes <code>ready</code>) and metadata switch to the model. If your model handles long text badly, lower <code>max_source_chars</code>.</li>
   <li><b>Images: ComfyUI.</b> Export a workflow in API format into <span class="path">comfyui-workflows/</span> using the <code>{{prompt}}</code>, <code>{{seed}}</code>, <code>{{width}}</code>, <code>{{height}}</code> and <code>{{reference_image}}</code> tokens, set the checkpoint name, and use <code>SPA_IMAGE_PROVIDER=comfyui</code>. For consistent characters, build a <code>scene_v2.json</code> that feeds <code>{{reference_image}}</code> into an IP-Adapter node.</li>
   <li><b>Voices: Piper.</b> <code>pip install piper-tts</code>, put <code>hi_IN-pratham-medium.onnx</code> and its <code>.json</code> in <span class="path">models/piper/</span>. The voice registry already points to them.</li>
+  <li><b>Animation: Wan 2.2 in ComfyUI.</b> Put the four fp8 model files in ComfyUI's model folders (listed in <span class="path">comfyui-workflows/README.md</span>), confirm ComfyUI's Wan 2.2 template renders, export it with tokens, then set <code>SPA_VIDEO_PROVIDER=comfyui</code> and create projects with style <em>Hybrid animation</em>. Draft at 832×480 and finish at 1280×720.</li>
   <li><b>YouTube.</b> Create an OAuth desktop client in Google Cloud, save it as <span class="path">secrets/client_secret.json</span>, run <code>python scripts/youtube_auth.py</code>, then <code>SPA_PUBLISH_PROVIDER=youtube</code>. Uploads stay <strong>private</strong> until you choose otherwise. Test against your project's real API quota before automating.</li>
 </ol>
 </section>
@@ -447,6 +484,7 @@ sequenceDiagram
   <li><strong>Add a feed.</strong> Put a Creative Commons story feed in <code>discovery.rss_feeds</code> and discover from it. Note that it arrives as <code>pending</code>, not approved.</li>
   <li><strong>Background music.</strong> Set <code>video.music_path</code> to a licensed track and listen to the ducking. Then add a QC check that the music is at least 12 dB below the voice.</li>
   <li><strong>A Shorts template.</strong> Add a <code>video.aspect</code> setting and a 1080×1920 render variant that crops each scene to its centre. Add the matching QC rule.</li>
+  <li><strong>First-and-last-frame motion.</strong> Wan 2.2 also offers a first-last-frame template. Animate between two consecutive scene stills so cuts become smooth transitions. (Touches the video provider and the selection logic.)</li>
   <li><strong>Character consistency.</strong> Build the IP-Adapter <code>scene_v2.json</code> workflow and compare scenes before and after.</li>
   <li><strong>Episodes.</strong> For long sources, add a stage before <code>script</code> that splits the bible into episodes, each becoming its own project. (Touches the state machine, models and API.)</li>
   <li><strong>Migrations.</strong> Add Alembic, generate the first migration from the models, and change startup to run <code>alembic upgrade head</code> instead of <code>create_all</code>.</li>

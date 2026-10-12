@@ -16,6 +16,7 @@ class ProjectStatus(str, Enum):
     SCRIPT_READY = "SCRIPT_READY"
     CHARACTERS_READY = "CHARACTERS_READY"
     SCENES_READY = "SCENES_READY"
+    MOTION_READY = "MOTION_READY"
     AUDIO_READY = "AUDIO_READY"
     RENDERED = "RENDERED"
     QC_PASSED = "QC_PASSED"
@@ -35,6 +36,7 @@ class Stage(str, Enum):
     SCRIPT = "script"
     CHARACTERS = "characters"
     SCENES = "scenes"
+    ANIMATE = "animate"
     AUDIO = "audio"
     RENDER = "render"
     QC = "qc"
@@ -66,7 +68,8 @@ STAGES: list[StageSpec] = [
     StageSpec(Stage.SCRIPT, ProjectStatus.SOURCE_APPROVED, ProjectStatus.SCRIPT_READY, "story_adaptation", "Story bible & script"),
     StageSpec(Stage.CHARACTERS, ProjectStatus.SCRIPT_READY, ProjectStatus.CHARACTERS_READY, "character_generation", "Character reference sheets"),
     StageSpec(Stage.SCENES, ProjectStatus.CHARACTERS_READY, ProjectStatus.SCENES_READY, "scene_generation", "Scene illustrations"),
-    StageSpec(Stage.AUDIO, ProjectStatus.SCENES_READY, ProjectStatus.AUDIO_READY, None, "Localization, voices & subtitles"),
+    StageSpec(Stage.ANIMATE, ProjectStatus.SCENES_READY, ProjectStatus.MOTION_READY, None, "AI animation (hybrid)"),
+    StageSpec(Stage.AUDIO, ProjectStatus.MOTION_READY, ProjectStatus.AUDIO_READY, None, "Localization, voices & subtitles"),
     StageSpec(Stage.RENDER, ProjectStatus.AUDIO_READY, ProjectStatus.RENDERED, None, "Video rendering"),
     StageSpec(Stage.QC, ProjectStatus.RENDERED, ProjectStatus.QC_PASSED, "final_render", "Quality control"),
     StageSpec(Stage.PUBLISH, ProjectStatus.QC_APPROVED, ProjectStatus.UPLOADED, None, "YouTube publishing"),

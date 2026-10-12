@@ -54,6 +54,7 @@ async def _llm_adapt(ctx: StageContext, src: StorySource) -> tuple[StoryAnalysis
         script = await generate_model(llm, render_prompt(
             s, "script", target_scenes=p.target_scene_count, min_seconds=p.min_scene_seconds,
             max_seconds=p.max_scene_seconds, originality_rule=originality,
+            max_animated=s.models.video.max_animated_scenes,
             bible_json=analysis.bible.model_dump_json(indent=1),
             characters_json=json.dumps([c.model_dump() for c in analysis.characters], indent=1),
             repair_note=repair_note), Script, system_prompt=SYSTEM,
@@ -101,7 +102,8 @@ def run_script_stage(ctx: StageContext) -> dict:
         p = s.pipeline
         analysis, script = heuristic.adapt(src.title, src.author, src.text, target_scenes=p.target_scene_count,
                                            min_s=p.min_scene_seconds, max_s=p.max_scene_seconds,
-                                           style=s.models.image.style)
+                                           style=s.models.image.style,
+                                           max_animated=s.models.video.max_animated_scenes)
         issues = check_script(analysis, script, source_text=src.text, min_s=p.min_scene_seconds,
                               max_s=p.max_scene_seconds, require_transformation=False,
                               max_similarity=s.quality.max_source_similarity)

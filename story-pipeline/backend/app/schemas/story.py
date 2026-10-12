@@ -108,6 +108,8 @@ class SceneSpec(BaseModel):
     mood: str = "neutral"
     music_cue: str = "subtle_ambient"
     continuity_requirements: list[str] = []
+    animate: bool = Field(False, description="worth an AI motion clip (hook, action, emotional peak)")
+    motion_prompt: str = Field("", description="what moves in the shot, for the image-to-video model")
 
 
 class Script(BaseModel):

@@ -10,6 +10,7 @@ Story sources ─► Discovery connectors ─► Rights & provenance review ─�
    ─► [script]      LLM story bible + characters + scene spec   (deterministic checks)   ◆ checkpoint
    ─► [characters]  reference sheets (image model)                                        ◆ checkpoint
    ─► [scenes]      one illustration per scene, conditioned on the sheets
+   ─► [animate]     hybrid projects only: key scenes -> AI image-to-video clips (Wan 2.2)
    ─► [audio]       translate per language ─► TTS per segment
    ─► [render]      timeline from measured audio ─► FFmpeg (Ken Burns, subtitles, loudness)
    ─► [qc]          ffprobe / volumedetect / blackdetect / subtitle / metadata / rights checks ◆ final approval
@@ -27,7 +28,7 @@ voices) `libflite`. Ubuntu's `ffmpeg` package has all three.
 ```bash
 cd story-pipeline/backend
 python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
-.venv/bin/pytest                         # 22 tests, including a full offline render
+.venv/bin/pytest                         # 26 tests, including full offline renders
 .venv/bin/uvicorn app.main:app --port 8000
 
 cd ../frontend && npm ci && npx ng serve  # http://localhost:4200
@@ -41,6 +42,7 @@ Then open **Story library → Discover stories → library**, approve a fable, c
 |---|---|---|---|
 | LLM | `offline`: deterministic scene splitter, template metadata, **no translation** | Ollama / any OpenAI-compatible server | `SPA_LLM_PROVIDER=ollama SPA_LLM_MODEL=llama3.1:8b` |
 | Images | `placeholder`: Pillow storyboard cards | ComfyUI workflows | `SPA_IMAGE_PROVIDER=comfyui` |
+| Animation (hybrid projects) | `none`: every scene is a still with a camera move (`placeholder` fakes motion with FFmpeg) | Wan 2.2 14B image-to-video in ComfyUI | `SPA_VIDEO_PROVIDER=comfyui` |
 | Voices | FFmpeg `flite` (English) | Piper neural TTS | `config/languages.yaml` |
 | Publishing | `dry_run`: writes a receipt | YouTube Data API v3 | `SPA_PUBLISH_PROVIDER=youtube` + `scripts/youtube_auth.py` |
 
@@ -55,9 +57,14 @@ the configured `silent` fallback renders it subtitled, and QC flags it.
 2. **Images**: run [ComfyUI](https://docs.comfy.org/), export your workflows in API format into
    `comfyui-workflows/` using the `{{prompt}}`/`{{seed}}`/`{{reference_image}}` tokens (see that folder's README),
    and set `models.image.provider: comfyui`.
-3. **Voices**: `pip install piper-tts`, download voices (e.g. `hi_IN-pratham-medium.onnx` + `.json`) into
+3. **AI animation (optional)**: create projects with style *Hybrid animation*. Download the Wan 2.2 14B
+   image-to-video fp8 files listed in `comfyui-workflows/README.md` (~20 GB VRAM; a 48 GB card runs 720p),
+   check ComfyUI's own Wan 2.2 I2V template works, and set `models.video.provider: comfyui`. Only scenes the
+   script marks `animate` are animated (capped by `max_animated_scenes`); the rest keep the Ken Burns treatment.
+   Set `models.llm.keep_alive: "0"` so Ollama releases VRAM for the video model.
+4. **Voices**: `pip install piper-tts`, download voices (e.g. `hi_IN-pratham-medium.onnx` + `.json`) into
    `models/piper/`, and reference them in `config/languages.yaml`.
-4. **YouTube**: create an OAuth desktop client, save it as `secrets/client_secret.json`, run
+5. **YouTube**: create an OAuth desktop client, save it as `secrets/client_secret.json`, run
    `pip install -e "backend[youtube]" && python scripts/youtube_auth.py`, and set `publishing.provider: youtube`.
    Uploads default to **private**.
 
@@ -123,7 +130,9 @@ Interactive docs at `http://localhost:8000/docs`. Main endpoints:
 
 ## Scope notes
 
-This is the MVP from the implementation plan: illustrated narration (still images + camera moves), private
-uploads, and English with a Hindi target. Not included yet: episode splitting for long novels, image-to-video
-animation, background-music generation, multi-user auth, and Alembic migrations (tables are created on startup;
-add Alembic before the schema has to evolve under real data).
+This is the MVP from the implementation plan: illustrated narration plus optional hybrid animation, private
+uploads, and English with a Hindi target. The Wan 2.2 workflow template and the real ComfyUI/Ollama/Piper/YouTube
+adapters have not been run against the real services in this repo's CI. Not included yet: episode splitting for long
+novels, full animated production, background-music generation, multi-user auth, and Alembic migrations (tables are created on startup;
+add Alembic before the schema has to evolve under real data). Until then, after pulling a schema change
+(e.g. the `scenes.motion_*` columns), delete `data/pipeline.db` or add the columns by hand.

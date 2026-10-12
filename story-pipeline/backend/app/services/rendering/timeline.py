@@ -31,6 +31,8 @@ class TimelineScene:
     start: float
     end: float
     camera_movement: str
+    motion_path: str | None = None       # AI clip for hybrid_animation scenes
+    motion_checksum: str | None = None
     segments: list[TimelineSegment] = field(default_factory=list)
 
     @property
@@ -77,7 +79,8 @@ def build_timeline(*, language: str, width: int, height: int, fps: int, scenes: 
         dur = round(round(dur * fps) / fps, 3)
         ts = TimelineScene(scene_id=sc["scene_id"], sequence=sc["sequence"], title=sc["title"],
                            image_path=sc["image_path"], image_checksum=sc["image_checksum"], start=round(t, 3),
-                           end=round(t + dur, 3), camera_movement=sc["camera_movement"])
+                           end=round(t + dur, 3), camera_movement=sc["camera_movement"],
+                           motion_path=sc.get("motion_path"), motion_checksum=sc.get("motion_checksum"))
         cursor = t + padding
         for s in segs:
             ts.segments.append(TimelineSegment(segment_id=s["segment_id"], speaker=s["speaker"],

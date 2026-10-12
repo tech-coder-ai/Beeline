@@ -35,6 +35,7 @@ export interface SceneSpec {
   scene_id: string; sequence: number; title: string; duration_seconds: number; location_id: string;
   characters: string[]; lines: ScriptLine[]; visual_prompt: string;
   camera: { shot_type: string; movement: string }; mood: string; music_cue: string; continuity_requirements: string[];
+  animate: boolean; motion_prompt: string;
 }
 export interface CharacterProfile {
   character_id: string; name: string; role: string; age_range: string; personality: string[]; description: string;
@@ -56,7 +57,8 @@ export interface ProjectDetail extends ProjectSummary {
   characters: { id: string; character_id: string; name: string; profile: CharacterProfile; seed: number;
                 approved: boolean; reference_url: string | null }[];
   scenes: { id: string; scene_id: string; sequence: number; spec: SceneSpec; seed: number; status: string;
-            error: string | null; image_url: string | null }[];
+            error: string | null; image_url: string | null; motion_url: string | null;
+            motion_status: string | null; motion_error: string | null }[];
   localizations: { language: string; status: string; generated_by: string; note: string | null;
                    segments: { segment_id: string; scene_id: string; speaker: string; text: string }[];
                    audio: { segment_id: string; scene_id: string; speaker: string; text: string; voice_id: string;
@@ -85,7 +87,7 @@ export interface Overview {
 
 export interface HealthItem { ok: boolean; detail: string; provider?: string; }
 export interface Health {
-  config_version: string; mode: string; llm: HealthItem; image: HealthItem; ffmpeg: HealthItem; publisher: HealthItem;
+  config_version: string; mode: string; llm: HealthItem; image: HealthItem; video: HealthItem; ffmpeg: HealthItem; publisher: HealthItem;
   voices: (HealthItem & { language: string; voice_id: string; provider: string; voice: string })[];
 }
 

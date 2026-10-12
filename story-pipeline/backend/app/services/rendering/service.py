@@ -44,8 +44,14 @@ def run_render_stage(ctx: StageContext) -> dict:
             if asset is None or not ctx.assets.is_valid(db, asset.id):
                 raise StageFailed(f"{sc.scene_id} has no valid image - run the scenes stage")
             spec = SceneSpec.model_validate(sc.spec)
+            motion = db.get(Asset, sc.motion_asset_id) if sc.motion_asset_id else None
+            if motion is not None and not ctx.assets.is_valid(db, motion.id):
+                motion = None
+                ctx.warn(f"{sc.scene_id}: motion clip missing on disk - using the still")
             scenes.append({"scene_id": sc.scene_id, "sequence": sc.sequence, "title": spec.title,
                            "image_path": str(ctx.assets.path_of(asset)), "image_checksum": asset.checksum,
+                           "motion_path": str(ctx.assets.path_of(motion)) if motion else None,
+                           "motion_checksum": motion.checksum if motion else None,
                            "planned": spec.duration_seconds, "camera_movement": spec.camera.movement,
                            "n_chars": len(spec.characters)})
         ready = [l.language for l in db.scalars(select(Localization).where(
@@ -142,4 +148,4 @@ def run_render_stage(ctx: StageContext) -> dict:
         for rj in db.scalars(select(RenderJob).where(RenderJob.project_id == ctx.project_id)):
             if rj.language not in order:
                 rj.status, rj.qc_passed = "skipped", None
-    return {"languages": results}
+    return {"languages": results, "animated_scenes": sum(1 for x in scenes if x["motion_path"])}
