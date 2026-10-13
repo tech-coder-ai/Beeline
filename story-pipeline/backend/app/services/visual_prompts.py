@@ -43,8 +43,9 @@ def describe(c: CharacterProfile) -> str:
 
 def scene_prompt(style: str, action: str, cast: list[CharacterProfile], setting: str, shot: str, mood: str,
                  continuity: list[str]) -> str:
+    # Cast first: image models weight the opening words most and tend to drop a second subject otherwise.
     who = " and ".join(describe(c) for c in cast)
-    parts = [action.strip().rstrip("."), f"featuring {who}" if who else "", setting,
+    parts = [who, action.strip().rstrip("."), setting,
              f"{shot.replace('_', ' ')} shot", f"{mood} mood", style]
     parts += [c for c in continuity if "#" not in c][:2]
     return ", ".join(p for p in parts if p)

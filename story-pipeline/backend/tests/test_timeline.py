@@ -53,5 +53,5 @@ def test_visual_prompts_use_words_not_hex_codes():
                             appearance=Appearance(species="lion", palette=["#d4a017", "#8b5a2b"]))
     assert color_name("#d4a017") == "golden"
     p = scene_prompt("watercolor", "The lion sleeps", [lion], "savanna", "wide", "peaceful", ["keep #fff"])
-    assert "#" not in p and p.startswith("The lion sleeps") and "a lion (golden, brown tones)" in p
+    assert "#" not in p and p.startswith("a lion (golden, brown tones)") and "The lion sleeps" in p
     assert "#" not in character_prompt("watercolor", lion)
